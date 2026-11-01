@@ -50,20 +50,33 @@ export async function getOffers(sql: postgres.Sql, productId: number) {
  * Stores a snapshot. Writes a price observation only when something changed, or once a day as a heartbeat.
  * Returns whether the min price changed.
  */
-export async function saveSnapshot(sql: postgres.Sql, snap: ProductSnapshot, slug: string | null, runId: number | null) {
+export async function saveSnapshot(
+  sql: postgres.Sql,
+  snap: ProductSnapshot,
+  slug: string | null,
+  runId: number | null,
+  opts: { pageFetched?: boolean } = {},
+) {
+  const pageFetched = opts.pageFetched ?? true;
   return sql.begin(async (tx) => {
     const [p] = await tx<{ id: number }[]>`
-      insert into products (marketplace_id, external_id, slug, title, image_url, category_path)
+      insert into products (marketplace_id, external_id, slug, title, image_url, category_path, page_checked_at)
       values ((select id from marketplaces where code = 'kaspi'), ${snap.externalId}, ${slug}, ${snap.title},
-              ${snap.imageUrl}, ${snap.categoryPath})
+              ${snap.imageUrl}, ${snap.categoryPath}, ${pageFetched ? new Date() : null})
       on conflict (marketplace_id, external_id) do update
         set title = excluded.title, image_url = excluded.image_url, category_path = excluded.category_path,
-            slug = coalesce(excluded.slug, products.slug), status = 'active'
+            slug = coalesce(excluded.slug, products.slug), status = 'active',
+            page_checked_at = coalesce(excluded.page_checked_at, products.page_checked_at)
       returning id`;
     const productId = p!.id;
-    const [prev] = await tx<{ current_min_price: number | null; offer_count: number; in_stock: boolean; last_obs: Date | null }[]>`
+    // heartbeat_due: the last observation is on an earlier Almaty calendar day (or there is none), so every
+    // day with a check gets a point even when nothing changed. (It was "> 24 h", which skipped days.)
+    const [prev] = await tx<{ current_min_price: number | null; offer_count: number; in_stock: boolean; heartbeat_due: boolean }[]>`
       select s.current_min_price, s.offer_count, s.in_stock,
-             (select max(observed_at) from price_observations o where o.product_id = s.product_id) as last_obs
+             coalesce(
+               ((select max(observed_at) from price_observations o where o.product_id = s.product_id) at time zone 'Asia/Almaty')::date
+                 < (now() at time zone 'Asia/Almaty')::date,
+               true) as heartbeat_due
       from product_state s where s.product_id = ${productId}`;
     const prices = snap.offers.map((o) => o.price);
     const median = prices.length ? prices[Math.floor(prices.length / 2)]! : null;
@@ -72,7 +85,7 @@ export async function saveSnapshot(sql: postgres.Sql, snap: ProductSnapshot, slu
       prev.current_min_price !== snap.minPrice ||
       prev.offer_count !== snap.offerCount ||
       prev.in_stock !== snap.inStock;
-    const heartbeatDue = !prev?.last_obs || Date.now() - prev.last_obs.getTime() > 24 * 3_600_000;
+    const heartbeatDue = !prev || prev.heartbeat_due;
     if (changed || heartbeatDue) {
       await tx`insert into price_observations (product_id, min_price, median_price, offer_count, in_stock, run_id)
                values (${productId}, ${snap.minPrice}, ${median}, ${snap.offerCount}, ${snap.inStock}, ${runId})`;

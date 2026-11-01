@@ -22,7 +22,7 @@ Read `docs/IMPLEMENTATION_PLAN.md` first: work only on the current milestone.
 3. **Money is integer tenge** (`number`, `int4`). Format with `formatTenge`.
 4. **One shared history per product.** Users own trackings, never prices.
 5. **Every DB change is a new file in `packages/db/migrations/`.** Never edit an applied migration.
-6. **Be polite to Kaspi:** ≤1–2 req/s with jitter, only seeded/viewed/tracked products, stop on 403/429 (circuit breaker). Never fetch a user-supplied URL; derive the product id and build the Kaspi URL ourselves.
+6. **Be polite to Kaspi — follow kaspi.kz/robots.txt:** ≥10 s between requests (Crawl-delay), collect only 04:00–08:45 UTC (Visit-time), only seeded/viewed/tracked products, stop on 403/429 (circuit breaker). Never fetch a user-supplied URL; derive the product id and build the Kaspi URL ourselves.
 7. **Kaspi prices are national** (verified 1 Nov 2026). Collect with the reference city id 750000000 only.
 8. New dependency or architectural change → add an entry to `docs/DECISIONS.md` first.
 9. Core logic changes come with tests. Parser changes come with refreshed fixtures.

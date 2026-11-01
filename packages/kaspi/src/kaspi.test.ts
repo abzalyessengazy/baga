@@ -83,6 +83,40 @@ describe("client", () => {
     expect((calls[0]!.headers as Record<string, string>)["X-KS-City"]).toBe("750000000");
   });
 
+  it("spaces request starts by minIntervalMs + jitter (robots.txt Crawl-delay)", async () => {
+    let t = 1_000_000;
+    const starts: number[] = [];
+    const client = createKaspiClient({
+      minIntervalMs: 10_000,
+      jitterMs: 2_000,
+      clock: { now: () => t, sleep: async (ms) => { t += ms; }, random: () => 0.5 },
+      fetch: (async () => {
+        starts.push(t);
+        t += 300; // the request itself takes 300 ms
+        return new Response("", { status: 404 });
+      }) as unknown as typeof fetch,
+    });
+    // fired concurrently on purpose: the gate must still serialise them
+    await Promise.all([
+      client.fetchOffers("177318181").catch(() => {}),
+      client.fetchOffers("177318415").catch(() => {}),
+      client.fetchProductPage("180533183").catch(() => {}),
+    ]);
+    expect(starts).toHaveLength(3);
+    for (let i = 1; i < starts.length; i++) expect(starts[i]! - starts[i - 1]!).toBe(11_000);
+  });
+
+  it("does not wait at all when no interval is set (web on-demand lookups)", async () => {
+    let slept = 0;
+    const client = createKaspiClient({
+      clock: { now: () => 0, sleep: async (ms) => { slept += ms; } },
+      fetch: (async () => new Response("", { status: 404 })) as unknown as typeof fetch,
+    });
+    await client.fetchOffers("177318181").catch(() => {});
+    await client.fetchOffers("177318181").catch(() => {});
+    expect(slept).toBe(0);
+  });
+
   it("default User-Agent contains no URL (Kaspi stalls such requests)", async () => {
     const saved = process.env.KASPI_USER_AGENT;
     delete process.env.KASPI_USER_AGENT;

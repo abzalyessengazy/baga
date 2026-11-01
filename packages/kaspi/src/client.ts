@@ -12,6 +12,15 @@ export interface KaspiClientOptions {
   userAgent?: string;
   timeoutMs?: number;
   cityId?: string;
+  /**
+   * Minimum gap between the starts of any two requests made by this client (robots.txt Crawl-delay).
+   * The worker sets KASPI_CRAWL_DELAY_MS; the web app's single on-demand lookups leave it at 0.
+   */
+  minIntervalMs?: number;
+  /** Extra random wait, 0..jitterMs, added to each gap. */
+  jitterMs?: number;
+  /** Injectable clock for tests. */
+  clock?: { now: () => number; sleep: (ms: number) => Promise<void>; random?: () => number };
 }
 
 export class KaspiHttpError extends Error {
@@ -35,8 +44,27 @@ export function createKaspiClient(opts: KaspiClientOptions = {}) {
   // A User-Agent containing a URL was stalled by Kaspi without any response.
   const ua = opts.userAgent ?? process.env.KASPI_USER_AGENT ?? "BAGA price history bot (+contact: hello@baga.app)";
   const timeoutMs = opts.timeoutMs ?? 15_000;
+  const minIntervalMs = opts.minIntervalMs ?? 0;
+  const jitterMs = opts.jitterMs ?? 0;
+  const clock = opts.clock ?? { now: () => Date.now(), sleep: (ms: number) => new Promise<void>((r) => setTimeout(r, ms)) };
+  const random = clock.random ?? Math.random;
+  let nextAllowedAt = 0;
+  let queue: Promise<void> = Promise.resolve();
+
+  /** Serialises requests and spaces their starts by minIntervalMs (+ jitter). */
+  function gate(): Promise<void> {
+    if (minIntervalMs <= 0) return Promise.resolve();
+    const turn = queue.then(async () => {
+      const wait = nextAllowedAt - clock.now();
+      if (wait > 0) await clock.sleep(wait);
+      nextAllowedAt = clock.now() + minIntervalMs + Math.round(random() * jitterMs);
+    });
+    queue = turn.catch(() => {});
+    return turn;
+  }
 
   async function request(url: string, init: RequestInit = {}) {
+    await gate();
     const res = await f(url, {
       ...init,
       headers: { "User-Agent": ua, ...(init.headers ?? {}) },
@@ -85,6 +113,7 @@ export function createKaspiClient(opts: KaspiClientOptions = {}) {
 
   /** Follows l.kaspi.kz short links to the product URL without downloading the page body. */
   async function resolveShortLink(url: string): Promise<string | null> {
+    await gate();
     const res = await f(url, { method: "HEAD", redirect: "manual", headers: { "User-Agent": ua } });
     return res.headers.get("location");
   }

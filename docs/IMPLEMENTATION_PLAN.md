@@ -4,7 +4,7 @@
 - [x] Kaspi data access works (offers endpoint + product page data) from a KZ connection
 - [x] City pricing tested: national price
 - [x] Decisions recorded in DECISIONS.md
-- [ ] Datacenter IP test: run `collect.yml` once against 3 seed products
+- [x] Datacenter IP test: run `collect.yml` once against 3 seed products (passed 1 Nov 2026, GitHub Actions ubuntu-latest: Kaspi page + offers OK)
 
 ## Phase 1 — foundations ✅
 - [x] Monorepo, TypeScript, Vitest, CI workflow

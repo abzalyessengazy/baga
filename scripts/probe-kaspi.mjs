@@ -1,6 +1,13 @@
 // Diagnoses why server-side requests to Kaspi fail. Run: node scripts/probe-kaspi.mjs [productId]
 // Tries the product page and the offers endpoint with different request headers and prints what Kaspi answers.
-const id = process.argv[2] ?? "177318181";
+// kaspi.kz/robots.txt: Crawl-delay 10, Visit-time 04:00-08:45 UTC. Outside the window, pass --force.
+const now = new Date();
+const minute = now.getUTCHours() * 60 + now.getUTCMinutes();
+if ((minute < 240 || minute >= 525) && !process.argv.includes("--force")) {
+  console.log("Outside Kaspi's robots.txt visit window (04:00-08:45 UTC = 09:00-13:45 Almaty). Re-run with --force to probe anyway.");
+  process.exit(0);
+}
+const id = process.argv.slice(2).find((a) => !a.startsWith("--")) ?? "177318181";
 const city = "750000000";
 const browserUA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36";
@@ -20,7 +27,10 @@ const variants = {
   },
 };
 
+let first = true;
 async function attempt(label, url, init) {
+  if (!first) await new Promise((r) => setTimeout(r, 10_000)); // robots.txt Crawl-delay: 10
+  first = false;
   try {
     const res = await fetch(url, { ...init, redirect: "manual", signal: AbortSignal.timeout(15000) });
     const text = await res.text();
@@ -40,5 +50,4 @@ for (const [name, headers] of Object.entries(variants)) {
     headers: { "Content-Type": "application/json", Accept: "application/json, text/*", "X-KS-City": city, Referer: `https://kaspi.kz/shop/p/-${id}/`, ...headers },
     body: JSON.stringify({ cityId: city, id, merchantUID: [], limit: 5, page: 0, sortOption: "PRICE", highRating: null, searchText: null, isExcellentMerchant: false, zoneId: [], installationId: "-1" }),
   });
-  await new Promise((r) => setTimeout(r, 1200));
 }

@@ -1,8 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { priorityFor, backoffMinutes, isSuspiciousJump } from "./schedule";
+import { priorityFor, backoffMinutes, isSuspiciousJump, INTERVAL_MINUTES } from "./schedule";
+import { VISIT_WINDOW_MINUTES } from "./window";
 import { formatTenge, toTenge } from "./money";
 
 describe("schedule", () => {
+  it("checks seed products exactly once per daily visit window", () => {
+    // Longer than the window: no second check the same day. Short enough that a product checked as the
+    // window closes is due again before the next window opens, so every day gets a point.
+    expect(INTERVAL_MINUTES.seed).toBeGreaterThan(VISIT_WINDOW_MINUTES);
+    expect(INTERVAL_MINUTES.seed).toBeLessThanOrEqual(24 * 60 - VISIT_WINDOW_MINUTES);
+  });
   it("prioritises products near a target", () => {
     expect(priorityFor({ activeTrackings: 2, minDistanceToTargetPct: 5, isSeed: false, lastViewedDaysAgo: null })).toBe("hot");
     expect(priorityFor({ activeTrackings: 1, minDistanceToTargetPct: 30, isSeed: false, lastViewedDaysAgo: null })).toBe("tracked");

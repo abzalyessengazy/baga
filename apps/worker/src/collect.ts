@@ -1,11 +1,13 @@
 /**
- * One collection run: claim due products, fetch Kaspi, store changes, evaluate alerts, send queued emails.
- * Safe to run every 15–30 minutes from GitHub Actions or a cron on a VPS.
+ * One daily collection run inside Kaspi's robots.txt visit window (04:00–08:45 UTC), one request per ≥10 s:
+ * check due products (offers only; product page weekly), then fetch queued seed products, evaluate alerts,
+ * send queued emails. Started by .github/workflows/collect.yml at 03:50 UTC; waits for the window to open.
  */
-import { createKaspiClient, KaspiHttpError, canonicalProductUrl } from "@baga/kaspi";
+import { createKaspiClient, buildSnapshot, KaspiHttpError, canonicalProductUrl } from "@baga/kaspi";
 import { saveSnapshot, connectionOptions } from "@baga/db";
 import {
   evaluateAlert, priorityFor, INTERVAL_MINUTES, backoffMinutes, isSuspiciousJump, type TrackingAlertState,
+  KASPI_CRAWL_DELAY_MS, isInVisitWindow, msUntilVisitWindow,
 } from "@baga/core";
 import postgres from "postgres";
 import { env } from "./env";
@@ -13,61 +15,142 @@ import { CircuitBreaker } from "./breaker";
 import { renderTargetEmail, sendViaResend } from "./email";
 
 const sql = postgres(env.databaseUrl(), { max: 2, ...connectionOptions(env.databaseUrl()) });
-const kaspi = createKaspiClient();
+// Every request this run makes (page, offers, re-checks, alert confirmations) goes through this gate.
+const kaspi = createKaspiClient({ minIntervalMs: KASPI_CRAWL_DELAY_MS, jitterMs: 2_000 });
 const breaker = new CircuitBreaker();
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms + Math.random() * ms * 0.5));
+
+const PAGE_REFRESH_MS = 7 * 24 * 3_600_000;
+// Worst case for one product: page + offers + suspicious re-check + alert confirmation = 4 requests ≈ 48 s.
+// Stop starting new products when less than this remains, so no request lands after 08:45 UTC.
+const WINDOW_MARGIN_MS = 60_000;
+const inWindow = () => isInVisitWindow(new Date(), WINDOW_MARGIN_MS);
+
+type DueRow = {
+  product_id: number; external_id: string; slug: string | null; fail_count: number; interval_minutes: number;
+  current_min_price: number | null; title: string; image_url: string | null; category_path: string[];
+  page_checked_at: Date | null;
+};
 
 async function main() {
+  const wait = msUntilVisitWindow(new Date());
+  if (wait > env.windowWaitMaxMs()) {
+    console.log(JSON.stringify({ skipped: "outside Kaspi visit window (04:00-08:45 UTC)", opensInMinutes: Math.round(wait / 60_000) }));
+    await sendQueued(); // email only, no Kaspi requests
+    return;
+  }
+  if (wait > 0) {
+    console.log(`waiting ${Math.ceil(wait / 1000)} s for Kaspi visit window`);
+    await new Promise((r) => setTimeout(r, wait));
+  }
+
   const [run] = await sql<{ id: number }[]>`insert into collection_runs (runner) values (${env.runner()}) returning id`;
   const runId = run!.id;
   let changed = 0;
+  let seeded = 0;
+  const triedSeeds = new Set<string>(); // each queued seed gets at most one attempt per run
 
-  // Claim due rows; locked_until prevents two overlapping runs from taking the same product.
-  const due = await sql<{ product_id: number; external_id: string; slug: string | null; fail_count: number; interval_minutes: number; current_min_price: number | null }[]>`
-    update collection_schedule cs set locked_until = now() + interval '20 minutes'
-    from products p left join product_state s on s.product_id = p.id
-    where cs.product_id = p.id and cs.product_id in (
-      select product_id from collection_schedule
-      where next_check_at <= now() and fail_count < 10 and (locked_until is null or locked_until < now())
-      order by next_check_at limit ${env.batchSize()} for update skip locked)
-    returning cs.product_id, p.external_id, p.slug, cs.fail_count, cs.interval_minutes, s.current_min_price`;
-
-  for (const row of due) {
-    if (breaker.openReason) break;
-    try {
-      let snap = await kaspi.fetchSnapshot(row.external_id);
-      if (snap.minPrice !== null && isSuspiciousJump(row.current_min_price, snap.minPrice)) {
-        await sleep(env.requestDelayMs());
-        const again = await kaspi.fetchSnapshot(row.external_id);
-        if (again.minPrice !== snap.minPrice) throw new Error(`unstable price ${snap.minPrice} vs ${again.minPrice}`);
-        snap = again;
+  while (!breaker.openReason && inWindow()) {
+    const due = await claimDue(env.chunkSize());
+    if (due.length) {
+      for (const row of due) {
+        if (breaker.openReason || !inWindow()) { await release(row.product_id); continue; }
+        if (await checkProduct(row, runId)) changed++;
       }
-      const saved = await saveSnapshot(sql, snap, row.slug, runId);
-      if (saved.priceChanged) changed++;
-      if (snap.minPrice !== null) await evaluateTrackings(row.product_id, row.external_id, snap.minPrice, snap.offers[0]?.sellerName ?? null);
-      await reschedule(row.product_id, snap.minPrice);
-      breaker.record(true);
-    } catch (e) {
-      const http = e instanceof KaspiHttpError ? e : null;
-      breaker.record(false, http?.isBlocking ?? false);
-      if (http?.isNotFound) await sql`update products set status = 'delisted' where id = ${row.product_id}`;
-      const fails = row.fail_count + 1;
-      await sql`update collection_schedule set fail_count = ${fails}, last_error = ${String(e).slice(0, 500)},
-        locked_until = null, next_check_at = now() + make_interval(mins => ${backoffMinutes(fails, row.interval_minutes)})
-        where product_id = ${row.product_id}`;
-      console.error(`product ${row.external_id}: ${e}`);
+      continue;
     }
-    await sleep(env.requestDelayMs());
+    const seeds = await sql<{ external_id: string; slug: string | null; attempts: number }[]>`
+      select external_id, slug, attempts from seed_queue
+      where attempts < 3 and external_id <> all(${sql.array([...triedSeeds])})
+      order by added_at limit ${env.chunkSize()}`;
+    if (!seeds.length) break; // nothing due, nothing queued
+    for (const s of seeds) {
+      if (breaker.openReason || !inWindow()) break;
+      triedSeeds.add(s.external_id);
+      if (await addSeed(s, runId)) seeded++;
+    }
   }
 
   await sendQueued();
   const aborted = breaker.openReason;
   await sql`update collection_runs set finished_at = now(), checked = ${breaker.checked}, changed = ${changed},
     failed = ${breaker.failed}, aborted_reason = ${aborted} where id = ${runId}`;
-  console.log(JSON.stringify({ runId, checked: breaker.checked, changed, failed: breaker.failed, aborted }));
+  const [left] = await sql<{ due: number; queued: number }[]>`
+    select (select count(*)::int from collection_schedule where next_check_at <= now() and fail_count < 10) as due,
+           (select count(*)::int from seed_queue where attempts < 3) as queued`;
+  console.log(JSON.stringify({ runId, checked: breaker.checked, changed, seeded, failed: breaker.failed, aborted, stillDue: left?.due, stillQueued: left?.queued }));
   const hc = env.healthcheckUrl();
   if (hc) await fetch(aborted ? `${hc}/fail` : hc, { method: "POST", body: aborted ?? "ok" }).catch(() => {});
   if (aborted) process.exitCode = 2;
+}
+
+/** Claims due rows; locked_until stops an overlapping run from taking the same product. */
+function claimDue(limit: number) {
+  return sql<DueRow[]>`
+    update collection_schedule cs set locked_until = now() + interval '45 minutes'
+    from products p left join product_state s on s.product_id = p.id
+    where cs.product_id = p.id and cs.product_id in (
+      select product_id from collection_schedule
+      where next_check_at <= now() and fail_count < 10 and (locked_until is null or locked_until < now())
+      order by next_check_at limit ${limit} for update skip locked)
+    returning cs.product_id, p.external_id, p.slug, cs.fail_count, cs.interval_minutes, s.current_min_price,
+              p.title, p.image_url, p.category_path, p.page_checked_at`;
+}
+
+function release(productId: number) {
+  return sql`update collection_schedule set locked_until = null where product_id = ${productId}`;
+}
+
+/** Routine check: offers only (1 request); the product page too when it is older than a week. */
+async function checkProduct(row: DueRow, runId: number): Promise<boolean> {
+  try {
+    const needPage = !row.page_checked_at || Date.now() - row.page_checked_at.getTime() > PAGE_REFRESH_MS;
+    const page = needPage
+      ? await kaspi.fetchProductPage(row.external_id)
+      : { id: row.external_id, title: row.title, imageUrl: row.image_url, categoryPath: row.category_path };
+    let offers = await kaspi.fetchOffers(row.external_id);
+    const min = offers[0]?.price ?? null;
+    if (min !== null && isSuspiciousJump(row.current_min_price, min)) {
+      const again = await kaspi.fetchOffers(row.external_id);
+      if ((again[0]?.price ?? null) !== min) throw new Error(`unstable price ${min} vs ${again[0]?.price ?? null}`);
+      offers = again;
+    }
+    const snap = buildSnapshot(page, offers);
+    const saved = await saveSnapshot(sql, snap, row.slug, runId, { pageFetched: needPage });
+    if (snap.minPrice !== null) await evaluateTrackings(row.product_id, row.external_id, snap.minPrice, snap.offers[0]?.sellerName ?? null);
+    await reschedule(row.product_id, snap.minPrice);
+    breaker.record(true);
+    return saved.priceChanged;
+  } catch (e) {
+    const http = e instanceof KaspiHttpError ? e : null;
+    breaker.record(false, http?.isBlocking ?? false);
+    if (http?.isNotFound) await sql`update products set status = 'delisted' where id = ${row.product_id}`;
+    const fails = row.fail_count + 1;
+    await sql`update collection_schedule set fail_count = ${fails}, last_error = ${String(e).slice(0, 500)},
+      locked_until = null, next_check_at = now() + make_interval(mins => ${backoffMinutes(fails, row.interval_minutes)})
+      where product_id = ${row.product_id}`;
+    console.error(`product ${row.external_id}: ${e}`);
+    return false;
+  }
+}
+
+/** First fetch of a queued seed product (page + offers = 2 requests). */
+async function addSeed(s: { external_id: string; slug: string | null; attempts: number }, runId: number): Promise<boolean> {
+  try {
+    const snap = await kaspi.fetchSnapshot(s.external_id);
+    const { productId } = await saveSnapshot(sql, snap, s.slug, runId);
+    await sql`update products set is_seed = true where id = ${productId}`;
+    await reschedule(productId, snap.minPrice); // next check in 18 h, not again in this window
+    await sql`delete from seed_queue where external_id = ${s.external_id}`;
+    breaker.record(true);
+    return true;
+  } catch (e) {
+    const http = e instanceof KaspiHttpError ? e : null;
+    breaker.record(false, http?.isBlocking ?? false);
+    if (http?.isNotFound) await sql`delete from seed_queue where external_id = ${s.external_id}`;
+    else await sql`update seed_queue set attempts = attempts + 1, last_error = ${String(e).slice(0, 500)} where external_id = ${s.external_id}`;
+    console.error(`seed ${s.external_id}: ${e}`);
+    return false;
+  }
 }
 
 async function reschedule(productId: number, minPrice: number | null) {

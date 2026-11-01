@@ -1,10 +1,14 @@
 /** Adaptive check intervals (minutes). A product costs the same to watch for 1 or 1000 users. */
 export type Priority = "hot" | "tracked" | "seed" | "cold";
 
+// The collector runs once a day inside Kaspi's visit window (see window.ts).
+// seed (18 h) is longer than the window, so a product is not checked twice in one day, and shorter than
+// 24 h minus the window, so a product checked at the very end of today's window is due before tomorrow's opens.
+// hot and tracked are shorter than the window: such products are re-checked within the same window.
 export const INTERVAL_MINUTES: Record<Priority, number> = {
   hot: 60,
   tracked: 180,
-  seed: 720,
+  seed: 18 * 60,
   cold: 7 * 24 * 60,
 };
 

@@ -13,8 +13,8 @@ With `BAGA_FIXTURES=1` the product page uses real Kaspi responses captured on 1 
 ## Run against real data
 1. Create a free Supabase project, copy `.env.example` to `.env`, fill `DATABASE_URL`.
 2. `pnpm db:migrate`
-3. `pnpm --filter @baga/worker seed` (adds `apps/worker/data/seed-products.txt`)
-4. `pnpm worker` (one collection run; schedule it every 30 min)
+3. `pnpm --filter @baga/worker seed` (queues `apps/worker/data/seed-products.txt` for collection; no Kaspi requests)
+4. `pnpm worker` (one collection run; runs daily 04:00–08:45 UTC per kaspi.kz/robots.txt, from `.github/workflows/collect.yml`)
 5. `pnpm dev`
 
 ## Layout
