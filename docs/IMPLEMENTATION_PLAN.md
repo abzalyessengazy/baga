@@ -27,7 +27,7 @@
 - [x] Product page: price, verdict, history chart (gaps shown), sellers, JSON-LD, sitemap, robots
 - [x] `/api/resolve` with URL allowlist + rate limit; `/go/[id]` click tracking
 - [x] Cloudflare Turnstile on lookups of unknown products (and short-link resolution); page loads never fetch Kaspi
-- [ ] Lighthouse mobile ≥ 85
+- [x] Lighthouse mobile ≥ 85 (1 Nov 2026: landing 88–90, product 96–98; a11y, best practices, SEO 100)
 
 ## Phase 4 — tracking + alerts
 - [ ] Supabase magic-link auth (Resend SMTP), `profiles`
