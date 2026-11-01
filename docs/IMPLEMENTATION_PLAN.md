@@ -18,7 +18,7 @@
 - [x] Schema + migration, `saveSnapshot` (write on change + daily heartbeat)
 - [x] Worker: claim queue, sanity guard, backoff, circuit breaker, healthcheck ping
 - [x] Seed script
-- [ ] Seed list of 1,000–2,000 popular products (phones, laptops, TVs, appliances, consoles)
+- [ ] Seed list of ~1,000 popular products (window budget, see DECISIONS 2026-11-01; `discover` built, run it in the window) (phones, laptops, TVs, appliances, consoles)
 - [ ] Run unattended 7 days, ≥ 98% success
 - [x] Backup restore drill (backup.yml: nightly dump to R2 + automatic restore into scratch Postgres with row-count check; first run passed 1 Nov 2026)
 

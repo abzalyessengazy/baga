@@ -4,3 +4,4 @@ export * from "./alerts";
 export * from "./schedule";
 export * from "./window";
 export * from "./search";
+export * from "./seedCatalog";

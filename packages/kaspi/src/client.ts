@@ -1,5 +1,7 @@
 import { parseOffers, parseProductPage, buildSnapshot, type ProductSnapshot } from "./snapshot";
 import { canonicalProductUrl } from "./url";
+import { gunzipSync } from "node:zlib";
+import { isKaspiSitemapUrl, parseSitemap } from "./sitemap";
 
 /**
  * Kaspi's lowest price is national (checked 1 Nov 2026 across 6 cities), so one reference city is enough.
@@ -125,7 +127,16 @@ export function createKaspiClient(opts: KaspiClientOptions = {}) {
     throw new KaspiHttpError(res.status, url);
   }
 
-  return { fetchOffers, fetchProductPage, fetchSnapshot, resolveShortLink };
+  /** A sitemap file from kaspi.kz/shop/ (robots.txt lists the index). Gzipped files are unpacked. */
+  async function fetchSitemap(url: string) {
+    if (!isKaspiSitemapUrl(url)) throw new Error(`not a Kaspi sitemap URL: ${url}`);
+    const res = await request(url, { headers: { Accept: "application/xml, text/xml" } });
+    const buf = Buffer.from(await res.arrayBuffer());
+    const gz = buf[0] === 0x1f && buf[1] === 0x8b;
+    return parseSitemap((gz ? gunzipSync(buf) : buf).toString("utf8"));
+  }
+
+  return { fetchOffers, fetchProductPage, fetchSnapshot, resolveShortLink, fetchSitemap };
 }
 
 export type KaspiClient = ReturnType<typeof createKaspiClient>;
