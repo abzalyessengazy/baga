@@ -1,0 +1,30 @@
+name: Collect prices
+on:
+  # Manual only until the datacenter IP test passes (IMPLEMENTATION_PLAN Phase 0).
+  # Uncommenting the schedule starts the unattended 7-day run (Phase 2).
+  # schedule: [{ cron: "*/30 * * * *" }]
+  workflow_dispatch:
+concurrency: { group: collect, cancel-in-progress: false }
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      # Manual runs: two requests to Kaspi for one seeded product, so the datacenter IP test always
+      # exercises Kaspi even when no product is due. Fails the job if Kaspi stalls or blocks.
+      - name: Probe Kaspi from this runner
+        if: github.event_name == 'workflow_dispatch'
+        run: pnpm --filter @baga/worker probe 177318181
+      - run: pnpm worker
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          SITE_URL: ${{ vars.SITE_URL }}
+          HEALTHCHECK_URL: ${{ secrets.HEALTHCHECK_URL }}
+          COLLECT_RUNNER: github-actions

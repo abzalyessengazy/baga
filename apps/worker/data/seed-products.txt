@@ -1,0 +1,5 @@
+# One Kaspi product URL per line. Phase 2 target: 1,000–2,000 popular products
+# (phones, laptops, TVs, large appliances, consoles). Start small and grow.
+https://kaspi.kz/shop/p/apple-iphone-18-pro-256gb-nanosim-esim-serebristyi-177318181/
+https://kaspi.kz/shop/p/apple-iphone-18-pro-512gb-nanosim-esim-goluboi-177318415/
+https://kaspi.kz/shop/p/apple-iphone-duo-256gb-dual-esim-sinii-180533183/

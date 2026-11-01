@@ -1,0 +1,19 @@
+{
+  "name": "baga",
+  "private": true,
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "dev": "pnpm --filter @baga/web dev",
+    "build": "pnpm --filter @baga/web build",
+    "test": "vitest run",
+    "typecheck": "pnpm -r typecheck",
+    "i18n:check": "node scripts/check-i18n.mjs",
+    "worker": "pnpm --filter @baga/worker run collect",
+    "db:migrate": "pnpm --filter @baga/db migrate"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.8",
+    "@types/node": "^22.10.0"
+  }
+}

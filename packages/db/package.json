@@ -1,0 +1,19 @@
+{
+  "name": "@baga/db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "migrate": "node --env-file-if-exists=../../.env --import tsx src/migrate.ts"
+  },
+  "dependencies": {
+    "@baga/kaspi": "workspace:^",
+    "postgres": "^3.4.5"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2"
+  }
+}

@@ -1,0 +1,109 @@
+import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { parseKaspiUrl, canonicalProductUrl } from "./url";
+import { parseOffers, parseProductPage, buildSnapshot, KaspiParseError } from "./snapshot";
+import { createKaspiClient, KaspiHttpError } from "./client";
+
+const fx = (f: string) => readFileSync(join(__dirname, "..", "fixtures", f), "utf8");
+
+describe("parseKaspiUrl", () => {
+  const ok = [
+    "https://kaspi.kz/shop/p/apple-iphone-18-pro-256gb-nanosim-esim-serebristyi-177318181/",
+    "https://kaspi.kz/shop/p/apple-iphone-18-pro-256gb-nanosim-esim-serebristyi-177318181/?c=750000000&ref=shared_link",
+    "kaspi.kz/shop/p/apple-iphone-18-pro-256gb-nanosim-esim-serebristyi-177318181",
+    "https://m.kaspi.kz/shop/p/apple-iphone-18-pro-256gb-nanosim-esim-serebristyi-177318181/",
+    "Смотри, что нашёл: https://kaspi.kz/shop/p/apple-iphone-18-pro-256gb-nanosim-esim-serebristyi-177318181/?ref=shared_link",
+    "https://kaspi.kz/shop/p/-177318181/",
+  ];
+  it.each(ok)("accepts %s", (u) => {
+    const r = parseKaspiUrl(u);
+    expect(r.ok && r.productId).toBe("177318181");
+  });
+  it("keeps the slug", () => {
+    const r = parseKaspiUrl(ok[0]!);
+    expect(r.ok && r.slug).toBe("apple-iphone-18-pro-256gb-nanosim-esim-serebristyi");
+  });
+  it("rejects other shapes with a reason", () => {
+    expect(parseKaspiUrl("iphone 18")).toEqual({ ok: false, reason: "not_a_url" });
+    expect(parseKaspiUrl("https://ozon.kz/product/123")).toEqual({ ok: false, reason: "not_kaspi" });
+    expect(parseKaspiUrl("https://kaspi.kz/shop/c/smartphones/")).toEqual({ ok: false, reason: "not_a_product" });
+    expect(parseKaspiUrl("https://l.kaspi.kz/shop/abc")).toEqual({ ok: false, reason: "short_link" });
+    expect(parseKaspiUrl("https://kaspi.kz.evil.com/shop/p/x-177318181/").ok).toBe(false);
+  });
+  it("builds canonical URLs", () => {
+    expect(canonicalProductUrl("177318181", "abc")).toBe("https://kaspi.kz/shop/p/abc-177318181/");
+  });
+});
+
+describe("parsers", () => {
+  it("parses real offers, sorted, integer tenge, names normalised", () => {
+    const offers = parseOffers(JSON.parse(fx("offers-177318181.json")));
+    expect(offers).toHaveLength(3);
+    expect(offers[0]).toMatchObject({ sellerName: "KHAN MOBILE", price: 749364, sellerRating: 4.8 });
+    expect(offers[1]!.sellerName).toBe("WORLD Верифицированных IMEI");
+    expect(offers.map((o) => o.price)).toEqual([749364, 749464, 749977]);
+  });
+  it("keeps sellers that ship later (preorder days), so the lowest price is right", () => {
+    const offers = parseOffers(JSON.parse(fx("offers-180533183.json")));
+    expect(offers).toHaveLength(3);
+    expect(offers[0]).toMatchObject({ sellerName: "TECHNODOM", price: 1399990, preorderDays: 3 });
+  });
+  it("rejects a malformed response instead of inventing a price", () => {
+    expect(() => parseOffers({ offers: [{ price: "cheap" }] })).toThrow(KaspiParseError);
+  });
+  it("parses the product page data block", () => {
+    const p = parseProductPage(fx("product-177318181.html"));
+    expect(p.title).toBe("Смартфон Apple iPhone 18 Pro 256Gb NanoSIM+eSIM серебристый");
+    expect(p.imageUrl).toContain("gallery-large");
+    expect(p.categoryPath).toEqual(["Телефоны и гаджеты", "Смартфоны"]);
+  });
+  it("throws when the data block is missing", () => {
+    expect(() => parseProductPage("<html></html>")).toThrow(KaspiParseError);
+  });
+  it("builds a snapshot", () => {
+    const s = buildSnapshot(parseProductPage(fx("product-177318181.html")), parseOffers(JSON.parse(fx("offers-177318181.json"))));
+    expect(s.minPrice).toBe(749364);
+    expect(s.inStock).toBe(true);
+  });
+});
+
+describe("client", () => {
+  it("sends the reference city and maps blocking statuses", async () => {
+    const calls: RequestInit[] = [];
+    const client = createKaspiClient({
+      fetch: (async (_url: string, init: RequestInit) => {
+        calls.push(init);
+        return new Response("", { status: 429 });
+      }) as unknown as typeof fetch,
+    });
+    const err = await client.fetchOffers("177318181").catch((e) => e);
+    expect(err).toBeInstanceOf(KaspiHttpError);
+    expect(err.isBlocking).toBe(true);
+    expect((calls[0]!.headers as Record<string, string>)["X-KS-City"]).toBe("750000000");
+  });
+
+  it("default User-Agent contains no URL (Kaspi stalls such requests)", async () => {
+    const saved = process.env.KASPI_USER_AGENT;
+    delete process.env.KASPI_USER_AGENT;
+    try {
+      const calls: RequestInit[] = [];
+      const client = createKaspiClient({
+        fetch: (async (_url: string, init: RequestInit) => {
+          calls.push(init);
+          return new Response("", { status: 404 });
+        }) as unknown as typeof fetch,
+      });
+      await client.fetchProductPage("177318181").catch(() => {});
+      await client.fetchOffers("177318181").catch(() => {});
+      for (const init of calls) {
+        const ua = (init.headers as Record<string, string>)["User-Agent"]!;
+        expect(ua).toBeTruthy();
+        expect(ua).not.toMatch(/https?:\/\/|www\./i);
+      }
+      expect(calls).toHaveLength(2);
+    } finally {
+      if (saved !== undefined) process.env.KASPI_USER_AGENT = saved;
+    }
+  });
+});

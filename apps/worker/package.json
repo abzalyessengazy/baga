@@ -1,0 +1,21 @@
+{
+  "name": "@baga/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "collect": "node --env-file-if-exists=../../.env --import tsx src/collect.ts",
+    "seed": "node --env-file-if-exists=../../.env --import tsx src/seed.ts",
+    "typecheck": "tsc --noEmit",
+    "probe": "node --env-file-if-exists=../../.env --import tsx src/probe.ts"
+  },
+  "dependencies": {
+    "@baga/core": "workspace:^",
+    "@baga/db": "workspace:^",
+    "@baga/kaspi": "workspace:^",
+    "postgres": "^3.4.5"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2"
+  }
+}
