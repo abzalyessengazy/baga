@@ -204,7 +204,7 @@ a { color: inherit; }
 
 .seller-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; padding: 7px 8px; border-radius: 4px; }
 .seller-row .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.seller-row .rate { color: var(--ink-faint); margin-left: 6px; }
+.seller-row .rate { color: var(--ink-soft); margin-left: 6px; }
 .seller-row .p { font-variant-numeric: tabular-nums; font-weight: 600; }
 .seller-row.is-best { background: color-mix(in srgb, var(--stamp) 10%, transparent); color: var(--stamp); }
 

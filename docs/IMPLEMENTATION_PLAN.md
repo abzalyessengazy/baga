@@ -20,7 +20,7 @@
 - [x] Seed script
 - [ ] Seed list of 1,000–2,000 popular products (phones, laptops, TVs, appliances, consoles)
 - [ ] Run unattended 7 days, ≥ 98% success
-- [ ] Backup restore drill
+- [x] Backup restore drill (backup.yml: nightly dump to R2 + automatic restore into scratch Postgres with row-count check; first run passed 1 Nov 2026)
 
 ## Phase 3 — product page (in progress)
 - [x] Receipt landing page, animated highlights, tear-off coupon

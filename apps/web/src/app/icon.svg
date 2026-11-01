@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- A receipt with a torn edge, in stamp violet. No text. -->
+  <path fill="#4b3fd1" d="M7 2h18v25l-3-2-3 2-3-2-3 2-3-2-3 2z"/>
+  <path fill="#fff" d="M11 8h10v2H11zm0 5h10v2H11zm0 5h6v2h-6z"/>
+</svg>

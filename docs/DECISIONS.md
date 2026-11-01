@@ -49,3 +49,6 @@ Kaspi answered the very first request from Vercel (AWS, iad1 and arn1) with 429,
 
 ## 2026-11-01 — Nightly backup to Cloudflare R2 with an automatic restore drill
 Supabase Free has no backups. `backup.yml` runs at 02:17 Almaty: `pg_dump --schema=public` over the session pooler (port 5432; `pg_dump` cannot use the transaction pooler), with a client matching the server's major version from the PostgreSQL apt repo, uploads to a private R2 bucket (free tier, 10 GB; old dumps expire by an R2 lifecycle rule), then restores the dump into a scratch Postgres of the same version and fails unless every table's row count matches. Supabase's `auth.users`/`auth.uid()` are stubbed for the drill; once Phase 4 creates user accounts, the backup must also cover `auth.users`. The derived connection string and password are masked in the public Actions logs.
+
+## 2026-11-01 — Inline CSS (Next `experimental.inlineCss`)
+Lighthouse mobile showed the 6 KB stylesheet as render-blocking (≈900 ms on a simulated slow phone). The CSS is small, so it is inlined into each HTML response; the text (the LCP element) can paint without waiting for a second request. Revert if the CSS grows past ~30 KB or the flag causes issues.
