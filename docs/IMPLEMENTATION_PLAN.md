@@ -10,7 +10,7 @@
 - [x] Monorepo, TypeScript, Vitest, CI workflow
 - [x] next-intl `/ru` `/kk`, Accept-Language detection, cookie, switcher keeps path/query/typed link
 - [x] i18n parity check
-- [ ] Connect Vercel project + Supabase project; set env vars
+- [x] Connect Vercel project + Supabase project; set env vars (https://baga-rho.vercel.app, Supabase eu-north-1)
 - [ ] Sentry + PostHog
 
 ## Phase 2 — collector + catalog (in progress)

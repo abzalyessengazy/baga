@@ -40,3 +40,6 @@ kaspi.kz/robots.txt asks bots for `Crawl-delay: 10` and `Visit-time: 0400-0845` 
 
 ## 2026-11-01 — Cloudflare Turnstile on visitor-triggered Kaspi requests
 A page load never fetches Kaspi. A product page for a product we don't have shows a lookup screen (`noindex`) with an invisible Turnstile check; on success the browser POSTs `{id, token}` to `/api/lookup`, which verifies the token with Cloudflare `siteverify`, fetches the product once, stores it and the page reloads from the database. Short-link resolution in `/api/resolve` (a request to l.kaspi.kz) also requires a token. No npm dependency: the Turnstile script is loaded only where needed and verification is a `fetch`. Keys: `NEXT_PUBLIC_TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY`. Without keys, development uses Cloudflare's documented always-pass test keys; production fails closed (lookups refused). Per-IP and per-instance limits stay as a second layer. Without a database (UI work), the old live-fetch path remains for development only.
+
+## 2026-11-01 — Vercel functions in Stockholm (arn1)
+The database is in Supabase eu-north-1 (Stockholm). Server code ran in Vercel's default iad1 (US East), so every query crossed the Atlantic (first product page ~3.3 s). `apps/web/vercel.json` pins functions to `arn1`, in the repo rather than only in the dashboard.
