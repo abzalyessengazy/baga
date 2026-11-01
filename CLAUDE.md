@@ -14,7 +14,8 @@ Read `docs/IMPLEMENTATION_PLAN.md` first: work only on the current milestone.
 ## Commands
 - `pnpm dev` (web on :3000; `BAGA_FIXTURES=1` serves captured Kaspi data, no network/DB needed)
 - `pnpm test` · `pnpm typecheck` · `pnpm i18n:check` · `pnpm build`
-- `pnpm worker` (needs `DATABASE_URL`) · `pnpm --filter @baga/worker seed` · `pnpm db:migrate`
+- `pnpm worker` (needs `DATABASE_URL`) · `pnpm --filter @baga/worker discover` (visit window only) · `pnpm --filter @baga/worker seed [file]` · `pnpm db:migrate`
+- Build checks while the user may have `pnpm dev` running: `BAGA_DIST_DIR=.next-check pnpm build` (never delete `apps/web/.next`).
 
 ## Hard rules
 1. **No user-facing string in code.** Every visible word lives in `apps/web/messages/{ru,kk}.json`; both files always have the same keys (`pnpm i18n:check`). No English in the UI. Brand/model names from Kaspi are shown as-is.
@@ -22,7 +23,7 @@ Read `docs/IMPLEMENTATION_PLAN.md` first: work only on the current milestone.
 3. **Money is integer tenge** (`number`, `int4`). Format with `formatTenge`.
 4. **One shared history per product.** Users own trackings, never prices.
 5. **Every DB change is a new file in `packages/db/migrations/`.** Never edit an applied migration.
-6. **Be polite to Kaspi — follow kaspi.kz/robots.txt:** ≥10 s between requests (Crawl-delay), collect only 04:00–08:45 UTC (Visit-time), only seeded/viewed/tracked products, stop on 403/429 (circuit breaker). Never fetch a user-supplied URL; derive the product id and build the Kaspi URL ourselves.
+6. **Be polite to Kaspi — follow kaspi.kz/robots.txt:** ≥10 s between requests (Crawl-delay), collect only 04:00–08:45 UTC (Visit-time), only seeded/viewed/tracked products, stop on 403/429 (circuit breaker). Never fetch a user-supplied URL; derive the product id and build the Kaspi URL ourselves (only exception: one non-following GET of an `l.kaspi.kz` short link, after Turnstile). The website never requests Kaspi product data: unknown products go to `seed_queue` for the collector. Never evade a Kaspi block (no proxies, other networks, browser impersonation).
 7. **Kaspi prices are national** (verified 1 Nov 2026). Collect with the reference city id 750000000 only.
 8. New dependency or architectural change → add an entry to `docs/DECISIONS.md` first.
 9. Core logic changes come with tests. Parser changes come with refreshed fixtures.

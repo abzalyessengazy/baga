@@ -16,7 +16,7 @@ export interface KaspiClientOptions {
   cityId?: string;
   /**
    * Minimum gap between the starts of any two requests made by this client (robots.txt Crawl-delay).
-   * The worker sets KASPI_CRAWL_DELAY_MS; the web app's single on-demand lookups leave it at 0.
+   * The worker sets KASPI_CRAWL_DELAY_MS; the web app (short-link resolution only) leaves it at 0.
    */
   minIntervalMs?: number;
   /** Extra random wait, 0..jitterMs, added to each gap. */
