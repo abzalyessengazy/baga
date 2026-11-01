@@ -282,3 +282,7 @@ a { color: inherit; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
+
+/* Cloudflare Turnstile: invisible unless the visitor must interact; then it needs room. */
+.turnstile { margin-block: 12px; min-height: 0; }
+.turnstile:empty { margin: 0; }

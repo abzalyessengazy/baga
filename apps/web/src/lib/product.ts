@@ -21,7 +21,8 @@ export interface ProductView {
   checkedAt: string; // ISO
 }
 
-export type ProductResult = { ok: true; view: ProductView } | { ok: false; reason: "not_found" | "unavailable" };
+/** "unknown": not in our database yet. The page shows the Turnstile lookup screen; it never fetches Kaspi itself. */
+export type ProductResult = { ok: true; view: ProductView } | { ok: false; reason: "not_found" | "unavailable" | "unknown" };
 
 const kaspi = createKaspiClient();
 
@@ -47,24 +48,33 @@ function fromSnapshot(s: ProductSnapshot): ProductView {
   };
 }
 
-/** cache(): the page and its metadata share one lookup per request, so Kaspi is asked once, not twice. */
+/**
+ * Fetches a product we don't have yet from Kaspi and stores it. Only called by /api/lookup after a
+ * Turnstile check (DECISIONS.md, 2026-11-01): a page load never triggers a Kaspi request.
+ */
+export async function lookupProduct(externalId: string): Promise<{ ok: true } | { ok: false; reason: "not_found" | "unavailable" }> {
+  const sql = getSql();
+  if (!sql) return { ok: false, reason: "unavailable" };
+  if (await getProductByExternalId(sql, externalId)) return { ok: true }; // someone else just looked it up
+  try {
+    const { productId } = await saveSnapshot(sql, await kaspi.fetchSnapshot(externalId), null, null);
+    await sql`update products set last_viewed_at = now() where id = ${productId}`;
+    return { ok: true };
+  } catch (e) {
+    console.error(`[kaspi] lookup failed for ${externalId}:`, e);
+    return { ok: false, reason: e instanceof KaspiHttpError && e.isNotFound ? "not_found" : "unavailable" };
+  }
+}
+
+/** cache(): the page and its metadata share one database read per request. */
 export const getProductView = cache(async function getProductView(externalId: string): Promise<ProductResult> {
   const fx = fixtureSnapshot(externalId);
   if (fx) return { ok: true, view: fromSnapshot(fx) };
 
   const sql = getSql();
   if (sql) {
-    let row = await getProductByExternalId(sql, externalId);
-    if (!row) {
-      try {
-        await saveSnapshot(sql, await kaspi.fetchSnapshot(externalId), null, null);
-      } catch (e) {
-        console.error(`[kaspi] fetch failed for ${externalId}:`, e);
-        return { ok: false, reason: e instanceof KaspiHttpError && e.isNotFound ? "not_found" : "unavailable" };
-      }
-      row = await getProductByExternalId(sql, externalId);
-      if (!row) return { ok: false, reason: "unavailable" };
-    }
+    const row = await getProductByExternalId(sql, externalId);
+    if (!row) return { ok: false, reason: "unknown" };
     await sql`update products set last_viewed_at = now() where id = ${row.id}`;
     const [history, offers] = await Promise.all([getDailyLows(sql, row.id), getOffers(sql, row.id)]);
     return {
@@ -78,7 +88,8 @@ export const getProductView = cache(async function getProductView(externalId: st
     };
   }
 
-  // No database configured: live snapshot only, no history (and the page says so).
+  // No database configured: development UI work only. Production always has a database.
+  if (process.env.NODE_ENV === "production") return { ok: false, reason: "unavailable" };
   try {
     return { ok: true, view: fromSnapshot(await kaspi.fetchSnapshot(externalId)) };
   } catch (e) {

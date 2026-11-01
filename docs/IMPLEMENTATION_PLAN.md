@@ -26,7 +26,7 @@
 - [x] Receipt landing page, animated highlights, tear-off coupon
 - [x] Product page: price, verdict, history chart (gaps shown), sellers, JSON-LD, sitemap, robots
 - [x] `/api/resolve` with URL allowlist + rate limit; `/go/[id]` click tracking
-- [ ] Cloudflare Turnstile on lookups of unknown products
+- [x] Cloudflare Turnstile on lookups of unknown products (and short-link resolution); page loads never fetch Kaspi
 - [ ] Lighthouse mobile ≥ 85
 
 ## Phase 4 — tracking + alerts

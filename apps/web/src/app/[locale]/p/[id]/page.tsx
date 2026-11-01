@@ -5,6 +5,7 @@ import { computeVerdict, formatTenge } from "@baga/core";
 import { getProductView } from "@/lib/product";
 import { PriceChart } from "@/components/PriceChart";
 import { TrackPanel } from "@/components/TrackPanel";
+import { ProductLookup } from "@/components/ProductLookup";
 
 type Props = { params: Promise<{ locale: string; id: string }> };
 const fmtDate = (iso: string, locale: string) =>
@@ -17,7 +18,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (!/^\d{5,12}$/.test(id)) return {};
   const t = await getTranslations({ locale, namespace: "meta" });
   const r = await getProductView(id);
-  if (!r.ok) return { title: t("title") };
+  // Lookup and error screens are not product pages: keep them out of search results.
+  if (!r.ok) return { title: t("title"), robots: { index: false, follow: false } };
   const price = r.view.minPrice ? formatTenge(r.view.minPrice, locale as "ru" | "kk") : "—";
   return {
     title: t("productTitle", { title: r.view.title }),
@@ -32,6 +34,7 @@ export default async function ProductPage({ params }: Props) {
   if (!/^\d{5,12}$/.test(id)) notFound();
   const [t, tr, tv] = await Promise.all([getTranslations("product"), getTranslations("receipt"), getTranslations("verdict")]);
   const r = await getProductView(id);
+  if (!r.ok && r.reason === "unknown") return <ProductLookup id={id} />;
   if (!r.ok) {
     return (
       <main className="wrap error-page">
