@@ -1,11 +1,12 @@
 import type { MetadataRoute } from "next";
 import { getSql } from "@baga/db";
+import { siteUrl } from "@/lib/site";
 
 // Rendered per request: the product list grows between deploys, and builds must not depend on the database.
 export const dynamic = "force-dynamic";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const base = process.env.SITE_URL ?? "http://localhost:3000";
+  const base = siteUrl();
   const pages: MetadataRoute.Sitemap = ["ru", "kk"].map((l) => ({ url: `${base}/${l}`, changeFrequency: "weekly" }));
   const sql = getSql();
   if (sql) {

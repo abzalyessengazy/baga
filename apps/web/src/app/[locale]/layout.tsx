@@ -7,6 +7,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { routing } from "@/i18n/routing";
 import { SiteHeader } from "@/components/SiteHeader";
+import { siteUrl } from "@/lib/site";
 
 export function generateStaticParams() {
   return routing.locales.map((locale) => ({ locale }));
@@ -18,7 +19,7 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
   return {
     title: t("title"),
     description: t("description"),
-    metadataBase: new URL(process.env.SITE_URL ?? "http://localhost:3000"),
+    metadataBase: new URL(siteUrl()),
     alternates: { languages: { "ru-KZ": "/ru", "kk-KZ": "/kk" } },
     openGraph: { title: t("title"), description: t("description"), locale: locale === "kk" ? "kk_KZ" : "ru_KZ" },
   };
