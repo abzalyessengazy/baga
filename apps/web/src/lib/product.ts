@@ -54,10 +54,17 @@ function fromSnapshot(s: ProductSnapshot): ProductView {
 }
 
 /** Queues a visitor's request; called by /api/lookup after a Turnstile check. No Kaspi request here. */
-export async function queueProductRequest(externalId: string): Promise<"queued" | "exists" | "full" | "unavailable"> {
+export async function queueProductRequest(externalId: string, slug: string | null): Promise<"queued" | "exists" | "full" | "unavailable"> {
   const sql = getSql();
   if (!sql) return "unavailable";
-  return requestProduct(sql, externalId);
+  return requestProduct(sql, externalId, slug);
+}
+
+/** The slug saved with a queued request (from the visitor's link), if any. */
+export async function queuedSlug(externalId: string): Promise<string | null> {
+  const sql = getSql();
+  if (!sql) return null;
+  return (await getQueuedRequest(sql, externalId))?.slug ?? null;
 }
 
 /** cache(): the page and its metadata share one database read per request. */

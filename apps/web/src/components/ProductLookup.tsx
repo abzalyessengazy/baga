@@ -4,10 +4,13 @@ import { useRef, useState } from "react";
 import { useRouter } from "@/i18n/navigation";
 import { Turnstile } from "./Turnstile";
 
-type ErrorCode = "check_failed" | "not_found" | "unavailable" | "too_many" | "generic";
+type ErrorCode = "check_failed" | "too_many" | "generic";
 
-/** Shown for a product we don't have yet: passes Turnstile, asks /api/lookup to fetch it once, then reloads. */
-export function ProductLookup({ id }: { id: string }) {
+/**
+ * For a product we don't track yet: passes Turnstile, asks /api/lookup to queue it for the collector, then
+ * refreshes so the page shows when the price will appear. No Kaspi request is made here or by the server.
+ */
+export function ProductLookup({ id, slug }: { id: string; slug: string | null }) {
   const t = useTranslations("product");
   const te = useTranslations("errors");
   const locale = useLocale();
@@ -16,14 +19,18 @@ export function ProductLookup({ id }: { id: string }) {
   const [attempt, setAttempt] = useState(0);
   const sent = useRef(false);
 
-  async function lookup(token: string | null) {
+  async function request(token: string | null) {
     if (!token || sent.current) return;
     sent.current = true;
     try {
-      const res = await fetch("/api/lookup", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, token }) });
-      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: ErrorCode };
+      const res = await fetch("/api/lookup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, slug, token }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
       if (data.ok) { router.refresh(); return; }
-      setError(data.error ?? "generic");
+      setError(data.error === "check_failed" || data.error === "too_many" ? data.error : "generic");
     } catch {
       setError("generic");
     }
@@ -35,18 +42,18 @@ export function ProductLookup({ id }: { id: string }) {
     setAttempt((n) => n + 1); // remount the widget for a fresh token
   }
 
-  const message = !error ? null
-    : error === "not_found" ? t("notFound")
-    : error === "unavailable" ? t("unavailable")
-    : te(error);
-
+  if (error) {
+    return (
+      <>
+        <p className="untracked-status" role="alert">{te(error)}</p>
+        <button className="btn" type="button" onClick={retry} style={{ marginTop: 12 }}>{t("lookupRetry")}</button>
+      </>
+    );
+  }
   return (
-    <main className="wrap error-page">
-      {!error && <p className="subline" role="status" aria-live="polite">{t("lookingUp")}</p>}
-      {!error && <p className="paste-hint">{t("lookupNote")}</p>}
-      {!error && <Turnstile key={attempt} action="lookup" locale={locale} onToken={lookup} onError={() => setError("check_failed")} />}
-      {message && <p className="subline" role="alert">{message}</p>}
-      {error && error !== "not_found" && <button className="btn" type="button" onClick={retry}>{t("lookupRetry")}</button>}
-    </main>
+    <>
+      <p className="untracked-status" role="status" aria-live="polite">{t("lookingUp")}</p>
+      <Turnstile key={attempt} action="lookup" locale={locale} onToken={request} onError={() => setError("check_failed")} />
+    </>
   );
 }

@@ -1,0 +1,82 @@
+name: Nightly backup
+# Dumps our schema (public) from Supabase, uploads it to Cloudflare R2, then proves it restores:
+# a scratch Postgres of the same major version gets the dump and every table's row count must match.
+# Skips with a warning until the R2 secrets exist. Never touches Kaspi.
+on:
+  schedule: [{ cron: "17 21 * * *" }] # 02:17 Almaty, far from the collector's window
+  workflow_dispatch:
+concurrency: { group: backup, cancel-in-progress: false }
+permissions: { contents: read }
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      R2_BUCKET: ${{ secrets.R2_BUCKET }}
+      R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: auto
+      # R2 compatibility with recent AWS CLI versions (Cloudflare's recommendation).
+      AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+      AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+    steps:
+      - name: Check configuration
+        id: cfg
+        run: |
+          for v in DATABASE_URL R2_BUCKET R2_ENDPOINT AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY; do
+            if [ -z "${!v}" ]; then echo "::warning::Backup skipped: secret for $v is not set."; echo "skip=1" >> "$GITHUB_OUTPUT"; exit 0; fi
+          done
+          # pg_dump needs a session connection; Supabase's session pooler is the same host on port 5432.
+          session_url="${DATABASE_URL/:6543\//:5432/}"
+          pw=$(node -e 'console.log(decodeURIComponent(new URL(process.argv[1]).password))' "$DATABASE_URL")
+          echo "::add-mask::$pw"
+          echo "::add-mask::$session_url"
+          echo "SESSION_URL=$session_url" >> "$GITHUB_ENV"
+
+      - name: Install pg tools matching the server version
+        if: steps.cfg.outputs.skip != '1'
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client postgresql-common > /dev/null
+          major=$(psql "$SESSION_URL" -Atc "select current_setting('server_version_num')::int / 10000")
+          echo "Supabase Postgres major version: $major"
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y > /dev/null
+          sudo apt-get install -y -qq "postgresql-client-$major" > /dev/null
+          echo "PG_MAJOR=$major" >> "$GITHUB_ENV"
+          echo "/usr/lib/postgresql/$major/bin" >> "$GITHUB_PATH"
+
+      - name: Dump our schema
+        if: steps.cfg.outputs.skip != '1'
+        run: |
+          file="baga-$(date -u +%F).dump"
+          pg_dump "$SESSION_URL" --schema=public --no-owner --no-privileges --format=custom --file="$file"
+          echo "DUMP=$file" >> "$GITHUB_ENV"
+          ls -l "$file"
+
+      - name: Upload to Cloudflare R2
+        if: steps.cfg.outputs.skip != '1'
+        run: aws s3 cp "$DUMP" "s3://$R2_BUCKET/daily/$DUMP" --endpoint-url "$R2_ENDPOINT" --only-show-errors
+
+      - name: Restore drill (scratch Postgres, compare row counts)
+        if: steps.cfg.outputs.skip != '1'
+        run: |
+          docker run -d --name drill -e POSTGRES_PASSWORD=drill -p 5433:5432 "postgres:$PG_MAJOR" > /dev/null
+          for i in $(seq 1 60); do pg_isready -h localhost -p 5433 -q && break; sleep 1; done
+          scratch="postgresql://postgres:drill@localhost:5433/postgres"
+          # Supabase objects our schema refers to, as empty stand-ins (no user accounts exist before Phase 4).
+          psql "$scratch" -q -v ON_ERROR_STOP=1 -c "create schema auth" \
+            -c "create table auth.users (id uuid primary key, email text)" \
+            -c "create function auth.uid() returns uuid language sql stable as 'select null::uuid'" \
+            -c "create role anon" -c "create role authenticated" -c "create role service_role"
+          if pg_restore -l "$DUMP" | grep -qE 'SCHEMA - public( |$)'; then psql "$scratch" -q -c "drop schema public cascade"; fi
+          pg_restore --no-owner --no-privileges --exit-on-error -d "$scratch" "$DUMP"
+          bad=0
+          for t in $(psql "$SESSION_URL" -Atc "select tablename from pg_tables where schemaname = 'public' order by 1"); do
+            a=$(psql "$SESSION_URL" -Atc "select count(*) from public.\"$t\"")
+            b=$(psql "$scratch" -Atc "select count(*) from public.\"$t\"" 2>/dev/null || echo missing)
+            printf '%-22s source %9s   restored %9s\n' "$t" "$a" "$b"
+            [ "$a" = "$b" ] || bad=1
+          done
+          [ "$bad" = 0 ] || { echo "::error::Restored backup does not match the database"; exit 1; }
+          echo "Restore drill passed: $DUMP restores with identical row counts."

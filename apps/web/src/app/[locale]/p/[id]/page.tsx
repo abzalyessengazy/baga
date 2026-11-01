@@ -1,13 +1,15 @@
 import { notFound } from "next/navigation";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import type { Metadata } from "next";
-import { computeVerdict, formatTenge, nextVisitWindowDay } from "@baga/core";
-import { getProductView } from "@/lib/product";
+import { computeVerdict, formatTenge, nextVisitWindowDay, isValidSlug, slugWords } from "@baga/core";
+import { getProductView, queuedSlug } from "@/lib/product";
+import { alreadyTracked } from "@/lib/catalog";
+import { CatalogList } from "@/components/CatalogList";
 import { PriceChart } from "@/components/PriceChart";
 import { TrackPanel } from "@/components/TrackPanel";
 import { ProductLookup } from "@/components/ProductLookup";
 
-type Props = { params: Promise<{ locale: string; id: string }> };
+type Props = { params: Promise<{ locale: string; id: string }>; searchParams: Promise<{ s?: string | string[] }> };
 const fmtDate = (iso: string, locale: string) =>
   new Intl.DateTimeFormat(locale === "kk" ? "kk-KZ" : "ru-KZ", { day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Almaty" }).format(new Date(iso));
 const fmtTime = (iso: string, locale: string) =>
@@ -28,20 +30,40 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
-export default async function ProductPage({ params }: Props) {
+export default async function ProductPage({ params, searchParams }: Props) {
   const { locale, id } = await params;
   setRequestLocale(locale);
   if (!/^\d{5,12}$/.test(id)) notFound();
   const [t, tr, tv] = await Promise.all([getTranslations("product"), getTranslations("receipt"), getTranslations("verdict")]);
   const r = await getProductView(id);
-  if (!r.ok && r.reason === "unknown") return <ProductLookup id={id} />;
-  if (!r.ok && r.reason === "queued") {
-    // The collector fetches visitor requests first, inside Kaspi's 09:00–13:45 Almaty window.
+  if (!r.ok && (r.reason === "unknown" || r.reason === "queued")) {
+    // Not tracked yet. Everything here comes from our database or the visitor's own link; no Kaspi request.
+    const fromQuery = (await searchParams).s;
+    const s = typeof fromQuery === "string" && isValidSlug(fromQuery) ? fromQuery : await queuedSlug(id);
+    const name = s ? slugWords(s).join(" ") : null;
+    const tracked = await alreadyTracked(id, s);
     return (
-      <main className="wrap error-page">
-        <p className="subline" role="status">
-          {nextVisitWindowDay(new Date()) === "today" ? t("queuedToday") : t("queuedTomorrow")}
-        </p>
+      <main className="wrap untracked">
+        <article className="receipt">
+          {r.reason === "unknown"
+            ? <p className="receipt-sub" style={{ margin: 0 }}>{t("lookupNote")}</p>
+            : <span className="stamp">{t("queuedStamp")}</span>}
+          {name && <p className="untracked-name">{t("fromLink", { name })}</p>}
+          <hr className="rule" />
+          {r.reason === "unknown"
+            ? <ProductLookup id={id} slug={s} />
+            : (
+              // "today"/"tomorrow" follows the collector's daily run (Kaspi's robots.txt window); times are not shown.
+              <p className="untracked-status" role="status">{nextVisitWindowDay(new Date()) === "today" ? t("queuedToday") : t("queuedTomorrow")}</p>
+            )}
+          <a className="kaspi-link" href={`/go/${id}`} rel="noopener">{t("openOnKaspi")}</a>
+        </article>
+        {tracked.items.length > 0 && (
+          <>
+            <h2>{tracked.kind === "similar" ? t("similarTracked") : t("popularTracked")}</h2>
+            <CatalogList items={tracked.items} locale={locale as "ru" | "kk"} outOfStock={t("outOfStock")} />
+          </>
+        )}
       </main>
     );
   }

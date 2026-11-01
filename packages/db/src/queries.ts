@@ -1,5 +1,6 @@
 import type postgres from "postgres";
 import type { ProductSnapshot } from "@baga/kaspi";
+import { likePattern } from "./like";
 
 export interface ProductRow {
   id: number;
@@ -113,20 +114,20 @@ export async function saveSnapshot(
   });
 }
 
-export type QueuedRequest = { status: "pending" | "not_found"; addedAt: Date };
+export type QueuedRequest = { status: "pending" | "not_found"; addedAt: Date; slug: string | null };
 
 /** A queued product request (seed or visitor), if any. */
 export async function getQueuedRequest(sql: postgres.Sql, externalId: string): Promise<QueuedRequest | null> {
-  const rows = await sql<{ status: "pending" | "not_found"; added_at: Date }[]>`
-    select status, added_at from seed_queue where external_id = ${externalId}`;
-  return rows[0] ? { status: rows[0].status, addedAt: rows[0].added_at } : null;
+  const rows = await sql<{ status: "pending" | "not_found"; added_at: Date; slug: string | null }[]>`
+    select status, added_at, slug from seed_queue where external_id = ${externalId}`;
+  return rows[0] ? { status: rows[0].status, addedAt: rows[0].added_at, slug: rows[0].slug } : null;
 }
 
 /**
  * Queues a visitor's request for a product we don't have. The collector fetches visitor rows first.
  * An existing seed row is promoted to visitor priority. Refuses when too many visitor rows are pending.
  */
-export async function requestProduct(sql: postgres.Sql, externalId: string, maxPending = 300): Promise<"queued" | "exists" | "full"> {
+export async function requestProduct(sql: postgres.Sql, externalId: string, slug: string | null = null, maxPending = 300): Promise<"queued" | "exists" | "full"> {
   const known = await sql`select 1 from products where external_id = ${externalId}`;
   if (known.length) return "exists";
   const already = await sql`select 1 from seed_queue where external_id = ${externalId}`;
@@ -134,8 +135,50 @@ export async function requestProduct(sql: postgres.Sql, externalId: string, maxP
     const [p] = await sql<{ n: number }[]>`select count(*)::int as n from seed_queue where source = 'visitor' and status = 'pending'`;
     if ((p?.n ?? 0) >= maxPending) return "full";
   }
-  await sql`insert into seed_queue (external_id, source) values (${externalId}, 'visitor')
-    on conflict (external_id) do update set source = 'visitor'
+  await sql`insert into seed_queue (external_id, slug, source) values (${externalId}, ${slug}, 'visitor')
+    on conflict (external_id) do update set source = 'visitor', slug = coalesce(seed_queue.slug, excluded.slug)
     where seed_queue.status = 'pending'`;
   return "queued";
+}
+
+/** A tracked product as shown in search results and "already tracked" lists. Prices are observed, never estimated. */
+export interface CatalogItem {
+  externalId: string;
+  title: string;
+  imageUrl: string | null;
+  minPrice: number | null;
+  inStock: boolean;
+}
+
+function catalogSelect(sql: postgres.Sql) {
+  return sql`select p.external_id as "externalId", p.title, p.image_url as "imageUrl",
+      s.current_min_price as "minPrice", coalesce(s.in_stock, false) as "inStock"
+    from products p join product_state s on s.product_id = p.id
+    where p.status = 'active'`;
+}
+
+/** Products whose title contains every word (case-insensitive). Our catalog only; never Kaspi. */
+export async function searchProducts(sql: postgres.Sql, words: string[], limit = 8): Promise<CatalogItem[]> {
+  if (!words.length) return [];
+  const all = words.map((w) => sql`and p.title ilike ${likePattern(w)}`).reduce((a, b) => sql`${a} ${b}`);
+  return sql<CatalogItem[]>`${catalogSelect(sql)} ${all}
+    order by s.in_stock desc, p.is_seed desc, p.last_viewed_at desc nulls last, p.id limit ${limit}`;
+}
+
+/**
+ * Tracked products sharing words with a link's slug, best matches first. Needs 2 matching words when there are
+ * several (one shared colour or brand alone is not "similar").
+ */
+export async function similarProducts(sql: postgres.Sql, words: string[], excludeExternalId: string, limit = 6): Promise<CatalogItem[]> {
+  if (!words.length) return [];
+  const score = words.map((w) => sql`(p.title ilike ${likePattern(w)})::int`).reduce((a, b) => sql`${a} + ${b}`);
+  const need = words.length >= 2 ? 2 : 1;
+  return sql<CatalogItem[]>`${catalogSelect(sql)} and p.external_id <> ${excludeExternalId} and (${score}) >= ${need}
+    order by (${score}) desc, s.in_stock desc, p.last_viewed_at desc nulls last, p.id limit ${limit}`;
+}
+
+/** Fallback list: in-stock tracked products, seed catalog first, most recently viewed first. */
+export async function popularProducts(sql: postgres.Sql, excludeExternalId: string, limit = 6): Promise<CatalogItem[]> {
+  return sql<CatalogItem[]>`${catalogSelect(sql)} and p.external_id <> ${excludeExternalId} and s.in_stock
+    order by p.is_seed desc, p.last_viewed_at desc nulls last, s.last_checked_at desc nulls last limit ${limit}`;
 }
