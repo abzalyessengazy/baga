@@ -112,10 +112,17 @@ export function createKaspiClient(opts: KaspiClientOptions = {}) {
   }
 
   /** Follows l.kaspi.kz short links to the product URL without downloading the page body. */
+  /**
+   * Where an l.kaspi.kz short link points. A plain GET that does not follow the redirect (the body is never
+   * read), exactly what a browser sends when the visitor taps the link. Throws with the status on failure.
+   */
   async function resolveShortLink(url: string): Promise<string | null> {
     await gate();
-    const res = await f(url, { method: "HEAD", redirect: "manual", headers: { "User-Agent": ua } });
-    return res.headers.get("location");
+    const res = await f(url, { method: "GET", redirect: "manual", headers: { "User-Agent": ua, Accept: "text/html" } });
+    await res.body?.cancel().catch(() => undefined);
+    const location = res.headers.get("location");
+    if (res.status >= 300 && res.status < 400 && location) return new URL(location, url).toString();
+    throw new KaspiHttpError(res.status, url);
   }
 
   return { fetchOffers, fetchProductPage, fetchSnapshot, resolveShortLink };

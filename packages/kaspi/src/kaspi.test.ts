@@ -69,6 +69,32 @@ describe("parsers", () => {
 });
 
 describe("client", () => {
+  it("resolves l.kaspi.kz short links with a non-following GET", async () => {
+    const seen: RequestInit[] = [];
+    const target = "https://kaspi.kz/shop/p/apple-macbook-pro-14-2025-chernyi-151699831/?c=231010000&ref=shared_link";
+    const client = createKaspiClient({
+      fetch: (async (_url: string, init: RequestInit) => {
+        seen.push(init);
+        return new Response(null, { status: 302, headers: { Location: target } });
+      }) as unknown as typeof fetch,
+    });
+    const got = await client.resolveShortLink("https://l.kaspi.kz/shop/D5zGA9hPyp8zi3w?sessionId=x");
+    expect(got).toBe(target);
+    expect(parseKaspiUrl(got!)).toMatchObject({ ok: true, productId: "151699831" });
+    expect(seen[0]).toMatchObject({ method: "GET", redirect: "manual" });
+  });
+
+  it("resolves relative short-link redirects and throws when Kaspi refuses", async () => {
+    const relative = createKaspiClient({
+      fetch: (async () => new Response(null, { status: 301, headers: { Location: "/shop/p/x-151699831/" } })) as unknown as typeof fetch,
+    });
+    expect(await relative.resolveShortLink("https://l.kaspi.kz/shop/abc")).toBe("https://l.kaspi.kz/shop/p/x-151699831/");
+    const refused = createKaspiClient({ fetch: (async () => new Response("", { status: 429 })) as unknown as typeof fetch });
+    const err = await refused.resolveShortLink("https://l.kaspi.kz/shop/abc").catch((e) => e);
+    expect(err).toBeInstanceOf(KaspiHttpError);
+    expect(err.status).toBe(429);
+  });
+
   it("sends the reference city and maps blocking statuses", async () => {
     const calls: RequestInit[] = [];
     const client = createKaspiClient({

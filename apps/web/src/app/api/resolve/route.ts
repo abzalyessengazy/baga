@@ -21,7 +21,10 @@ export async function POST(req: Request) {
       const check = await verifyTurnstile(body.token, ip, { expectedAction: "resolve" });
       if (!check.ok) return NextResponse.json({ error: "check_failed" }, { status: 403 });
     }
-    const target = m ? await kaspi.resolveShortLink(m[0]).catch(() => null) : null;
+    const target = m
+      ? await kaspi.resolveShortLink(m[0]).catch((e) => { console.error("[resolve] short link failed:", String(e)); return null; })
+      : null;
+    if (m && target && !parseKaspiUrl(target).ok) console.error("[resolve] short link pointed to:", target);
     if (target) parsed = parseKaspiUrl(target);
   }
   if (!parsed.ok) return NextResponse.json({ error: parsed.reason }, { status: 400 });
