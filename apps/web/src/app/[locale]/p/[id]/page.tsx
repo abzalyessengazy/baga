@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import type { Metadata } from "next";
-import { computeVerdict, formatTenge } from "@baga/core";
+import { computeVerdict, formatTenge, nextVisitWindowDay } from "@baga/core";
 import { getProductView } from "@/lib/product";
 import { PriceChart } from "@/components/PriceChart";
 import { TrackPanel } from "@/components/TrackPanel";
@@ -35,6 +35,16 @@ export default async function ProductPage({ params }: Props) {
   const [t, tr, tv] = await Promise.all([getTranslations("product"), getTranslations("receipt"), getTranslations("verdict")]);
   const r = await getProductView(id);
   if (!r.ok && r.reason === "unknown") return <ProductLookup id={id} />;
+  if (!r.ok && r.reason === "queued") {
+    // The collector fetches visitor requests first, inside Kaspi's 09:00–13:45 Almaty window.
+    return (
+      <main className="wrap error-page">
+        <p className="subline" role="status">
+          {nextVisitWindowDay(new Date()) === "today" ? t("queuedToday") : t("queuedTomorrow")}
+        </p>
+      </main>
+    );
+  }
   if (!r.ok) {
     return (
       <main className="wrap error-page">

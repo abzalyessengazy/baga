@@ -26,6 +26,6 @@ for (const line of lines) {
     on conflict (external_id) do nothing returning external_id`;
   if (inserted.length) queued++;
 }
-const [q] = await sql<{ n: number }[]>`select count(*)::int as n from seed_queue where attempts < 3`;
+const [q] = await sql<{ n: number }[]>`select count(*)::int as n from seed_queue where status = 'pending' and attempts < 3`;
 console.log(`queued ${queued} new, marked ${marked} existing as seed, skipped ${skipped}; ${q?.n ?? 0} waiting in seed_queue`);
 await sql.end();

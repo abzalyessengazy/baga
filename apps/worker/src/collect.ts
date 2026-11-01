@@ -1,7 +1,7 @@
 /**
  * One daily collection run inside Kaspi's robots.txt visit window (04:00–08:45 UTC), one request per ≥10 s:
- * check due products (offers only; product page weekly), then fetch queued seed products, evaluate alerts,
- * send queued emails. Started by .github/workflows/collect.yml at 03:50 UTC; waits for the window to open.
+ * fetch visitor requests first, then check due products (offers only; product page weekly), then queued seed
+ * products; poll for new visitor requests until the window closes; evaluate alerts, send queued emails. Started by .github/workflows/collect.yml at 03:50 UTC; waits for the window to open.
  */
 import { createKaspiClient, buildSnapshot, KaspiHttpError, canonicalProductUrl } from "@baga/kaspi";
 import { saveSnapshot, connectionOptions } from "@baga/db";
@@ -47,9 +47,20 @@ async function main() {
   const runId = run!.id;
   let changed = 0;
   let seeded = 0;
-  const triedSeeds = new Set<string>(); // each queued seed gets at most one attempt per run
+  const tried = new Set<string>(); // each queued product gets at most one attempt per run
 
+  // Order on every turn: visitor requests (someone is waiting), then due products, then seed rows.
+  // When there is nothing to do, poll for new visitor requests until the window closes.
   while (!breaker.openReason && inWindow()) {
+    const visitors = await nextQueued("visitor", tried);
+    if (visitors.length) {
+      for (const q of visitors) {
+        if (breaker.openReason || !inWindow()) break;
+        tried.add(q.external_id);
+        if (await addQueued(q, runId)) seeded++;
+      }
+      continue;
+    }
     const due = await claimDue(env.chunkSize());
     if (due.length) {
       for (const row of due) {
@@ -58,16 +69,16 @@ async function main() {
       }
       continue;
     }
-    const seeds = await sql<{ external_id: string; slug: string | null; attempts: number }[]>`
-      select external_id, slug, attempts from seed_queue
-      where attempts < 3 and external_id <> all(${sql.array([...triedSeeds])})
-      order by added_at limit ${env.chunkSize()}`;
-    if (!seeds.length) break; // nothing due, nothing queued
-    for (const s of seeds) {
-      if (breaker.openReason || !inWindow()) break;
-      triedSeeds.add(s.external_id);
-      if (await addSeed(s, runId)) seeded++;
+    const seeds = await nextQueued("seed", tried);
+    if (seeds.length) {
+      for (const q of seeds) {
+        if (breaker.openReason || !inWindow()) break;
+        tried.add(q.external_id);
+        if (await addQueued(q, runId)) seeded++;
+      }
+      continue;
     }
+    await new Promise((r) => setTimeout(r, env.idlePollMs()));
   }
 
   await sendQueued();
@@ -76,7 +87,7 @@ async function main() {
     failed = ${breaker.failed}, aborted_reason = ${aborted} where id = ${runId}`;
   const [left] = await sql<{ due: number; queued: number }[]>`
     select (select count(*)::int from collection_schedule where next_check_at <= now() and fail_count < 10) as due,
-           (select count(*)::int from seed_queue where attempts < 3) as queued`;
+           (select count(*)::int from seed_queue where status = 'pending' and attempts < 3) as queued`;
   console.log(JSON.stringify({ runId, checked: breaker.checked, changed, seeded, failed: breaker.failed, aborted, stillDue: left?.due, stillQueued: left?.queued }));
   const hc = env.healthcheckUrl();
   if (hc) await fetch(aborted ? `${hc}/fail` : hc, { method: "POST", body: aborted ?? "ok" }).catch(() => {});
@@ -133,22 +144,32 @@ async function checkProduct(row: DueRow, runId: number): Promise<boolean> {
   }
 }
 
-/** First fetch of a queued seed product (page + offers = 2 requests). */
-async function addSeed(s: { external_id: string; slug: string | null; attempts: number }, runId: number): Promise<boolean> {
+type Queued = { external_id: string; slug: string | null; source: "seed" | "visitor" };
+
+function nextQueued(source: "seed" | "visitor", tried: Set<string>) {
+  return sql<Queued[]>`
+    select external_id, slug, source from seed_queue
+    where source = ${source} and status = 'pending' and attempts < 3 and external_id <> all(${sql.array([...tried])})
+    order by added_at limit ${env.chunkSize()}`;
+}
+
+/** First fetch of a queued product (page + offers = 2 requests). Seed rows become seed products. */
+async function addQueued(q: Queued, runId: number): Promise<boolean> {
   try {
-    const snap = await kaspi.fetchSnapshot(s.external_id);
-    const { productId } = await saveSnapshot(sql, snap, s.slug, runId);
-    await sql`update products set is_seed = true where id = ${productId}`;
+    const snap = await kaspi.fetchSnapshot(q.external_id);
+    const { productId } = await saveSnapshot(sql, snap, q.slug, runId);
+    if (q.source === "seed") await sql`update products set is_seed = true where id = ${productId}`;
+    else await sql`update products set last_viewed_at = now() where id = ${productId}`;
     await reschedule(productId, snap.minPrice); // next check in 18 h, not again in this window
-    await sql`delete from seed_queue where external_id = ${s.external_id}`;
+    await sql`delete from seed_queue where external_id = ${q.external_id}`;
     breaker.record(true);
     return true;
   } catch (e) {
     const http = e instanceof KaspiHttpError ? e : null;
     breaker.record(false, http?.isBlocking ?? false);
-    if (http?.isNotFound) await sql`delete from seed_queue where external_id = ${s.external_id}`;
-    else await sql`update seed_queue set attempts = attempts + 1, last_error = ${String(e).slice(0, 500)} where external_id = ${s.external_id}`;
-    console.error(`seed ${s.external_id}: ${e}`);
+    if (http?.isNotFound) await sql`update seed_queue set status = 'not_found', last_error = ${String(e).slice(0, 500)} where external_id = ${q.external_id}`;
+    else await sql`update seed_queue set attempts = attempts + 1, last_error = ${String(e).slice(0, 500)} where external_id = ${q.external_id}`;
+    console.error(`queued ${q.source} ${q.external_id}: ${e}`);
     return false;
   }
 }

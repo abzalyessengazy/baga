@@ -12,6 +12,8 @@ export const env = {
   /** Products claimed per batch; the run keeps claiming batches until the visit window closes. */
   chunkSize: () => Number(process.env.COLLECT_CHUNK ?? 10),
   /** How long a run started early may wait for the visit window to open (otherwise it skips). */
+  /** When idle inside the window, how often to look for new visitor requests. */
+  idlePollMs: () => Number(process.env.COLLECT_IDLE_POLL_S ?? 60) * 1000,
   windowWaitMaxMs: () => Number(process.env.COLLECT_WINDOW_WAIT_MIN ?? 20) * 60_000,
   runner: () => process.env.COLLECT_RUNNER ?? "local",
 };

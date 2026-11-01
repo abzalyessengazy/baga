@@ -24,3 +24,15 @@ export function msUntilVisitWindow(now: Date): number {
   if (minutes < 0) minutes += 24 * 60;
   return Math.round(minutes * 60_000);
 }
+
+/** Kazakhstan has used one time zone, UTC+5, since 1 March 2024. */
+const ALMATY_OFFSET_MINUTES = 5 * 60;
+
+/**
+ * For a request made at `now`: is the next visit window still today, or tomorrow, in Almaty local time?
+ * The window (09:00–13:45 Almaty) falls on a single Almaty calendar day.
+ */
+export function nextVisitWindowDay(now: Date): "today" | "tomorrow" {
+  const almatyMinute = (now.getUTCHours() * 60 + now.getUTCMinutes() + ALMATY_OFFSET_MINUTES) % (24 * 60);
+  return almatyMinute < KASPI_VISIT_WINDOW_UTC.endMinute + ALMATY_OFFSET_MINUTES ? "today" : "tomorrow";
+}

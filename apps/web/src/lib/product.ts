@@ -2,7 +2,7 @@ import "server-only";
 import { cache } from "react";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { getSql, getProductByExternalId, getDailyLows, getOffers, saveSnapshot } from "@baga/db";
+import { getSql, getProductByExternalId, getDailyLows, getOffers, getQueuedRequest, requestProduct } from "@baga/db";
 import { createKaspiClient, parseOffers, parseProductPage, buildSnapshot, KaspiHttpError, type ProductSnapshot } from "@baga/kaspi";
 import type { DailyLow } from "@baga/core";
 
@@ -21,8 +21,13 @@ export interface ProductView {
   checkedAt: string; // ISO
 }
 
-/** "unknown": not in our database yet. The page shows the Turnstile lookup screen; it never fetches Kaspi itself. */
-export type ProductResult = { ok: true; view: ProductView } | { ok: false; reason: "not_found" | "unavailable" | "unknown" };
+/**
+ * Not in our database yet: "unknown" shows the Turnstile request screen; "queued" means the collector will fetch it
+ * in Kaspi's next visit window. The website itself never requests Kaspi (DECISIONS.md, 2026-11-01).
+ */
+export type ProductResult =
+  | { ok: true; view: ProductView }
+  | { ok: false; reason: "not_found" | "unavailable" | "unknown" | "queued" };
 
 const kaspi = createKaspiClient();
 
@@ -48,22 +53,11 @@ function fromSnapshot(s: ProductSnapshot): ProductView {
   };
 }
 
-/**
- * Fetches a product we don't have yet from Kaspi and stores it. Only called by /api/lookup after a
- * Turnstile check (DECISIONS.md, 2026-11-01): a page load never triggers a Kaspi request.
- */
-export async function lookupProduct(externalId: string): Promise<{ ok: true } | { ok: false; reason: "not_found" | "unavailable" }> {
+/** Queues a visitor's request; called by /api/lookup after a Turnstile check. No Kaspi request here. */
+export async function queueProductRequest(externalId: string): Promise<"queued" | "exists" | "full" | "unavailable"> {
   const sql = getSql();
-  if (!sql) return { ok: false, reason: "unavailable" };
-  if (await getProductByExternalId(sql, externalId)) return { ok: true }; // someone else just looked it up
-  try {
-    const { productId } = await saveSnapshot(sql, await kaspi.fetchSnapshot(externalId), null, null);
-    await sql`update products set last_viewed_at = now() where id = ${productId}`;
-    return { ok: true };
-  } catch (e) {
-    console.error(`[kaspi] lookup failed for ${externalId}:`, e);
-    return { ok: false, reason: e instanceof KaspiHttpError && e.isNotFound ? "not_found" : "unavailable" };
-  }
+  if (!sql) return "unavailable";
+  return requestProduct(sql, externalId);
 }
 
 /** cache(): the page and its metadata share one database read per request. */
@@ -74,7 +68,10 @@ export const getProductView = cache(async function getProductView(externalId: st
   const sql = getSql();
   if (sql) {
     const row = await getProductByExternalId(sql, externalId);
-    if (!row) return { ok: false, reason: "unknown" };
+    if (!row) {
+      const q = await getQueuedRequest(sql, externalId);
+      return { ok: false, reason: !q ? "unknown" : q.status === "not_found" ? "not_found" : "queued" };
+    }
     await sql`update products set last_viewed_at = now() where id = ${row.id}`;
     const [history, offers] = await Promise.all([getDailyLows(sql, row.id), getOffers(sql, row.id)]);
     return {

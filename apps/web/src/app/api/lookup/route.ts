@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { allow } from "@/lib/rateLimit";
 import { clientIp, verifyTurnstile } from "@/lib/turnstile";
-import { lookupProduct } from "@/lib/product";
+import { queueProductRequest } from "@/lib/product";
 
 /**
- * First fetch of a product we don't have yet, after a Turnstile check (DECISIONS.md, 2026-11-01).
- * Body: { id: "<kaspi product id>", token: "<turnstile token>" }. The page reloads from the database afterwards.
+ * Queues a visitor's request for a product we don't have yet, after a Turnstile check. The collector fetches it
+ * inside Kaspi's robots.txt window; this route never requests Kaspi (DECISIONS.md, 2026-11-01).
+ * Body: { id: "<kaspi product id>", token: "<turnstile token>" }. The page then reloads and shows when.
  */
 export async function POST(req: Request) {
   const ip = clientIp(req);
@@ -23,7 +24,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: check.reason === "no_secret" ? "generic" : "check_failed" }, { status: check.reason === "no_secret" ? 503 : 403 });
   }
 
-  const r = await lookupProduct(id);
-  if (r.ok) return NextResponse.json({ ok: true });
-  return NextResponse.json({ error: r.reason }, { status: r.reason === "not_found" ? 404 : 502 });
+  const r = await queueProductRequest(id);
+  if (r === "queued" || r === "exists") return NextResponse.json({ ok: true });
+  if (r === "full") return NextResponse.json({ error: "too_many" }, { status: 429 });
+  return NextResponse.json({ error: "generic" }, { status: 503 });
 }

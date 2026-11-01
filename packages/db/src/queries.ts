@@ -112,3 +112,30 @@ export async function saveSnapshot(
     return { productId, priceChanged: !prev || prev.current_min_price !== snap.minPrice, previousMin: prev?.current_min_price ?? null };
   });
 }
+
+export type QueuedRequest = { status: "pending" | "not_found"; addedAt: Date };
+
+/** A queued product request (seed or visitor), if any. */
+export async function getQueuedRequest(sql: postgres.Sql, externalId: string): Promise<QueuedRequest | null> {
+  const rows = await sql<{ status: "pending" | "not_found"; added_at: Date }[]>`
+    select status, added_at from seed_queue where external_id = ${externalId}`;
+  return rows[0] ? { status: rows[0].status, addedAt: rows[0].added_at } : null;
+}
+
+/**
+ * Queues a visitor's request for a product we don't have. The collector fetches visitor rows first.
+ * An existing seed row is promoted to visitor priority. Refuses when too many visitor rows are pending.
+ */
+export async function requestProduct(sql: postgres.Sql, externalId: string, maxPending = 300): Promise<"queued" | "exists" | "full"> {
+  const known = await sql`select 1 from products where external_id = ${externalId}`;
+  if (known.length) return "exists";
+  const already = await sql`select 1 from seed_queue where external_id = ${externalId}`;
+  if (!already.length) {
+    const [p] = await sql<{ n: number }[]>`select count(*)::int as n from seed_queue where source = 'visitor' and status = 'pending'`;
+    if ((p?.n ?? 0) >= maxPending) return "full";
+  }
+  await sql`insert into seed_queue (external_id, source) values (${externalId}, 'visitor')
+    on conflict (external_id) do update set source = 'visitor'
+    where seed_queue.status = 'pending'`;
+  return "queued";
+}
