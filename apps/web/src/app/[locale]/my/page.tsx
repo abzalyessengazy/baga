@@ -1,0 +1,64 @@
+import type { Metadata } from "next";
+import { getTranslations, setRequestLocale } from "next-intl/server";
+import { getSql, listWatched } from "@baga/db";
+import { slugWords } from "@baga/core";
+import { currentWatcher, telegramConnectUrl, botUsername } from "@/lib/watcher";
+import { siteUrl } from "@/lib/site";
+import { MyList } from "@/components/MyList";
+
+type Props = { params: Promise<{ locale: string }> };
+// Per visitor (cookie): never prerendered.
+export const dynamic = "force-dynamic";
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { locale } = await params;
+  const t = await getTranslations({ locale, namespace: "my" });
+  return { title: t("title"), robots: { index: false, follow: false } };
+}
+
+/** "Мои товары": what this browser tracks, before registration exists (DECISIONS.md, 2026-11-02). */
+export default async function MyPage({ params }: Props) {
+  const { locale } = await params;
+  setRequestLocale(locale);
+  const t = await getTranslations("my");
+  const found = await currentWatcher();
+  const sql = getSql();
+  const items = found && sql ? await listWatched(sql, found.watcher.id) : [];
+  const tgUrl = found ? await telegramConnectUrl(found.watcher) : null;
+  const shareUrl = found ? `${siteUrl()}/api/my?k=${found.secret}&l=${locale}` : null;
+  return (
+    <main className="wrap untracked">
+      <h1 className="product-title" style={{ color: "var(--ink-on-counter, var(--ink))" }}>{t("title")}</h1>
+      <article className="receipt">
+        {items.length === 0 ? (
+          <p className="untracked-status">{t("empty")}</p>
+        ) : (
+          <MyList
+            locale={locale as "ru" | "kk"}
+            items={items.map((i) => ({
+              trackingId: i.trackingId, externalId: i.externalId, imageUrl: i.imageUrl, targetPrice: i.targetPrice,
+              currentMinPrice: i.currentMinPrice,
+              name: i.title ?? (i.slug ? slugWords(i.slug).join(" ") : `№ ${i.externalId}`),
+            }))}
+          />
+        )}
+        {found && (
+          <>
+            <hr className="rule" />
+            {found.watcher.telegramChatId ? (
+              <p className="note">{t("telegramLinked")}</p>
+            ) : tgUrl ? (
+              <>
+                <a className="btn btn-stamp" href={tgUrl} target="_blank" rel="noopener">{t("telegramConnect")}</a>
+                <p className="note">{t("telegramHint")}</p>
+              </>
+            ) : !botUsername() ? <p className="note">{t("telegramSoon")}</p> : null}
+            <hr className="rule" />
+            <p className="note">{t("shareNote")}</p>
+            <p className="my-share">{shareUrl}</p>
+          </>
+        )}
+      </article>
+    </main>
+  );
+}

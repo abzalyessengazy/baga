@@ -5,7 +5,7 @@
  * AND a well-known brand; newest ids (current models) come first; one colour per model.
  * Order matters: more specific categories come first (tablets and watches before phones).
  */
-export interface SeedCategory { id: string; type: string[]; brands: string[] }
+export interface SeedCategory { id: string; type: string[]; brands: string[]; exclude?: string[] }
 
 const PHONE_BRANDS = ["apple", "samsung", "xiaomi", "redmi", "poco", "honor", "huawei", "realme", "tecno", "infinix", "oppo", "vivo", "google", "oneplus", "nothing", "motorola"];
 const BIG_APPLIANCE = ["samsung", "lg", "bosch", "beko", "haier", "indesit", "electrolux", "midea", "hisense", "artel", "atlant", "gorenje", "candy", "hotpoint", "siemens", "whirlpool", "tcl", "liebherr", "weissgauff", "korting"];
@@ -18,7 +18,7 @@ export const SEED_CATEGORIES: SeedCategory[] = [
   { id: "laptops", type: ["noutbuk", "macbook", "ideapad", "vivobook", "zenbook", "thinkpad", "matebook", "magicbook"], brands: ["apple", "asus", "lenovo", "hp", "acer", "huawei", "honor", "msi", "dell", "gigabyte", "xiaomi", "machenike", "thunderobot"] },
   { id: "monitors", type: ["monitor"], brands: ["samsung", "lg", "xiaomi", "aoc", "philips", "asus", "msi", "dell", "benq", "acer", "gigabyte", "huawei", "titan"] },
   { id: "tvs", type: ["televizor"], brands: ["samsung", "lg", "xiaomi", "tcl", "hisense", "haier", "sony", "artel", "yasin", "skyworth", "philips", "toshiba"] },
-  { id: "consoles", type: ["igrovajapristavka", "igrovayapristavka", "playstation", "xboxseries", "nintendoswitch", "steamdeck"], brands: ["sony", "microsoft", "nintendo", "valve", "playstation", "xbox"] },
+  { id: "consoles", type: ["igrovajapristavka", "igrovayapristavka", "playstation", "xboxseries", "nintendoswitch", "steamdeck"], brands: ["sony", "microsoft", "nintendo", "valve", "playstation", "xbox"], exclude: ["rus", "eng", "ps4", "joy", "signature"] }, // games and controllers ride on console names
   { id: "fridges", type: ["holodilnik", "kholodilnik", "morozilnik"], brands: BIG_APPLIANCE },
   { id: "washers", type: ["stiralnajamashina", "stiralnayamashina", "sushilnajamashina", "sushilnayamashina"], brands: BIG_APPLIANCE },
   { id: "dishwashers", type: ["posudomoechnaja", "posudomoechnaya"], brands: BIG_APPLIANCE },
@@ -29,36 +29,63 @@ export const SEED_CATEGORIES: SeedCategory[] = [
 ];
 
 /** Accessories and spare parts ride on popular product names ("chehol-dlja-iphone"); they are not what we track. */
-const ACCESSORY_WORDS = ["dlja", "dlya", "chehol", "chekhol", "case", "cover", "steklo", "plenka", "kabel", "adapter", "derzhatel", "remeshok", "kronshtein", "podstavka", "stolik", "nakleiki", "stikery", "nasadka", "pult", "sumka", "rjukzak", "ryukzak", "aksessuarov", "aksessuary", "schetka", "meshok", "pylesbornik", "zapchast", "remen", "zarjadnoe", "zaryadnoe", "komplekt", "nabor", "sht"];
+const ACCESSORY_WORDS = ["dlja", "dlya", "chehol", "chekhol", "case", "cover", "steklo", "plenka", "kabel", "adapter", "derzhatel", "remeshok", "kronshtein", "podstavka", "stolik", "nakleiki", "stikery", "nasadka", "pult", "sumka", "rjukzak", "ryukzak", "aksessuarov", "aksessuary", "schetka", "meshok", "pylesbornik", "zapchast", "remen", "zarjadnoe", "zaryadnoe", "zarjadnaja", "zaryadnaya", "komplekt", "nabor", "sht", "ml"];
 /** Checked on the joined slug, because Kaspi writes the soft sign as a hyphen ("fil-tr", "stiral-naja"). */
 const ACCESSORY_JOINED = ["filtr", "pylesbornik", "zapchast"];
 
 const has = (words: string[], joined: string, k: string) => (k.length <= 3 ? words.includes(k) : joined.includes(k));
+const tokens = (slug: string) => slug.toLowerCase().split("-").filter(Boolean);
+
+/**
+ * The slug must open with the category word or the brand ("naushniki-…", "stiral-naja-mashina-…", "dyson-…", leading
+ * sizes like "27-…" skipped). Anything else is usually an accessory or a game that names the product later on.
+ */
+function opensRight(words: string[], c: SeedCategory): boolean {
+  const head = words.slice(words.findIndex((w) => !/^\d+$/.test(w)));
+  const joined = head.join("");
+  return c.brands.includes(head[0] ?? "") || c.type.some((k) => joined.startsWith(k));
+}
 
 export function seedCategory(slug: string): string | null {
-  const words = slug.toLowerCase().split("-").filter(Boolean);
+  const words = tokens(slug);
   const joined = words.join("");
   if (words.some((w) => ACCESSORY_WORDS.includes(w)) || ACCESSORY_JOINED.some((a) => joined.includes(a))) return null;
   for (const c of SEED_CATEGORIES) {
-    if (c.type.some((k) => has(words, joined, k))) return c.brands.some((b) => words.includes(b)) ? c.id : null;
+    if (!c.type.some((k) => has(words, joined, k))) continue;
+    const ok = c.brands.some((b) => words.includes(b)) && opensRight(words, c) && !c.exclude?.some((x) => words.includes(x));
+    return ok ? c.id : null;
   }
   return null;
 }
 
-/** Model key: the slug without its last word, which on Kaspi is the colour ("…-256gb-nanosim-esim-serebristyi"). */
+/** Model key: the slug without its colour, the last word on Kaspi ("…-256gb-nanosim-esim-serebristyi"), and "podarok". */
 export function modelKey(slug: string): string {
-  const words = slug.toLowerCase().split("-").filter(Boolean);
+  const words = tokens(slug);
+  while (words.length > 3 && words[words.length - 1] === "podarok") words.pop();
   return words.length > 3 ? words.slice(0, -1).join("-") : words.join("-");
 }
 
 /**
+ * Product line: the brand and the two words after it ("apple-macbook-air", "samsung-galaxy-a26", "lg-f2y1ws6w-6").
+ * Capped, so one line's dozens of configurations do not fill a category.
+ */
+export function familyKey(slug: string, category: string): string {
+  const words = tokens(slug);
+  const brands = SEED_CATEGORIES.find((c) => c.id === category)?.brands ?? [];
+  const i = Math.max(0, words.findIndex((w) => brands.includes(w)));
+  return `${category}:${words.slice(i, i + 3).join("-")}`;
+}
+export const FAMILY_CAP = 3;
+
+/**
  * Up to `perCategory` products per category: newest ids first (Kaspi ids grow over time, so these are current
- * models), one colour per model. Deterministic for the same input.
+ * models), one colour per model, at most FAMILY_CAP per product line. Deterministic for the same input.
  */
 export function pickSeedProducts<T extends { productId: string; slug: string }>(candidates: T[], perCategory: number): Map<string, T[]> {
   const sorted = [...candidates].sort((a, b) => Number(b.productId) - Number(a.productId));
   const seenIds = new Set<string>();
   const seenModels = new Set<string>();
+  const families = new Map<string, number>();
   const out = new Map<string, T[]>();
   for (const c of sorted) {
     if (seenIds.has(c.productId)) continue;
@@ -69,7 +96,10 @@ export function pickSeedProducts<T extends { productId: string; slug: string }>(
     if (list.length >= perCategory) continue;
     const model = modelKey(c.slug);
     if (seenModels.has(model)) continue;
+    const family = familyKey(c.slug, cat);
+    if ((families.get(family) ?? 0) >= FAMILY_CAP) continue;
     seenModels.add(model);
+    families.set(family, (families.get(family) ?? 0) + 1);
     list.push(c);
     out.set(cat, list);
   }

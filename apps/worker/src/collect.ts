@@ -1,7 +1,8 @@
 /**
  * One daily collection run inside Kaspi's robots.txt visit window (04:00–08:45 UTC), one request per ≥10 s:
  * fetch visitor requests first, then check due products (offers only; product page weekly), then queued seed
- * products; poll for new visitor requests until the window closes; evaluate alerts, send queued emails. Started by .github/workflows/collect.yml at 03:50 UTC; waits for the window to open.
+ * products; poll for new visitor requests until the window closes; evaluate alerts; send the first price and
+ * target alerts to Telegram right after each check, queued emails at the end. Started by .github/workflows/collect.yml at 03:50 UTC; waits for the window to open.
  */
 import { createKaspiClient, buildSnapshot, KaspiHttpError, canonicalProductUrl, parseKaspiUrl, shortLinkUrl } from "@baga/kaspi";
 import { saveSnapshot, connectionOptions, requestProduct } from "@baga/db";
@@ -13,6 +14,7 @@ import postgres from "postgres";
 import { env } from "./env";
 import { CircuitBreaker } from "./breaker";
 import { renderTargetEmail, sendViaResend } from "./email";
+import { renderTelegramAlert, sendTelegram } from "./telegram";
 
 const sql = postgres(env.databaseUrl(), { max: 2, ...connectionOptions(env.databaseUrl()) });
 // Every request this run makes (page, offers, re-checks, alert confirmations) goes through this gate.
@@ -163,7 +165,7 @@ async function checkProduct(row: DueRow, runId: number): Promise<boolean> {
     }
     const snap = buildSnapshot(page, offers);
     const saved = await saveSnapshot(sql, snap, row.slug, runId, { pageFetched: needPage });
-    if (snap.minPrice !== null) await evaluateTrackings(row.product_id, row.external_id, snap.minPrice, snap.offers[0]?.sellerName ?? null);
+    await afterSave(row.product_id, row.external_id, snap.minPrice, snap.offers[0]?.sellerName ?? null);
     await reschedule(row.product_id, snap.minPrice);
     breaker.record(true);
     return saved.priceChanged;
@@ -196,6 +198,7 @@ async function addQueued(q: Queued, runId: number): Promise<boolean> {
     const { productId } = await saveSnapshot(sql, snap, q.slug, runId);
     if (q.source === "seed") await sql`update products set is_seed = true where id = ${productId}`;
     else await sql`update products set last_viewed_at = now() where id = ${productId}`;
+    await afterSave(productId, q.external_id, snap.minPrice, snap.offers[0]?.sellerName ?? null);
     await reschedule(productId, snap.minPrice); // next check in 18 h, not again in this window
     await sql`delete from seed_queue where external_id = ${q.external_id}`;
     breaker.record(true);
@@ -226,10 +229,30 @@ async function reschedule(productId: number, minPrice: number | null) {
     where product_id = ${productId}`;
 }
 
+/**
+ * After every saved check: watchers who set a price while the product was queued get its first price, then target
+ * alerts are evaluated; Telegram messages go out at once (no Kaspi request), so a visitor hears within minutes.
+ */
+async function afterSave(productId: number, externalId: string, price: number | null, seller: string | null) {
+  const waiting = await sql<{ id: string; linked: boolean }[]>`
+    update trackings t set first_price_sent_at = now()
+    from watchers w
+    where t.product_id = ${productId} and t.watcher_id = w.id and t.status = 'active' and t.first_price_sent_at is null
+    returning t.id, w.telegram_chat_id is not null as linked`;
+  for (const w of waiting.filter((x) => x.linked)) {
+    await sql`insert into notifications (tracking_id, type, channel, price, idempotency_key)
+      values (${w.id}, 'first_price', 'telegram', ${price ?? 0}, ${`${w.id}:first`}) on conflict (idempotency_key) do nothing`;
+  }
+  if (price !== null) await evaluateTrackings(productId, externalId, price, seller);
+  await sendTelegramQueued();
+}
+
 async function evaluateTrackings(productId: number, externalId: string, price: number, seller: string | null) {
-  const rows = await sql<{ id: string; target_price: number; alert_state: "armed" | "triggered"; episode: number; last_triggered_at: Date | null; above_since: Date | null }[]>`
-    select id, target_price, alert_state, episode, last_triggered_at, above_since
-    from trackings where product_id = ${productId} and status = 'active'`;
+  const rows = await sql<{ id: string; target_price: number; alert_state: "armed" | "triggered"; episode: number; last_triggered_at: Date | null; above_since: Date | null; channel: "email" | "telegram" | null }[]>`
+    select t.id, t.target_price, t.alert_state, t.episode, t.last_triggered_at, t.above_since,
+           case when t.user_id is not null then 'email' when w.telegram_chat_id is not null then 'telegram' end as channel
+    from trackings t left join watchers w on w.id = t.watcher_id
+    where t.product_id = ${productId} and t.status = 'active'`;
   for (const r of rows) {
     const state: TrackingAlertState = {
       trackingId: r.id, targetPrice: r.target_price, state: r.alert_state, episode: r.episode,
@@ -248,16 +271,50 @@ async function evaluateTrackings(productId: number, externalId: string, price: n
     const n = d.next;
     await sql`update trackings set alert_state = ${n.state}, episode = ${n.episode},
       last_triggered_at = ${n.lastTriggeredAt}, above_since = ${n.aboveSince} where id = ${r.id}`;
-    if (d.action === "send") {
+    if (d.action === "send" && r.channel) {
       // The unique idempotency key makes a duplicate alert impossible, even with overlapping runs.
-      await sql`insert into notifications (tracking_id, price, idempotency_key)
-        values (${r.id}, ${price}, ${d.idempotencyKey}) on conflict (idempotency_key) do nothing`;
+      // A watcher without Telegram has nowhere to be told; the page and "Мои товары" still show the price.
+      await sql`insert into notifications (tracking_id, channel, price, idempotency_key)
+        values (${r.id}, ${r.channel}, ${price}, ${d.idempotencyKey}) on conflict (idempotency_key) do nothing`;
     }
     void seller;
   }
 }
 
+/** Queued Telegram messages for watchers (first price, target reached). Only the Telegram API is called. */
+async function sendTelegramQueued() {
+  const token = env.telegramBotToken();
+  if (!token) return;
+  const queued = await sql<{ id: number; type: "first_price" | "target_reached"; price: number; target_price: number; chat_id: string; locale: "ru" | "kk"; title: string; external_id: string; current: number | null; offer_count: number }[]>`
+    select n.id, n.type, n.price, t.target_price, w.telegram_chat_id::text as chat_id, w.locale, p.title, p.external_id,
+           s.current_min_price as current, coalesce(s.offer_count, 0) as offer_count
+    from notifications n
+    join trackings t on t.id = n.tracking_id
+    join watchers w on w.id = t.watcher_id
+    join products p on p.id = t.product_id
+    left join product_state s on s.product_id = p.id
+    where n.status = 'queued' and n.channel = 'telegram' and w.telegram_chat_id is not null
+      and n.created_at > now() - interval '2 days'
+    order by n.created_at limit 30`;
+  for (const q of queued) {
+    const site = env.siteUrl();
+    const text = renderTelegramAlert({
+      type: q.type, locale: q.locale, title: q.title,
+      price: q.type === "first_price" ? q.current : q.price, target: q.target_price, offerCount: q.offer_count,
+      productUrl: `${site}/${q.locale}/p/${q.external_id}`, kaspiUrl: `${site}/go/${q.external_id}?n=${q.id}`,
+    });
+    try {
+      const messageId = await sendTelegram(token, q.chat_id, text);
+      await sql`update notifications set status = 'sent', sent_at = now(), provider_message_id = ${String(messageId)} where id = ${q.id}`;
+    } catch (e) {
+      await sql`update notifications set status = 'failed' where id = ${q.id}`;
+      console.error(`notification ${q.id}: ${e}`);
+    }
+  }
+}
+
 async function sendQueued() {
+  await sendTelegramQueued();
   const key = env.resendApiKey();
   if (!key) return;
   const queued = await sql<{ id: number; price: number; target_price: number; email: string; locale: "ru" | "kk"; title: string; external_id: string; slug: string | null; tracking_id: string }[]>`
@@ -267,7 +324,7 @@ async function sendQueued() {
     join auth.users u on u.id = t.user_id
     left join profiles pr on pr.user_id = t.user_id
     join products p on p.id = t.product_id
-    where n.status = 'queued' and coalesce(pr.email_alerts_enabled, true)
+    where n.status = 'queued' and n.channel = 'email' and coalesce(pr.email_alerts_enabled, true)
     order by n.created_at limit 80`;
   for (const q of queued) {
     const site = env.siteUrl();

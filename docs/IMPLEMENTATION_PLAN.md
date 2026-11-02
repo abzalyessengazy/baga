@@ -34,9 +34,12 @@
 - [x] Lighthouse mobile ≥ 85 (1 Nov 2026: landing 88–90, product 96–98; a11y, best practices, SEO 100)
 
 ## Phase 4 — tracking + alerts
-- [ ] Supabase magic-link auth (Resend SMTP), `profiles`
-- [ ] Coupon form creates a pending tracking → active on email confirm
-- [ ] "Мои товары" page: edit target, pause, delete
+- [x] Tracking before registration: anonymous watcher (cookie + private link), coupon saves the price at once, also on queued products (DECISIONS 2026-11-02)
+- [x] Telegram alerts: first price + target reached, bot `/start` link, `/list`, `/stop`
+- [x] "Мои товары" page: list, remove; change price on the product page
+- [ ] Verify on production: bot set up, first-price message arrives within minutes in the window
+- [ ] Registration (Supabase magic link or Telegram login) moves watcher trackings into the account; 5 free, 50 on a 2 999 ₸/month plan
+- [ ] Email alerts once there is a domain (Resend), `profiles`
 - [ ] Unsubscribe endpoint, preferences
 - [x] Alert state machine + email template + sender (worker)
 

@@ -6,6 +6,7 @@ function required(name: string): string {
 export const env = {
   databaseUrl: () => required("DATABASE_URL"),
   resendApiKey: () => process.env.RESEND_API_KEY ?? null,
+  telegramBotToken: () => process.env.TELEGRAM_BOT_TOKEN?.trim() || null,
   emailFrom: () => process.env.EMAIL_FROM ?? "BAGA <alerts@baga.app>",
   siteUrl: () => (process.env.SITE_URL?.trim() || "http://localhost:3000").replace(/\/+$/, ""),
   healthcheckUrl: () => process.env.HEALTHCHECK_URL ?? null,

@@ -7,6 +7,7 @@
     "collect": "node --env-file-if-exists=../../.env --import tsx src/collect.ts",
     "discover": "node --import tsx src/discover.ts",
     "seed": "node --env-file-if-exists=../../.env --import tsx src/seed.ts",
+    "telegram:webhook": "node --env-file-if-exists=../../.env --import tsx src/telegram-webhook.ts",
     "typecheck": "tsc --noEmit",
     "probe": "node --env-file-if-exists=../../.env --import tsx src/probe.ts"
   },

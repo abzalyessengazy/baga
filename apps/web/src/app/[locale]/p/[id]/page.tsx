@@ -9,6 +9,7 @@ import { CatalogList } from "@/components/CatalogList";
 import { PriceChart } from "@/components/PriceChart";
 import { TrackPanel } from "@/components/TrackPanel";
 import { ProductLookup } from "@/components/ProductLookup";
+import { trackInitial } from "@/lib/watcher";
 
 type Props = { params: Promise<{ locale: string; id: string }>; searchParams: Promise<{ s?: string | string[] }> };
 const fmtDate = (iso: string, locale: string) =>
@@ -69,6 +70,8 @@ export default async function ProductPage({ params, searchParams }: Props) {
             )}
           <a className="kaspi-link" href={`/go/${id}`} rel="noopener">{t("openOnKaspi")}</a>
         </article>
+        {/* Queued: the visitor can set a price now; the first price goes to Telegram when the collector gets it. */}
+        {r.reason === "queued" && <TrackPanel productId={id} current={null} initial={await trackInitial(id)} />}
         {tracked.items.length > 0 && (
           <>
             <h2>{tracked.kind === "similar" ? t("similarTracked") : t("popularTracked")}</h2>
@@ -164,7 +167,7 @@ export default async function ProductPage({ params, searchParams }: Props) {
         <a className="kaspi-link" href={`/go/${v.externalId}`} rel="noopener">{t("openOnKaspi")}</a>
         <div className="barcode" aria-hidden />
       </article>
-      <TrackPanel productId={v.externalId} current={v.minPrice} />
+      <TrackPanel productId={v.externalId} current={v.minPrice} initial={await trackInitial(v.externalId)} />
     </main>
   );
 }

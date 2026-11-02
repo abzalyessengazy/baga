@@ -3,10 +3,13 @@
  * to data/seed-discovered.txt for review; `pnpm --filter @baga/worker seed data/seed-discovered.txt` queues them.
  * Touches no database. Inside the robots.txt visit window only, ≥10 s between requests,
  * at most --max-requests requests (default 41, ~8 min), stops at the first 403/429.
+ * Every link read is saved to data/sitemap-links.txt (gitignored); `--from-file` re-picks from it with no requests,
+ * so picking rules can be tuned without asking Kaspi again.
  *
  *   pnpm --filter @baga/worker discover [--per-category 70] [--max-requests 41]
+ *   pnpm --filter @baga/worker discover --from-file [--per-category 70]
  */
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { createKaspiClient, parseKaspiUrl, KASPI_SITEMAP_URL, KaspiHttpError, canonicalProductUrl, type Sitemap } from "@baga/kaspi";
 import { isInVisitWindow, KASPI_CRAWL_DELAY_MS, pickSeedProducts, SEED_CATEGORIES } from "@baga/core";
@@ -20,8 +23,10 @@ const perCategory = arg("per-category", 70);
 const maxRequests = arg("max-requests", 41); // the index + 40 of ~350 product sitemaps (those are on Kaspi's CDN)
 const out = fileURLToPath(new URL("../data/seed-discovered.txt", import.meta.url));
 const fixtures = fileURLToPath(new URL("../../../packages/kaspi/fixtures/", import.meta.url));
+const linksFile = fileURLToPath(new URL("../data/sitemap-links.txt", import.meta.url));
+const fromFile = process.argv.includes("--from-file");
 
-if (!isInVisitWindow(new Date())) {
+if (!fromFile && !isInVisitWindow(new Date())) {
   console.error("Outside kaspi.kz robots.txt visit window (04:00–08:45 UTC = 09:00–13:45 Almaty). No requests made.");
   process.exit(1);
 }
@@ -53,6 +58,7 @@ const addLocs = (locs: string[]) => {
 const sample = (locs: string[]) => locs.slice(0, 200).map((l) => `  <url><loc>${l.replace(/&/g, "&amp;")}</loc></url>`).join("\n");
 
 function finish(): never {
+  if (!fromFile && candidates.length) writeFileSync(linksFile, candidates.map((c) => `${c.productId}\t${c.slug}`).join("\n") + "\n");
   const picked = pickSeedProducts(candidates, perCategory);
   const lines = [
     `# Seed catalog from ${KASPI_SITEMAP_URL}, ${new Date().toISOString()}.`,
@@ -70,6 +76,16 @@ function finish(): never {
   writeFileSync(out, lines.join("\n") + "\n");
   console.log(`\n${total} products from ${candidates.length} links → ${out}`);
   process.exit(0);
+}
+
+if (fromFile) {
+  if (!existsSync(linksFile)) { console.error(`No ${linksFile} yet: run discover once inside the visit window.`); process.exit(1); }
+  for (const line of readFileSync(linksFile, "utf8").split("\n")) {
+    const [productId, slug] = line.split("\t");
+    if (productId && slug) candidates.push({ productId, slug });
+  }
+  console.log(`Re-picking from ${linksFile} (no requests).`);
+  finish();
 }
 
 console.log(`Reading ${KASPI_SITEMAP_URL} (max ${maxRequests} requests, ≥10 s apart)…`);

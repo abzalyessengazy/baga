@@ -70,6 +70,8 @@ export async function saveSnapshot(
             page_checked_at = coalesce(excluded.page_checked_at, products.page_checked_at)
       returning id`;
     const productId = p!.id;
+    // Watcher trackings made while the product was still queued (migration 0007).
+    await tx`update trackings set product_id = ${productId} where external_id = ${snap.externalId} and product_id is null`;
     // heartbeat_due: the last observation is on an earlier Almaty calendar day (or there is none), so every
     // day with a check gets a point even when nothing changed. (It was "> 24 h", which skipped days.)
     const [prev] = await tx<{ current_min_price: number | null; offer_count: number; in_stock: boolean; heartbeat_due: boolean }[]>`

@@ -15,3 +15,6 @@ coverage
 .lighthouse/
 .next-check/
 .pnpm-store/
+
+# Full Kaspi sitemap link dump from `discover` (large, re-pick input)
+apps/worker/data/sitemap-links.txt

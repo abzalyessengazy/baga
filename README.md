@@ -1,6 +1,6 @@
 # BAGA
 
-Paste a Kaspi.kz product link, or search the products BAGA already tracks, and see whether today's price is a good one: observed price history, every seller's offer and a plain-language verdict. Email alerts when the price reaches your target are coming in Phase 4. The interface is in Russian and Kazakh.
+Paste a Kaspi.kz product link, or search the products BAGA already tracks, and see whether today's price is a good one: observed price history, every seller's offer and a plain-language verdict. Set your own price on any product and get its first price and a target alert in Telegram, no account needed; "Мои товары" keeps the list. The interface is in Russian and Kazakh.
 
 Live: https://baga-rho.vercel.app/ru · Repo: https://github.com/abzalyessengazy/baga
 
@@ -10,7 +10,8 @@ Live: https://baga-rho.vercel.app/ru · Repo: https://github.com/abzalyessengazy
   - It stops when Kaspi answers 403 or 429.
 - **Website** (`apps/web`, Vercel): reads only our database. It never requests Kaspi product data, because Kaspi refuses requests from Vercel's servers.
   - A product we don't track yet is queued after a bot check (Cloudflare Turnstile). The collector fetches it first in its next window.
-  - Until then, the page says "Добавлен" and shows similar products we already track.
+  - Until then, the page says "Добавлен", lets the visitor set their price right away, and shows similar products we already track.
+- **Telegram bot:** connects from the coupon with one tap; the collector sends the first price and target alerts. One-time setup: `pnpm --filter @baga/worker telegram:webhook`.
 - **Backups** (GitHub Actions, nightly): dump the database to Cloudflare R2, then restore the dump into a scratch database and compare row counts.
 
 ## Run locally
@@ -31,7 +32,7 @@ BAGA_DIST_DIR=.next-check pnpm build   # build check that does not disturb a run
 1. Create a free Supabase project, copy `.env.example` to `.env`, and fill in `DATABASE_URL` (transaction pooler, port 6543).
 2. `pnpm db:migrate`
 3. Seed the catalog. Neither step writes Kaspi data directly; the collector fetches everything later.
-   - `pnpm --filter @baga/worker discover` reads Kaspi's sitemap inside the visit window and writes `apps/worker/data/seed-discovered.txt`. Review that file first.
+   - `pnpm --filter @baga/worker discover` reads Kaspi's sitemap inside the visit window and writes `apps/worker/data/seed-discovered.txt`. Review that file first. It also saves every link it read to `apps/worker/data/sitemap-links.txt` (gitignored), so `discover --from-file` can re-pick after a rule change with no Kaspi requests.
    - `pnpm --filter @baga/worker seed data/seed-discovered.txt` queues it. With no argument, `seed` queues `apps/worker/data/seed-products.txt` instead.
 4. `pnpm worker` runs one collection. Outside the visit window it exits without requests. In production it runs daily from `.github/workflows/collect.yml`.
 5. `pnpm dev`

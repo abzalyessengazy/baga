@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { seedCategory, pickSeedProducts, modelKey } from "./seedCatalog";
+import { seedCategory, pickSeedProducts, modelKey, familyKey, FAMILY_CAP } from "./seedCatalog";
 
 describe("seedCategory", () => {
   it("needs a category word and a known brand", () => {
@@ -37,6 +37,13 @@ describe("seedCategory", () => {
       "likato-professional-wellness-konditsioner-250-ml",
       "fen-stroitel-nyi-resanta-fe-2000ek",
       "kreslo-ofisnoe-chernoe",
+      "haier-konditsioner-haier-fs-1-05-kitaiskaja-roza-1000-ml",
+      "acd-samsung-watch-galaxy-watch3-watch4-watch6-chernyi",
+      "poppy-playtime-triple-pack-nintendo-switch-rus",
+      "uncharted-collection-playstation-4-ps4",
+      "nintendo-switch-joy-con-sinii-zheltyi",
+      "zarjadnaja-stantsija-dobe-playstation-5-dualsense-charging-dock-belyi",
+      "lugx-pylesos-vytjazhka-lg-622-48-vt",
     ]) expect(seedCategory(s), s).toBeNull();
   });
 });
@@ -54,7 +61,20 @@ describe("pickSeedProducts", () => {
     expect([...got.keys()]).toEqual(["phones"]);
     expect(got.get("phones")!.map((p) => p.productId)).toEqual(["177318415", "177318182"]);
   });
-  it("model key drops the trailing colour", () => {
+  it("model key drops the trailing colour and gift tag", () => {
     expect(modelKey("apple-iphone-18-pro-256gb-nanosim-esim-serebristyi")).toBe(modelKey("apple-iphone-18-pro-256gb-nanosim-esim-goluboi"));
+    expect(modelKey("apple-iphone-16-128gb-chernyi-podarok")).toBe(modelKey("apple-iphone-16-128gb-belyi-podarok"));
+  });
+  it("keeps consoles, sized monitors and brand-first names", () => {
+    expect(seedCategory("sony-playstation-5-slim-digital-edition-geimpad-charging-station-pulse-3d")).toBe("consoles");
+    expect(seedCategory("27-xiaomi-gaming-monitor-g27qi-p27qca-rggl-chernyi")).toBe("monitors");
+    expect(seedCategory("dyson-hd19-supersonic-travel-kompaktnyi-fen-rozovyi")).toBe("beauty");
+  });
+  it("caps one product line (captured MacBook Air M5 configurations)", () => {
+    const air = ["mdhj4-goluboi", "mdhc4-zolotistyi", "mdhg4-temno-sinii", "mdhh4-goluboi", "mdha4-zolotistyi"].map((c, i) => ({
+      productId: String(170000000 + i), slug: `apple-macbook-air-13-2026-13-6-apple-m5-16-gb-ssd-512-gb-apple-m5-macos-${c}`,
+    }));
+    expect(familyKey(air[0]!.slug, "laptops")).toBe("laptops:apple-macbook-air");
+    expect(pickSeedProducts(air, 70).get("laptops")).toHaveLength(FAMILY_CAP);
   });
 });

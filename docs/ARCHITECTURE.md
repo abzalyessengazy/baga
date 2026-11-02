@@ -5,7 +5,7 @@ Shopper ──paste link / search──▶ Web (Next.js, Vercel arn1) ──read
              unknown product: Turnstile → seed_queue (no Kaspi request)       ▲              │
                                                                               │ saves on change   │ nightly pg_dump
 Kaspi.kz ◀── daily, 04:00–08:45 UTC, ≥10 s apart ── Worker (GitHub Actions) ──┘              ▼
-                                                        └──▶ Resend ──▶ inbox (Phase 4)   Cloudflare R2
+                                                        └──▶ Telegram bot ──▶ visitor     Cloudflare R2
 ```
 
 ## Data acquisition (verified 1 Nov 2026)
@@ -40,6 +40,7 @@ See `packages/db/migrations/`, starting with `0001_init.sql`.
   - `source`: `seed`, or `visitor` for visitor requests, which are fetched first.
   - `status`: `pending` or `not_found`.
   - The slug from the visitor's link is kept so the page can show the product's name before it's collected.
+- **`watchers`, `trackings`:** a tracking belongs to a registered user or to an anonymous watcher. A watcher's tracking may wait for its product (`external_id` set, `product_id` filled in when first collected).
 - **RLS:** enabled on all tables. Users own trackings, never prices.
 
 ## Scheduling (`packages/core/src/schedule.ts`)
@@ -59,6 +60,8 @@ After a failed check, the retry backoff is 5, 20, then 60 minutes.
 - **Hosting:** Vercel Hobby, functions pinned to `arn1` next to the database.
 - **Search:** `/api/search` reads our catalog only.
 - **Lookups and short links:** `/api/lookup` queues unknown products and `/api/resolve` turns pasted links into product ids. Both are rate-limited and checked with Turnstile.
+- **Tracking before registration:** `/api/track` saves a visitor's price for a product in the catalog or the queue. The visitor is an anonymous watcher: a secret in an httpOnly cookie and in a private link, stored hashed. `/my` lists what they track.
+- **Telegram:** `/api/telegram/webhook` handles the bot (`/start <code>` connects a chat, `/list`, `/stop`). The collector sends the first price and target alerts right after each check.
 - **CSS** is inlined into the HTML. Lighthouse mobile scores are 88–98.
 
 ## Hosting (free tier)
