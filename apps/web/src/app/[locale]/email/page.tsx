@@ -26,14 +26,14 @@ export default async function EmailPage({ params, searchParams }: Props) {
   let body: React.ReactNode;
   if (done === "confirmed" || done === "stopped" || done === "invalid") {
     body = (
-      <>
+      <div className="email-page">
         <p className="untracked-status">{t(done)}</p>
         <Link className="btn" href={done === "confirmed" ? "/my" : "/"}>{done === "confirmed" ? t("toMy") : t("toHome")}</Link>
-      </>
+      </div>
     );
   } else if (isToken(confirm)) {
     body = (
-      <form method="post" action="/api/email/confirm">
+      <form className="email-page" method="post" action="/api/email/confirm">
         <p className="untracked-status">{t("confirmText")}</p>
         <input type="hidden" name="t" value={confirm} />
         <input type="hidden" name="l" value={locale} />
@@ -42,7 +42,7 @@ export default async function EmailPage({ params, searchParams }: Props) {
     );
   } else if (isToken(stop)) {
     body = (
-      <form method="post" action="/api/email/stop">
+      <form className="email-page" method="post" action="/api/email/stop">
         <p className="untracked-status">{t("stopText")}</p>
         <input type="hidden" name="c" value={stop} />
         <input type="hidden" name="l" value={locale} />
