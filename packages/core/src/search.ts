@@ -23,6 +23,23 @@ export function slugWords(slug: string): string[] {
   return isValidSlug(slug) ? slug.split("-") : [];
 }
 
+// Kaspi slugs transliterate Russian; colours are the common Russian words left in them.
+const COLOURS: Record<string, string> = {
+  chernyi: "черный", belyi: "белый", seryi: "серый", serebristyi: "серебристый", sinii: "синий", goluboi: "голубой",
+  zolotistyi: "золотистый", krasnyi: "красный", zelenyi: "зеленый", rozovyi: "розовый", fioletovyi: "фиолетовый",
+  bezhevyi: "бежевый", korichnevyi: "коричневый", oranzhevyi: "оранжевый", zheltyi: "желтый", mnogotsvetnyi: "многоцветный",
+};
+
+/**
+ * A readable name from a slug until Kaspi's real title is collected: brands capitalised, model codes and short
+ * letter groups upper-cased, colours back in Russian. "27-xiaomi-redmi-g27q-rg-chernyi" → "27 Xiaomi Redmi G27Q RG черный".
+ */
+export function slugName(slug: string): string {
+  return slugWords(slug)
+    .map((w) => COLOURS[w] ?? (/\d/.test(w) && /[a-z]/.test(w) ? w.toUpperCase() : /^[a-z]{1,2}$/.test(w) ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1)))
+    .join(" ");
+}
+
 /** Search words from a slug: words of ≥ 2 characters, duplicates removed, at most 8. */
 export function slugTokens(slug: string): string[] {
   const out: string[] = [];

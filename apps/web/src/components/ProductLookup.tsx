@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { useRouter } from "@/i18n/navigation";
 import { Turnstile } from "./Turnstile";
 
-type ErrorCode = "check_failed" | "too_many" | "generic";
+type ErrorCode = "check_failed" | "check_blocked" | "too_many" | "generic";
 
 /**
  * For a product we don't track yet: passes Turnstile, asks /api/lookup to queue it for the collector, then
@@ -53,7 +53,7 @@ export function ProductLookup({ id, slug }: { id: string; slug: string | null })
   return (
     <>
       <p className="untracked-status" role="status" aria-live="polite">{t("lookingUp")}</p>
-      <Turnstile key={attempt} action="lookup" locale={locale} onToken={request} onError={() => setError("check_failed")} />
+      <Turnstile key={attempt} action="lookup" locale={locale} onToken={request} onError={(why) => setError(why === "blocked" ? "check_blocked" : "check_failed")} />
     </>
   );
 }

@@ -331,3 +331,9 @@ a { color: inherit; }
 .untracked .side-panel { margin-top: 24px; }
 .untracked .track-card h2 { margin: 0 0 14px; font-size: var(--step-1); color: var(--ink); }
 .untracked .catalog-list { background: var(--paper); border-radius: 10px; box-shadow: var(--paper-shadow); padding: 4px 8px; }
+
+/* Home: "Мои товары" for a returning visitor, a strip of receipt paper under the paste form. */
+.my-strip { max-width: 560px; margin-top: 24px; background: var(--paper); border-radius: 10px; box-shadow: var(--paper-shadow); padding: 14px 6px 10px; color: var(--ink); }
+.my-strip-title { font: 600 var(--step--1)/1 var(--font-receipt); text-transform: uppercase; letter-spacing: .08em; margin: 0 10px 8px; color: var(--ink-soft); }
+.my-strip-all { display: inline-block; margin: 8px 10px 0; font: 600 var(--step--1)/1.2 var(--font-ui); color: var(--stamp); text-decoration: none; }
+.my-strip-all:hover { text-decoration: underline; text-underline-offset: 3px; }

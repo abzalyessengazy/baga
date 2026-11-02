@@ -16,11 +16,16 @@ export async function searchCatalog(q: string, limit = 8): Promise<CatalogItem[]
   return searchProducts(sql, searchTokens(q), limit);
 }
 
-/** For a product we don't track yet: similar tracked products by the words of its link, else popular ones. */
-export async function alreadyTracked(externalId: string, slug: string | null, limit = 6): Promise<{ kind: "similar" | "popular"; items: CatalogItem[] }> {
+/**
+ * For a product we don't track yet: similar tracked products by the words of its link, then other tracked
+ * products to fill the list, so a visitor waiting for their price always has something to look at.
+ */
+export async function alreadyTracked(externalId: string, slug: string | null, limit = 8): Promise<{ similar: CatalogItem[]; popular: CatalogItem[] }> {
   const sql = getSql();
-  if (!sql) return { kind: "popular", items: [] };
+  if (!sql) return { similar: [], popular: [] };
   const similar = slug ? await similarProducts(sql, slugTokens(slug), externalId, limit) : [];
-  if (similar.length) return { kind: "similar", items: similar };
-  return { kind: "popular", items: await popularProducts(sql, externalId, limit) };
+  if (similar.length >= limit) return { similar, popular: [] };
+  const seen = new Set(similar.map((i) => i.externalId));
+  const popular = (await popularProducts(sql, externalId, limit + similar.length)).filter((i) => !seen.has(i.externalId));
+  return { similar, popular: popular.slice(0, limit - similar.length) };
 }

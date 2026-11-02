@@ -1,5 +1,5 @@
 import { toTenge, type Tenge } from "@baga/core";
-import { KaspiOffersResponseSchema, KaspiCardSchema } from "./schema";
+import { KaspiOffersResponseSchema, KaspiOfferSchema, KaspiCardSchema } from "./schema";
 
 export interface OfferSnapshot {
   sellerId: string;
@@ -27,7 +27,8 @@ export interface ProductSnapshot {
 
 export class KaspiParseError extends Error {
   constructor(message: string, readonly detail?: unknown) {
-    super(message);
+    // The detail goes into the message so the collector's log line says which field failed.
+    super(detail === undefined ? message : `${message}: ${JSON.stringify(detail).slice(0, 400)}`);
     this.name = "KaspiParseError";
   }
 }
@@ -42,13 +43,26 @@ export function decodeEntities(s: string): string {
     .replace(/&gt;/g, ">");
 }
 
+/**
+ * Kaspi's offers response, sorted by price. A seller entry without a usable id or price is skipped (it has no
+ * price to show); if every entry is unusable the response is rejected, with the failing fields in `detail`.
+ */
 export function parseOffers(json: unknown): OfferSnapshot[] {
   const r = KaspiOffersResponseSchema.safeParse(json);
-  if (!r.success) throw new KaspiParseError("Offers response did not match schema", r.error.issues.slice(0, 5));
-  return r.data.offers
+  if (!r.success) {
+    const keys = json && typeof json === "object" ? Object.keys(json).slice(0, 10) : typeof json;
+    throw new KaspiParseError("Offers response did not match schema", { keys, issues: r.error.issues.slice(0, 5) });
+  }
+  const parsed = r.data.offers.map((o) => KaspiOfferSchema.safeParse(o));
+  const good = parsed.flatMap((p) => (p.success ? [p.data] : []));
+  if (parsed.length > 0 && good.length === 0) {
+    const bad = parsed.find((p) => !p.success);
+    throw new KaspiParseError("No usable offers in response", { offers: parsed.length, issues: bad && !bad.success ? bad.error.issues.slice(0, 5) : [] });
+  }
+  return good
     .map((o) => ({
       sellerId: o.merchantId,
-      sellerName: o.merchantName.replace(/\s+/g, " ").trim(),
+      sellerName: (o.merchantName ?? "").replace(/\s+/g, " ").trim() || o.merchantId,
       sellerRating: o.merchantRating ?? null,
       sellerReviews: o.merchantReviewsQuantity ?? null,
       price: toTenge(o.price),

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { getSql, listWatched } from "@baga/db";
-import { slugWords } from "@baga/core";
+import { slugName } from "@baga/core";
 import { currentWatcher, telegramConnectUrl, botUsername } from "@/lib/watcher";
 import { siteUrl } from "@/lib/site";
 import { MyList } from "@/components/MyList";
@@ -38,7 +38,7 @@ export default async function MyPage({ params }: Props) {
             items={items.map((i) => ({
               trackingId: i.trackingId, externalId: i.externalId, imageUrl: i.imageUrl, targetPrice: i.targetPrice,
               currentMinPrice: i.currentMinPrice,
-              name: i.title ?? (i.slug ? slugWords(i.slug).join(" ") : `№ ${i.externalId}`),
+              name: i.title ?? (i.slug ? slugName(i.slug) : `№ ${i.externalId}`),
             }))}
           />
         )}

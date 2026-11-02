@@ -4,7 +4,7 @@
  * products; poll for new visitor requests until the window closes; evaluate alerts; send the first price and
  * target alerts to Telegram right after each check, queued emails at the end. Started by .github/workflows/collect.yml at 03:50 UTC; waits for the window to open.
  */
-import { createKaspiClient, buildSnapshot, KaspiHttpError, canonicalProductUrl, parseKaspiUrl, shortLinkUrl } from "@baga/kaspi";
+import { createKaspiClient, buildSnapshot, KaspiHttpError, KaspiParseError, canonicalProductUrl, parseKaspiUrl, shortLinkUrl } from "@baga/kaspi";
 import { saveSnapshot, connectionOptions, requestProduct } from "@baga/db";
 import {
   evaluateAlert, priorityFor, INTERVAL_MINUTES, backoffMinutes, isSuspiciousJump, type TrackingAlertState,
@@ -123,7 +123,7 @@ async function resolveShortLinks(): Promise<number> {
       breaker.record(true);
     } catch (e) {
       const http = e instanceof KaspiHttpError ? e : null;
-      breaker.record(false, http?.isBlocking ?? false);
+      breaker.record(false, http?.isBlocking ?? false, e instanceof KaspiParseError);
       await sql`update short_link_queue set attempts = attempts + 1, last_error = ${String(e).slice(0, 500)},
         status = case when attempts + 1 >= 3 then 'failed' else 'pending' end where code = ${r.code}`;
       console.error(`short link ${r.code}: ${e}`);
@@ -171,7 +171,7 @@ async function checkProduct(row: DueRow, runId: number): Promise<boolean> {
     return saved.priceChanged;
   } catch (e) {
     const http = e instanceof KaspiHttpError ? e : null;
-    breaker.record(false, http?.isBlocking ?? false);
+    breaker.record(false, http?.isBlocking ?? false, e instanceof KaspiParseError);
     if (http?.isNotFound) await sql`update products set status = 'delisted' where id = ${row.product_id}`;
     const fails = row.fail_count + 1;
     await sql`update collection_schedule set fail_count = ${fails}, last_error = ${String(e).slice(0, 500)},
@@ -205,7 +205,7 @@ async function addQueued(q: Queued, runId: number): Promise<boolean> {
     return true;
   } catch (e) {
     const http = e instanceof KaspiHttpError ? e : null;
-    breaker.record(false, http?.isBlocking ?? false);
+    breaker.record(false, http?.isBlocking ?? false, e instanceof KaspiParseError);
     if (http?.isNotFound) await sql`update seed_queue set status = 'not_found', last_error = ${String(e).slice(0, 500)} where external_id = ${q.external_id}`;
     else await sql`update seed_queue set attempts = attempts + 1, last_error = ${String(e).slice(0, 500)} where external_id = ${q.external_id}`;
     console.error(`queued ${q.source} ${q.external_id}: ${e}`);

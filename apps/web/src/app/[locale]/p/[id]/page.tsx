@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import type { Metadata } from "next";
-import { computeVerdict, formatTenge, nextVisitWindowDay, isValidSlug, slugWords, isInVisitWindow } from "@baga/core";
+import { computeVerdict, formatTenge, nextVisitWindowDay, isValidSlug, slugName, isInVisitWindow } from "@baga/core";
 import { getProductView, queuedSlug, collectorRunning } from "@/lib/product";
 import { QueuedWatcher } from "@/components/QueuedWatcher";
 import { alreadyTracked } from "@/lib/catalog";
@@ -42,7 +42,7 @@ export default async function ProductPage({ params, searchParams }: Props) {
     // Not tracked yet. Everything here comes from our database or the visitor's own link; no Kaspi request.
     const fromQuery = (await searchParams).s;
     const s = typeof fromQuery === "string" && isValidSlug(fromQuery) ? fromQuery : await queuedSlug(id);
-    const name = s ? slugWords(s).join(" ") : null;
+    const name = s ? slugName(s) : null;
     const tracked = await alreadyTracked(id, s);
     // During the visit window with the collector running, visitor requests are fetched within minutes:
     // say so and refresh until the product page exists. Otherwise "today"/"tomorrow".
@@ -72,10 +72,16 @@ export default async function ProductPage({ params, searchParams }: Props) {
         </article>
         {/* Queued: the visitor can set a price now; the first price goes to Telegram when the collector gets it. */}
         {r.reason === "queued" && <TrackPanel productId={id} current={null} initial={await trackInitial(id)} />}
-        {tracked.items.length > 0 && (
+        {tracked.similar.length > 0 && (
           <>
-            <h2>{tracked.kind === "similar" ? t("similarTracked") : t("popularTracked")}</h2>
-            <CatalogList items={tracked.items} locale={locale as "ru" | "kk"} outOfStock={t("outOfStock")} />
+            <h2>{t("similarTracked")}</h2>
+            <CatalogList items={tracked.similar} locale={locale as "ru" | "kk"} outOfStock={t("outOfStock")} />
+          </>
+        )}
+        {tracked.popular.length > 0 && (
+          <>
+            <h2>{tracked.similar.length ? t("moreTracked") : t("popularTracked")}</h2>
+            <CatalogList items={tracked.popular} locale={locale as "ru" | "kk"} outOfStock={t("outOfStock")} />
           </>
         )}
       </main>

@@ -3,6 +3,7 @@ import { useRef } from "react";
 import { useTranslations } from "next-intl";
 import { PasteForm } from "./PasteForm";
 import { HeroReceipt } from "./HeroReceipt";
+import { MyStrip } from "./MyStrip";
 
 export function HomeHero() {
   const t = useTranslations("home");
@@ -13,6 +14,7 @@ export function HomeHero() {
         <h1 className="headline">{t("headline")}</h1>
         <p className="subline">{t("subline")}</p>
         <PasteForm ref={input} />
+        <MyStrip />
       </div>
       <HeroReceipt onTorn={() => setTimeout(() => input.current?.focus({ preventScroll: false }), 500)} />
     </section>

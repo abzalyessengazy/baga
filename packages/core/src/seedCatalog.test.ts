@@ -70,6 +70,21 @@ describe("pickSeedProducts", () => {
     expect(seedCategory("27-xiaomi-gaming-monitor-g27qi-p27qca-rggl-chernyi")).toBe("monitors");
     expect(seedCategory("dyson-hd19-supersonic-travel-kompaktnyi-fen-rozovyi")).toBe("beauty");
   });
+  it("recognises categories Kaspi names without a category word (captured slugs, 2 Nov 2026)", () => {
+    expect(seedCategory("artel-55au20h-140-sm-chernyi")).toBe("tvs");
+    expect(seedCategory("lg-43lm5772pla-109-sm-chernyi")).toBe("tvs");
+    expect(seedCategory("27-lg-27gp750-b-chernyi")).toBe("monitors");
+    expect(seedCategory("24-5-asus-tuf-gaming-vg259qm-chernyi")).toBe("monitors");
+    expect(seedCategory("atlant-hm-4623-101-belyi")).toBe("fridges");
+    expect(seedCategory("samsung-rb33a32n0el-wt-bezhevyi")).toBe("fridges");
+    expect(seedCategory("bosch-smv4hvx31e-belyi")).toBe("dishwashers");
+    expect(seedCategory("roborock-q7-plus-belyi-chernyi")).toBe("vacuums");
+    expect(seedCategory("dyson-v12-detect-slim-absolute-fioletovyi-serebristyi")).toBe("vacuums");
+    expect(seedCategory("dreame-grand-fen-belyi")).toBe("beauty");
+    for (const s of ["atlant-vaz-2112-1-1-econom", "samsung-bn59-01385a", "dreamee-trimmer-universal-noe", "kronshtein-dlja-televizora-c3-nastennyi-naklonnyi-40-75"]) {
+      expect(seedCategory(s), s).toBeNull();
+    }
+  });
   it("caps one product line (captured MacBook Air M5 configurations)", () => {
     const air = ["mdhj4-goluboi", "mdhc4-zolotistyi", "mdhg4-temno-sinii", "mdhh4-goluboi", "mdha4-zolotistyi"].map((c, i) => ({
       productId: String(170000000 + i), slug: `apple-macbook-air-13-2026-13-6-apple-m5-16-gb-ssd-512-gb-apple-m5-macos-${c}`,

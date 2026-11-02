@@ -51,6 +51,17 @@ describe("parsers", () => {
   });
   it("rejects a malformed response instead of inventing a price", () => {
     expect(() => parseOffers({ offers: [{ price: "cheap" }] })).toThrow(KaspiParseError);
+    expect(() => parseOffers({ items: [] })).toThrow(/keys/);
+  });
+  it("skips one unusable seller entry and keeps the rest", () => {
+    const real = JSON.parse(fx("offers-177318181.json")) as { offers: Record<string, unknown>[] };
+    const odd = [{ ...real.offers[0], price: null }, { ...real.offers[1], merchantName: null, merchantId: 42, title: undefined }, real.offers[2]];
+    const offers = parseOffers({ offers: odd });
+    expect(offers.map((o) => o.price)).toEqual([749464, 749977]);
+    expect(offers[0]).toMatchObject({ sellerId: "42", sellerName: "42" });
+  });
+  it("reads an empty offers list as no sellers", () => {
+    expect(parseOffers({ offers: [], total: 0 })).toEqual([]);
   });
   it("parses the product page data block", () => {
     const p = parseProductPage(fx("product-177318181.html"));

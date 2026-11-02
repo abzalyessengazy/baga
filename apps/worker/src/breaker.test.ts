@@ -20,4 +20,16 @@ describe("CircuitBreaker", () => {
     for (let i = 0; i < 50; i++) b.record(i % 20 !== 0);
     expect(b.openReason).toBeNull();
   });
+  it("does not stop for a few responses we could not read (the run of 2 Nov: 3 of 14)", () => {
+    const b = new CircuitBreaker();
+    for (let i = 0; i < 11; i++) b.record(true);
+    for (let i = 0; i < 3; i++) b.record(false, false, true);
+    expect(b.openReason).toBeNull();
+  });
+  it("stops when most responses are unreadable (Kaspi changed its format)", () => {
+    const b = new CircuitBreaker();
+    for (let i = 0; i < 8; i++) b.record(true);
+    for (let i = 0; i < 12; i++) b.record(false, false, true);
+    expect(b.openReason).toMatch(/unreadable share/);
+  });
 });

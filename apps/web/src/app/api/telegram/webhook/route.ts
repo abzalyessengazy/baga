@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getTranslations } from "next-intl/server";
 import { getSql, linkTelegram, getWatcherByChat, unlinkTelegram, listWatched, type Watcher } from "@baga/db";
-import { formatTenge, slugWords } from "@baga/core";
+import { formatTenge, slugName } from "@baga/core";
 import { sendTelegram } from "@/lib/telegram";
 import { siteUrl } from "@/lib/site";
 
@@ -53,7 +53,7 @@ async function listText(w: Watcher): Promise<string> {
   if (!items.length) return t("empty", { site: `${siteUrl()}/${w.locale}` });
   const f = (n: number) => formatTenge(n, w.locale);
   const lines = items.map((i) => {
-    const name = i.title ?? (i.slug ? slugWords(i.slug).join(" ") : `№ ${i.externalId}`);
+    const name = i.title ?? (i.slug ? slugName(i.slug) : `№ ${i.externalId}`);
     const now = i.currentMinPrice !== null ? f(i.currentMinPrice) : t("noPriceYet");
     return `• ${name}\n  ${t("line", { now, target: f(i.targetPrice) })}\n  ${siteUrl()}/${w.locale}/p/${i.externalId}`;
   });

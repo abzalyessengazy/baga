@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { searchTokens, isValidSlug, slugWords, slugTokens } from "./search";
+import { searchTokens, isValidSlug, slugWords, slugTokens, slugName } from "./search";
 
 describe("searchTokens", () => {
   it("lowercases and splits on anything that is not a letter or digit", () => {
@@ -30,5 +30,10 @@ describe("slugs", () => {
     expect(slugWords("apple-iphone-18-pro-256gb")).toEqual(["apple", "iphone", "18", "pro", "256gb"]);
     expect(slugTokens("ww-grinder-ww-x")).toEqual(["ww", "grinder"]);
     expect(slugWords("not a slug")).toEqual([]);
+  });
+  it("makes a readable name from a slug", () => {
+    expect(slugName("27-xiaomi-redmi-g27q-2026-p27qdb-rg-chernyi")).toBe("27 Xiaomi Redmi G27Q 2026 P27QDB RG черный");
+    expect(slugName("apple-iphone-18-pro-256gb")).toBe("Apple Iphone 18 Pro 256GB");
+    expect(slugName("not a slug")).toBe("");
   });
 });

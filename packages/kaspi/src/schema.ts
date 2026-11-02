@@ -1,21 +1,21 @@
 import { z } from "zod";
 
 /** Only the fields BAGA uses. Unknown fields are ignored so small API changes don't break parsing. */
+// Only the seller id and the price are required; a seller without a name is shown by id.
 export const KaspiOfferSchema = z.object({
-  masterSku: z.string(),
-  merchantId: z.string(),
-  merchantName: z.string(),
+  merchantId: z.union([z.string(), z.number()]).transform(String),
+  merchantName: z.string().nullable().optional(),
   merchantRating: z.number().nullable().optional(),
   merchantReviewsQuantity: z.number().nullable().optional(),
-  title: z.string(),
   price: z.number().positive(),
   delivery: z.string().nullable().optional(),
   deliveryDuration: z.string().nullable().optional(),
   preorder: z.number().nullable().optional(),
 });
 
+/** Offers are checked one by one in `parseOffers`, so one odd seller entry does not lose the whole product. */
 export const KaspiOffersResponseSchema = z.object({
-  offers: z.array(KaspiOfferSchema),
+  offers: z.array(z.unknown()),
   total: z.number().optional(),
   offersCount: z.number().optional(),
 });
