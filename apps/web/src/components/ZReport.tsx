@@ -199,7 +199,7 @@ export function ZReport() {
       <h2 className="section-title">{t("zTitle")}</h2>
       <p className="section-note">{t("zNote")}</p>
       <Totals s={{ ...s, lastRun: s.lastRun }} />
-      <div className="highlights">
+      <div className="z-slips" data-n={slips.length}>
         {slips.map((x) => (
           <article key={x.title} className="slip">
             {x.el}
