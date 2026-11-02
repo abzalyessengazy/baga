@@ -19,11 +19,18 @@ export function parseSitemap(xml: string): Sitemap {
   return { kind, locs };
 }
 
-/** Only sitemap files on kaspi.kz/shop/ are ever fetched — never a URL from anywhere else. */
+/**
+ * Only Kaspi's own sitemap files are ever fetched: the index on kaspi.kz/shop/ and the files it lists, which Kaspi
+ * hosts in one dated folder on its CDN (seen 2 Nov 2026: resources.cdn-kaspi.kz/img/cnt/s/m/20261102070000/
+ * Product-ru-KZT-<uuid>.xml). Never a URL from anywhere else.
+ */
 export function isKaspiSitemapUrl(url: string): boolean {
   try {
     const u = new URL(url);
-    return u.protocol === "https:" && u.hostname === "kaspi.kz" && u.pathname.startsWith("/shop/") && /\.xml(\.gz)?$/i.test(u.pathname);
+    if (u.protocol !== "https:" || u.search || !/\.xml(\.gz)?$/i.test(u.pathname)) return false;
+    if (u.hostname === "kaspi.kz") return u.pathname.startsWith("/shop/");
+    if (u.hostname === "resources.cdn-kaspi.kz") return /^\/img\/cnt\/s\/m\/\d{8,14}\/[A-Za-z0-9-]+\.xml(\.gz)?$/.test(u.pathname);
+    return false;
   } catch {
     return false;
   }

@@ -2,7 +2,7 @@ import "server-only";
 import { cache } from "react";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { getSql, getProductByExternalId, getDailyLows, getOffers, getQueuedRequest, requestProduct } from "@baga/db";
+import { getSql, getProductByExternalId, getDailyLows, getOffers, getQueuedRequest, requestProduct, isCollectorRunning, queueShortLink, getShortLink, type ShortLinkRow } from "@baga/db";
 import { createKaspiClient, parseOffers, parseProductPage, buildSnapshot, KaspiHttpError, type ProductSnapshot } from "@baga/kaspi";
 import type { DailyLow } from "@baga/core";
 
@@ -58,6 +58,28 @@ export async function queueProductRequest(externalId: string, slug: string | nul
   const sql = getSql();
   if (!sql) return "unavailable";
   return requestProduct(sql, externalId, slug);
+}
+
+/** Queues an l.kaspi.kz short link for the collector to resolve. */
+export async function queueShortLinkRequest(code: string, path: string): Promise<"queued" | "full" | "unavailable"> {
+  const sql = getSql();
+  if (!sql) return "unavailable";
+  const r = await queueShortLink(sql, code, path);
+  return r === "full" ? "full" : "queued";
+}
+
+/** A queued short link: still pending, failed, or resolved to a product id. */
+export async function shortLinkStatus(code: string): Promise<ShortLinkRow | null> {
+  const sql = getSql();
+  if (!sql) return null;
+  return getShortLink(sql, code);
+}
+
+/** Whether the collector is running right now, so a queued product will be fetched within minutes. */
+export async function collectorRunning(): Promise<boolean> {
+  const sql = getSql();
+  if (!sql) return false;
+  return isCollectorRunning(sql).catch(() => false);
 }
 
 /** The slug saved with a queued request (from the visitor's link), if any. */

@@ -1,8 +1,9 @@
 import { notFound } from "next/navigation";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import type { Metadata } from "next";
-import { computeVerdict, formatTenge, nextVisitWindowDay, isValidSlug, slugWords } from "@baga/core";
-import { getProductView, queuedSlug } from "@/lib/product";
+import { computeVerdict, formatTenge, nextVisitWindowDay, isValidSlug, slugWords, isInVisitWindow } from "@baga/core";
+import { getProductView, queuedSlug, collectorRunning } from "@/lib/product";
+import { QueuedWatcher } from "@/components/QueuedWatcher";
 import { alreadyTracked } from "@/lib/catalog";
 import { CatalogList } from "@/components/CatalogList";
 import { PriceChart } from "@/components/PriceChart";
@@ -42,6 +43,9 @@ export default async function ProductPage({ params, searchParams }: Props) {
     const s = typeof fromQuery === "string" && isValidSlug(fromQuery) ? fromQuery : await queuedSlug(id);
     const name = s ? slugWords(s).join(" ") : null;
     const tracked = await alreadyTracked(id, s);
+    // During the visit window with the collector running, visitor requests are fetched within minutes:
+    // say so and refresh until the product page exists. Otherwise "today"/"tomorrow".
+    const live = r.reason === "queued" && isInVisitWindow(new Date()) && (await collectorRunning());
     return (
       <main className="wrap untracked">
         <article className="receipt">
@@ -54,7 +58,14 @@ export default async function ProductPage({ params, searchParams }: Props) {
             ? <ProductLookup id={id} slug={s} />
             : (
               // "today"/"tomorrow" follows the collector's daily run (Kaspi's robots.txt window); times are not shown.
-              <p className="untracked-status" role="status">{nextVisitWindowDay(new Date()) === "today" ? t("queuedToday") : t("queuedTomorrow")}</p>
+              live ? (
+                <>
+                  <p className="untracked-status" role="status">{t("fetchingNow")}</p>
+                  <QueuedWatcher />
+                </>
+              ) : (
+                <p className="untracked-status" role="status">{nextVisitWindowDay(new Date()) === "today" ? t("queuedToday") : t("queuedTomorrow")}</p>
+              )
             )}
           <a className="kaspi-link" href={`/go/${id}`} rel="noopener">{t("openOnKaspi")}</a>
         </article>

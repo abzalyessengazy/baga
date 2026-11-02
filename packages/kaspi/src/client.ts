@@ -120,7 +120,7 @@ export function createKaspiClient(opts: KaspiClientOptions = {}) {
    */
   async function resolveShortLink(url: string): Promise<string | null> {
     await gate();
-    const res = await f(url, { method: "GET", redirect: "manual", headers: { "User-Agent": ua, Accept: "text/html" } });
+    const res = await f(url, { method: "GET", redirect: "manual", headers: { "User-Agent": ua, Accept: "text/html" }, signal: AbortSignal.timeout(timeoutMs) });
     await res.body?.cancel().catch(() => undefined);
     const location = res.headers.get("location");
     if (res.status >= 300 && res.status < 400 && location) return new URL(location, url).toString();

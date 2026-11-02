@@ -13,7 +13,7 @@ Kaspi.kz ◀── daily, 04:00–08:45 UTC, ≥10 s apart ── Worker (GitHub
   - Request: JSON body `{cityId, id, limit, page, sortOption:"PRICE", …}` and the header `X-KS-City`.
   - Response: `offers[]` with `merchantId, merchantName, merchantRating, price, deliveryDuration`, plus `total`.
 - **Product:** the product page HTML contains `BACKEND.components.item = {...}`, with `card.title`, `galleryImages` and `breadcrumbs`.
-- **Seed catalog:** comes from Kaspi's sitemap (`/shop/sitemap.xml`, the one robots.txt lists), via the `discover` command.
+- **Seed catalog:** comes from Kaspi's sitemap (`/shop/sitemap.xml`, the one robots.txt lists), via the `discover` command. The index lists 350 product sitemaps and 320 per-city category sitemaps, hosted in one dated folder on Kaspi's CDN (`resources.cdn-kaspi.kz/img/cnt/s/m/<date>/`). Only that folder is fetched there, with the same 10 s spacing.
 - **Short links:** `l.kaspi.kz/…` links are resolved with one GET that doesn't follow the redirect, after Turnstile.
 - **Prices are national:** the lowest price was identical in 6 cities for 3 products. We use reference city 750000000 (Almaty).
 - **Which networks Kaspi accepts:**

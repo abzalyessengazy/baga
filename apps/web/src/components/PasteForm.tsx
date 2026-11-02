@@ -71,12 +71,13 @@ export const PasteForm = forwardRef<HTMLInputElement>(function PasteForm(_, ref)
         body: JSON.stringify({ input: q, token: short ? token.current : undefined }),
       });
       if (short) { token.current = null; setWidgetKey((k) => k + 1); } // tokens are single-use
-      const data = (await res.json()) as { productId?: string; slug?: string | null; error?: ErrorCode };
+      const data = (await res.json()) as { productId?: string; slug?: string | null; pendingLink?: string; error?: ErrorCode };
       if (data.productId) {
         write("");
         router.push(`/p/${data.productId}${data.slug ? `?s=${encodeURIComponent(data.slug)}` : ""}`);
         return;
       }
+      if (data.pendingLink) { write(""); router.push(`/l/${encodeURIComponent(data.pendingLink)}`); return; }
       setError(data.error ?? "generic");
     } catch {
       setError("generic");

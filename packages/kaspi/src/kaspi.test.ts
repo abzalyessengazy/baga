@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { parseKaspiUrl, canonicalProductUrl } from "./url";
+import { parseKaspiUrl, canonicalProductUrl, shortLinkCode } from "./url";
 import { parseOffers, parseProductPage, buildSnapshot, KaspiParseError } from "./snapshot";
 import { createKaspiClient, KaspiHttpError } from "./client";
 
@@ -165,5 +165,16 @@ describe("client", () => {
     } finally {
       if (saved !== undefined) process.env.KASPI_USER_AGENT = saved;
     }
+  });
+});
+
+describe("shortLinkCode", () => {
+  it("takes the code from links shared by the Kaspi app", () => {
+    expect(shortLinkCode("https://l.kaspi.kz/shop/D5zGA9hPyp8zi3w?sessionId=7c54d10f-0aa4-44f8-893b-862ff30a128d1793558424"))
+      .toEqual({ code: "D5zGA9hPyp8zi3w", path: "/shop/D5zGA9hPyp8zi3w" });
+    expect(shortLinkCode("Смотри: https://l.kaspi.kz/AbCd123/ ")).toEqual({ code: "AbCd123", path: "/AbCd123" });
+    expect(shortLinkCode("https://l.kaspi.kz/shop/../../etc")).toBeNull();
+    expect(shortLinkCode("https://l.kaspi.kz.evil.example/shop/abcd")).toBeNull();
+    expect(shortLinkCode("https://kaspi.kz/shop/p/x-1/")).toBeNull();
   });
 });

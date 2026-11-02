@@ -3,8 +3,8 @@
  * fetch visitor requests first, then check due products (offers only; product page weekly), then queued seed
  * products; poll for new visitor requests until the window closes; evaluate alerts, send queued emails. Started by .github/workflows/collect.yml at 03:50 UTC; waits for the window to open.
  */
-import { createKaspiClient, buildSnapshot, KaspiHttpError, canonicalProductUrl } from "@baga/kaspi";
-import { saveSnapshot, connectionOptions } from "@baga/db";
+import { createKaspiClient, buildSnapshot, KaspiHttpError, canonicalProductUrl, parseKaspiUrl, shortLinkUrl } from "@baga/kaspi";
+import { saveSnapshot, connectionOptions, requestProduct } from "@baga/db";
 import {
   evaluateAlert, priorityFor, INTERVAL_MINUTES, backoffMinutes, isSuspiciousJump, type TrackingAlertState,
   KASPI_CRAWL_DELAY_MS, isInVisitWindow, msUntilVisitWindow,
@@ -51,19 +51,25 @@ async function main() {
 
   // Order on every turn: visitor requests (someone is waiting), then due products, then seed rows.
   // When there is nothing to do, poll for new visitor requests until the window closes.
-  while (!breaker.openReason && inWindow()) {
+  // Someone is looking at a "Получаем цену…" page: called before every product, so a visitor waits for at
+  // most one product in progress, not a whole chunk.
+  async function serveVisitors(): Promise<boolean> {
+    const links = await resolveShortLinks();
     const visitors = await nextQueued("visitor", tried);
-    if (visitors.length) {
-      for (const q of visitors) {
-        if (breaker.openReason || !inWindow()) break;
-        tried.add(q.external_id);
-        if (await addQueued(q, runId)) seeded++;
-      }
-      continue;
+    for (const q of visitors) {
+      if (breaker.openReason || !inWindow()) break;
+      tried.add(q.external_id);
+      if (await addQueued(q, runId)) seeded++;
     }
+    return links > 0 || visitors.length > 0;
+  }
+
+  while (!breaker.openReason && inWindow()) {
+    if (await serveVisitors()) continue;
     const due = await claimDue(env.chunkSize());
     if (due.length) {
       for (const row of due) {
+        if (!breaker.openReason && inWindow()) await serveVisitors();
         if (breaker.openReason || !inWindow()) { await release(row.product_id); continue; }
         if (await checkProduct(row, runId)) changed++;
       }
@@ -72,6 +78,7 @@ async function main() {
     const seeds = await nextQueued("seed", tried);
     if (seeds.length) {
       for (const q of seeds) {
+        if (!breaker.openReason && inWindow()) await serveVisitors();
         if (breaker.openReason || !inWindow()) break;
         tried.add(q.external_id);
         if (await addQueued(q, runId)) seeded++;
@@ -92,6 +99,35 @@ async function main() {
   const hc = env.healthcheckUrl();
   if (hc) await fetch(aborted ? `${hc}/fail` : hc, { method: "POST", body: aborted ?? "ok" }).catch(() => {});
   if (aborted) process.exitCode = 2;
+}
+
+/**
+ * Short links the website could not resolve (Kaspi does not answer Vercel): one non-following GET of
+ * https://l.kaspi.kz + the validated path each, then the product is queued as a visitor request.
+ */
+async function resolveShortLinks(): Promise<number> {
+  const rows = await sql<{ code: string; path: string }[]>`
+    select code, path from short_link_queue where status = 'pending' and attempts < 3 order by added_at limit 5`;
+  for (const r of rows) {
+    try {
+      const target = await kaspi.resolveShortLink(shortLinkUrl(r.path));
+      const p = target ? parseKaspiUrl(target) : null;
+      if (!p?.ok) {
+        await sql`update short_link_queue set status = 'failed', attempts = attempts + 1, last_error = ${`points to ${target}`.slice(0, 500)} where code = ${r.code}`;
+        continue;
+      }
+      await requestProduct(sql, p.productId, p.slug, 10_000);
+      await sql`update short_link_queue set status = 'resolved', external_id = ${p.productId}, slug = ${p.slug}, resolved_at = now() where code = ${r.code}`;
+      breaker.record(true);
+    } catch (e) {
+      const http = e instanceof KaspiHttpError ? e : null;
+      breaker.record(false, http?.isBlocking ?? false);
+      await sql`update short_link_queue set attempts = attempts + 1, last_error = ${String(e).slice(0, 500)},
+        status = case when attempts + 1 >= 3 then 'failed' else 'pending' end where code = ${r.code}`;
+      console.error(`short link ${r.code}: ${e}`);
+    }
+  }
+  return rows.length;
 }
 
 /** Claims due rows; locked_until stops an overlapping run from taking the same product. */

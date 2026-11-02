@@ -2,9 +2,9 @@
  * Builds the seed catalog from Kaspi's sitemap (the one kaspi.kz/robots.txt lists). Writes a list of product URLs
  * to data/seed-discovered.txt for review; `pnpm --filter @baga/worker seed data/seed-discovered.txt` queues them.
  * Touches no database. Inside the robots.txt visit window only, ≥10 s between requests,
- * at most --max-requests requests, stops at the first 403/429.
+ * at most --max-requests requests (default 41, ~8 min), stops at the first 403/429.
  *
- *   pnpm --filter @baga/worker discover [--per-category 70] [--max-requests 8]
+ *   pnpm --filter @baga/worker discover [--per-category 70] [--max-requests 41]
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -17,7 +17,7 @@ const arg = (name: string, dflt: number) => {
   return Number.isFinite(v) && v > 0 ? v : dflt;
 };
 const perCategory = arg("per-category", 70);
-const maxRequests = arg("max-requests", 8);
+const maxRequests = arg("max-requests", 41); // the index + 40 of ~350 product sitemaps (those are on Kaspi's CDN)
 const out = fileURLToPath(new URL("../data/seed-discovered.txt", import.meta.url));
 const fixtures = fileURLToPath(new URL("../../../packages/kaspi/fixtures/", import.meta.url));
 

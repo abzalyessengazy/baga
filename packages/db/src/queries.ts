@@ -123,6 +123,29 @@ export async function getQueuedRequest(sql: postgres.Sql, externalId: string): P
   return rows[0] ? { status: rows[0].status, addedAt: rows[0].added_at, slug: rows[0].slug } : null;
 }
 
+export interface ShortLinkRow { code: string; path: string; status: "pending" | "resolved" | "failed"; externalId: string | null; slug: string | null }
+
+/** Queues a short link the website could not resolve. Returns the row (existing or new), or "full". */
+export async function queueShortLink(sql: postgres.Sql, code: string, path: string, maxPending = 300): Promise<ShortLinkRow | "full"> {
+  const existing = await getShortLink(sql, code);
+  if (existing) return existing;
+  const [p] = await sql<{ n: number }[]>`select count(*)::int as n from short_link_queue where status = 'pending'`;
+  if ((p?.n ?? 0) >= maxPending) return "full";
+  await sql`insert into short_link_queue (code, path) values (${code}, ${path}) on conflict (code) do nothing`;
+  return (await getShortLink(sql, code))!;
+}
+
+export async function getShortLink(sql: postgres.Sql, code: string): Promise<ShortLinkRow | null> {
+  const rows = await sql<ShortLinkRow[]>`select code, path, status, external_id as "externalId", slug from short_link_queue where code = ${code}`;
+  return rows[0] ?? null;
+}
+
+/** True while a collector run has started and not finished (runs last at most the 4 h 45 min window). */
+export async function isCollectorRunning(sql: postgres.Sql): Promise<boolean> {
+  const rows = await sql`select 1 from collection_runs where finished_at is null and started_at > now() - interval '6 hours' limit 1`;
+  return rows.length > 0;
+}
+
 /**
  * Queues a visitor's request for a product we don't have. The collector fetches visitor rows first.
  * An existing seed row is promoted to visitor priority. Refuses when too many visitor rows are pending.

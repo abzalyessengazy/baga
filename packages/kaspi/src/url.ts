@@ -43,3 +43,17 @@ export function parseKaspiUrl(input: string): ParsedKaspiUrl {
 export function canonicalProductUrl(productId: string, slug?: string | null): string {
   return `https://kaspi.kz/shop/p/${slug ? `${slug}-` : "-"}${productId}/`;
 }
+
+/**
+ * The code of an l.kaspi.kz short link ("https://l.kaspi.kz/shop/D5zGA9hPyp8zi3w?sessionId=…" → path
+ * "/shop/D5zGA9hPyp8zi3w", code "D5zGA9hPyp8zi3w"). Query and fragment are dropped. We only ever request
+ * https://l.kaspi.kz + this validated path, never the pasted text.
+ */
+export function shortLinkCode(input: string): { code: string; path: string } | null {
+  const m = input.match(/https?:\/\/l\.kaspi\.kz(\/[^\s?#]*)/i);
+  const path = m?.[1]?.replace(/\/+$/, "");
+  const ok = path?.match(/^\/(?:shop\/)?([A-Za-z0-9_-]{4,64})$/);
+  return ok ? { code: ok[1]!, path: path! } : null;
+}
+
+export const shortLinkUrl = (path: string) => `https://l.kaspi.kz${path}`;

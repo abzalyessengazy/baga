@@ -3,9 +3,16 @@ on:
   # Once a day. kaspi.kz/robots.txt asks bots to visit 04:00-08:45 UTC (09:00-13:45 Almaty) with a
   # 10 s crawl delay. The job starts at 03:50 UTC; the worker waits for 04:00 and stops at 08:45.
   # See DECISIONS.md "Follow kaspi.kz/robots.txt". Manual runs outside the window exit without requests.
-  schedule: [{ cron: "50 3 * * *" }]
+  # GitHub delays scheduled runs under load and sometimes drops them (2 Nov 2026: no 03:50 run at all), so later
+  # triggers through the window act as backups. The concurrency group makes them wait for a running collector;
+  # once it has stopped at 08:45 they start outside the window and exit without any Kaspi request.
+  schedule:
+    - cron: "50 3 * * *"
+    - cron: "23 4 * * *"
+    - cron: "47 5 * * *"
+    - cron: "13 7 * * *"
   workflow_dispatch:
-concurrency: { group: collect, cancel-in-progress: false }
+concurrency: { group: collect, cancel-in-progress: false } # one collector at a time; later triggers queue
 jobs:
   collect:
     runs-on: ubuntu-latest
