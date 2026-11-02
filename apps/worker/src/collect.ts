@@ -1,8 +1,8 @@
 /**
- * One daily collection run inside Kaspi's robots.txt visit window (04:00–08:45 UTC), one request per ≥10 s:
+ * One daily collection run inside Kaspi's robots.txt visit window (04:00–08:45 UTC; we use 04:05–08:30), one request per ≥10 s:
  * fetch visitor requests first, then check due products (offers only; product page weekly), then queued seed
  * products; poll for new visitor requests until the window closes; evaluate alerts; send the first price and
- * target alerts to Telegram right after each check, queued emails at the end. Started by .github/workflows/collect.yml at 03:50 UTC; waits for the window to open.
+ * target alerts to Telegram right after each check, queued emails at the end. Started by .github/workflows/collect.yml at 03:50 UTC; waits for 04:05.
  */
 import { createKaspiClient, buildSnapshot, KaspiHttpError, KaspiParseError, canonicalProductUrl, parseKaspiUrl, shortLinkUrl } from "@baga/kaspi";
 import { saveSnapshot, connectionOptions, requestProduct, attachShortLinkTrackings } from "@baga/db";
@@ -23,7 +23,7 @@ const breaker = new CircuitBreaker();
 
 const PAGE_REFRESH_MS = 7 * 24 * 3_600_000;
 // Worst case for one product: page + offers + suspicious re-check + alert confirmation = 4 requests ≈ 48 s.
-// Stop starting new products when less than this remains, so no request lands after 08:45 UTC.
+// Stop starting new products when less than this remains, so no request lands after 08:30 UTC.
 const WINDOW_MARGIN_MS = 60_000;
 const inWindow = () => isInVisitWindow(new Date(), WINDOW_MARGIN_MS);
 
@@ -36,7 +36,7 @@ type DueRow = {
 async function main() {
   const wait = msUntilVisitWindow(new Date());
   if (wait > env.windowWaitMaxMs()) {
-    console.log(JSON.stringify({ skipped: "outside Kaspi visit window (04:00-08:45 UTC)", opensInMinutes: Math.round(wait / 60_000) }));
+    console.log(JSON.stringify({ skipped: "outside collection window (04:05-08:30 UTC)", opensInMinutes: Math.round(wait / 60_000) }));
     await sendQueued(); // Telegram and email only, no Kaspi requests
     return;
   }

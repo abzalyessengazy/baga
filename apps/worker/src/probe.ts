@@ -4,7 +4,7 @@ import { isInVisitWindow, KASPI_CRAWL_DELAY_MS } from "@baga/core";
 
 // kaspi.kz/robots.txt: Visit-time 04:00-08:45 UTC. Debugging outside it needs an explicit --force.
 if (!isInVisitWindow(new Date()) && !process.argv.includes("--force")) {
-  console.log("Outside Kaspi's robots.txt visit window (04:00-08:45 UTC = 09:00-13:45 Almaty). Re-run with --force to probe anyway.");
+  console.log("Outside the collection window (04:05-08:30 UTC = 09:05-13:30 Almaty, inside Kaspi's robots.txt 04:00-08:45). Re-run with --force to probe anyway.");
   process.exit(0);
 }
 

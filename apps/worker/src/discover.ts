@@ -27,7 +27,7 @@ const linksFile = fileURLToPath(new URL("../data/sitemap-links.txt", import.meta
 const fromFile = process.argv.includes("--from-file");
 
 if (!fromFile && !isInVisitWindow(new Date())) {
-  console.error("Outside kaspi.kz robots.txt visit window (04:00–08:45 UTC = 09:00–13:45 Almaty). No requests made.");
+  console.error("Outside the collection window (04:05–08:30 UTC = 09:05–13:30 Almaty, inside kaspi.kz robots.txt 04:00–08:45). No requests made.");
   process.exit(1);
 }
 
