@@ -18,9 +18,7 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
       <HonestReceipt />
       <footer className="wrap site-footer">
         <p>{t("footer")}</p>
-        <p>{t("footerAdvice")}</p>
-        <p>{t("footerContact")} <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a></p>
-        <p className="site-footer-since">{t("footerSince")}</p>
+        <p>{t("footerContact")} <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a> · {t("footerSince")}</p>
       </footer>
     </main>
   );

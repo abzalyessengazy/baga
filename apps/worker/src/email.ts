@@ -18,7 +18,7 @@ const copy = {
     buy: "Открыть на Kaspi",
     change: "Изменить цену",
     stop: "Не присылать письма",
-    footer: "Вы получили это письмо, потому что следите за ценой в BAGA и подтвердили этот адрес.",
+    footer: "Вы получили это письмо, потому что следите за ценой в BAĞA и подтвердили этот адрес.",
   },
   kk: {
     firstSubject: (title: string) => `Баға алынды: ${title}`,
@@ -35,7 +35,7 @@ const copy = {
     buy: "Kaspi-де ашу",
     change: "Бағаны өзгерту",
     stop: "Хат жібермеу",
-    footer: "Бұл хат BAGA-да бағаны бақылап, осы адресті растағаныңыз үшін келді.",
+    footer: "Бұл хат BAĞA-да бағаны бақылап, осы адресті растағаныңыз үшін келді.",
   },
 } as const;
 
@@ -60,7 +60,7 @@ export function renderAlertEmail(p: AlertEmail) {
   const html = `<!doctype html><html lang="${p.locale}"><body style="margin:0;background:#e4e6e9;font-family:Menlo,Consolas,monospace;color:#1d2025">
 <table role="presentation" width="100%" style="padding:24px 12px"><tr><td align="center">
 <table role="presentation" width="360" style="background:#fbfbf8;padding:24px;border-radius:4px">
-<tr><td style="font-size:20px;font-weight:700;letter-spacing:2px;text-align:center">BAGA</td></tr>
+<tr><td style="font-size:20px;font-weight:700;letter-spacing:2px;text-align:center">BAĞA</td></tr>
 <tr><td style="padding:16px 0;border-bottom:1px dashed #b9bcc2">${first ? c.firstLead : c.targetLead}<br><strong>${escapeHtml(p.title)}</strong></td></tr>
 <tr><td><table role="presentation" width="100%" style="font-size:14px;padding-top:8px">${rows.map(row).join("")}</table></td></tr>
 ${note ? `<tr><td style="padding-top:12px;font-size:13px;color:#5d6168">${note}</td></tr>` : ""}

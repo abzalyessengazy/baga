@@ -60,7 +60,7 @@ function Totals({ s }: { s: Stats & { lastRun: NonNullable<Stats["lastRun"]> } }
   return (
     <div className="slip z-totals" ref={ref}>
       <div className="z-head">
-        <span className="z-name">BAGA · {t("zHead")}</span>
+        <span className="z-name">BAĞA · {t("zHead")}</span>
         <span className="z-shift">{t("zShift", { date: ddmm(finishedAt), from: hhmm(startedAt), to: hhmm(finishedAt) })}</span>
       </div>
       <dl className="z-grid">
@@ -85,7 +85,7 @@ function DaysSlip({ days }: { days: Stats["days"] }) {
   const max = Math.max(...rows.map((r) => r.checks));
   return (
     <div className="slip-screen" ref={ref}>
-      <div style={{ display: "flex", flexDirection: "column", justifyContent: "flex-end", height: "100%" }}>
+      <div>
         {rows.map((r, i) => (
           <motion.div key={r.day} className={`tape-row z-day${r.checks === max ? " is-min" : ""}`}
             initial={reduce ? false : { opacity: 0, y: 14 }} animate={go ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.3, delay: i * 0.07 }}>

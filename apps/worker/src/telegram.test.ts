@@ -20,7 +20,7 @@ describe("renderTelegramAlert", () => {
     expect(m.html).toContain("Баға сіздің бағаңызға жетті!");
     expect(m.buttons).toEqual([
       { text: "Kaspi-де ашу", url: "https://bagaapp.com/go/1?n=5" },
-      { text: "BAGA-да ашу", url: "https://bagaapp.com/ru/p/1" },
+      { text: "BAĞA-да ашу", url: "https://bagaapp.com/ru/p/1" },
     ]);
   });
   it("out of stock says so instead of a price", () => {
