@@ -30,6 +30,8 @@ export function ProductLookup({ id, slug }: { id: string; slug: string | null })
       });
       const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
       if (data.ok) { router.refresh(); return; }
+      // A first rejected token is often a stale or early one: try once more with a fresh check before saying so.
+      if (data.error === "check_failed" && attempt === 0) return retry();
       setError(data.error === "check_failed" || data.error === "too_many" ? data.error : "generic");
     } catch {
       setError("generic");

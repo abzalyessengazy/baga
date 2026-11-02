@@ -25,7 +25,9 @@ export function TrackPanel({ productId, current, initial }: { productId: string;
   const suggested = current ? Math.round((current * 0.9) / 1000) * 1000 - 10 : null;
   const [tracked, setTracked] = useState<number | null>(initial.target);
   const [tg, setTg] = useState({ linked: initial.linked, url: initial.telegramUrl });
-  const [open, setOpen] = useState(false);
+  // A product still waiting for its first price has nothing to tear off: show the form at once, so the visitor
+  // sees straight away that they can set a price and get the first one sent to them.
+  const [open, setOpen] = useState(current === null);
   const [target, setTarget] = useState(String(initial.target ?? suggested ?? ""));
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -49,9 +51,10 @@ export function TrackPanel({ productId, current, initial }: { productId: string;
   const form = (
     <form className="track-card" onSubmit={submit} noValidate>
       <h2>{t("title")}</h2>
+      {current === null && <p className="note" style={{ margin: "0 0 12px" }}>{t("queuedFormNote")}</p>}
       <div className="field">
         <label htmlFor={`${id}-t`}>{t("targetLabel")}</label>
-        <input id={`${id}-t`} inputMode="numeric" value={target} onChange={(e) => setTarget(e.target.value)} autoFocus />
+        <input id={`${id}-t`} inputMode="numeric" value={target} onChange={(e) => setTarget(e.target.value)} autoFocus={current !== null} />
         {suggested && <small>{t("suggested")}</small>}
       </div>
       <button className="btn btn-stamp" type="submit" disabled={busy} style={{ width: "100%" }}>{t("submit")}</button>
