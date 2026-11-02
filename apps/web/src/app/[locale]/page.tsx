@@ -4,6 +4,8 @@ import { ZReport } from "@/components/ZReport";
 import { HowItWorks } from "@/components/HowItWorks";
 import { HonestReceipt } from "@/components/HonestReceipt";
 
+const SUPPORT_EMAIL = "abzal.yessengazy@gmail.com";
+
 export default async function Home({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params;
   setRequestLocale(locale);
@@ -14,7 +16,12 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
       <HowItWorks />
       <ZReport />
       <HonestReceipt />
-      <footer className="wrap site-footer">{t("footer")}</footer>
+      <footer className="wrap site-footer">
+        <p>{t("footer")}</p>
+        <p>{t("footerAdvice")}</p>
+        <p>{t("footerContact")} <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a></p>
+        <p className="site-footer-since">{t("footerSince")}</p>
+      </footer>
     </main>
   );
 }
