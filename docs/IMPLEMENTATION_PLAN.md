@@ -39,8 +39,9 @@
 - [x] "Мои товары" page: list, remove; change price on the product page
 - [ ] Verify on production: bot set up, first-price message arrives within minutes in the window
 - [ ] Registration (Supabase magic link or Telegram login) moves watcher trackings into the account; 5 free, 50 on a 2 999 ₸/month plan
-- [ ] Email alerts once there is a domain (Resend), `profiles`
-- [ ] Unsubscribe endpoint, preferences
+- [x] Email alerts with confirmation (bagaapp.com, Resend; DECISIONS 2026-11-02)
+- [ ] Verify on production: confirmation email arrives, first price / target email arrives, one-click unsubscribe works
+- [x] Unsubscribe endpoint (one-click), email on/off in "Мои товары"
 - [x] Alert state machine + email template + sender (worker)
 
 ## Phase 5 — hardening, beta prep

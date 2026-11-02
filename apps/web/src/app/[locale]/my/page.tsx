@@ -2,9 +2,10 @@ import type { Metadata } from "next";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { getSql, listWatched } from "@baga/db";
 import { slugName } from "@baga/core";
-import { currentWatcher, telegramConnectUrl, botUsername } from "@/lib/watcher";
+import { currentWatcher, telegramConnectUrl, botUsername, emailReady } from "@/lib/watcher";
 import { siteUrl } from "@/lib/site";
 import { MyList } from "@/components/MyList";
+import { EmailConnect } from "@/components/EmailConnect";
 
 type Props = { params: Promise<{ locale: string }> };
 // Per visitor (cookie): never prerendered.
@@ -53,6 +54,12 @@ export default async function MyPage({ params }: Props) {
                 <p className="note">{t("telegramHint")}</p>
               </>
             ) : !botUsername() ? <p className="note">{t("telegramSoon")}</p> : null}
+            {emailReady() && (
+              <>
+                <hr className="rule" />
+                <EmailConnect initial={{ address: found.watcher.email, confirmed: found.watcher.emailConfirmed }} removable />
+              </>
+            )}
             <hr className="rule" />
             <p className="note">{t("shareNote")}</p>
             <p className="my-share">{shareUrl}</p>

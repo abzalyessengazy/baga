@@ -5,3 +5,4 @@ export * from "./schedule";
 export * from "./window";
 export * from "./search";
 export * from "./seedCatalog";
+export * from "./email";

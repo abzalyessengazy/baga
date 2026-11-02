@@ -4,14 +4,19 @@ import type postgres from "postgres";
  * Trackings before registration (migration 0007): an anonymous watcher holds a secret (cookie + private link,
  * only its SHA-256 stored here) and optionally a linked Telegram chat.
  */
-export interface Watcher { id: string; locale: "ru" | "kk"; telegramChatId: string | null; telegramLinkCode: string | null }
+export interface Watcher {
+  id: string; locale: "ru" | "kk"; telegramChatId: string | null; telegramLinkCode: string | null;
+  /** Migration 0008: the address alerts go to once confirmed. */
+  email: string | null; emailConfirmed: boolean;
+}
 export interface WatchedItem {
   trackingId: string; externalId: string; title: string | null; slug: string | null; imageUrl: string | null;
   targetPrice: number; currentMinPrice: number | null; lastCheckedAt: Date | null; status: string; createdAt: Date;
 }
 
 const watcherCols = (sql: postgres.Sql) =>
-  sql`id, locale, telegram_chat_id::text as "telegramChatId", telegram_link_code as "telegramLinkCode"`;
+  sql`id, locale, telegram_chat_id::text as "telegramChatId", telegram_link_code as "telegramLinkCode",
+      email, email_confirmed_at is not null as "emailConfirmed"`;
 
 export async function createWatcher(sql: postgres.Sql, secretHash: string, locale: "ru" | "kk", linkCode: string): Promise<Watcher> {
   const [w] = await sql<Watcher[]>`insert into watchers (secret_hash, locale, telegram_link_code)
@@ -106,4 +111,49 @@ export async function getWatcherTracking(sql: postgres.Sql, watcherId: string, e
   const [t] = await sql<{ id: string; targetPrice: number }[]>`
     select id, target_price as "targetPrice" from trackings where watcher_id = ${watcherId} and external_id = ${externalId} and status = 'active'`;
   return t ?? null;
+}
+
+export type EmailRequest = { ok: true; send: boolean } | { ok: false; reason: "too_soon" | "too_many" };
+
+/**
+ * Stores an address waiting for confirmation (migration 0008) with a fresh token and unsubscribe code. An address
+ * this watcher already confirmed needs no new email (send: false). Limits: one request a minute per watcher, and
+ * at most 5 a day per address across all watchers, so the form cannot be used to flood someone's inbox.
+ */
+export async function requestWatcherEmail(sql: postgres.Sql, watcherId: string, email: string, tokenHash: string, stopCode: string): Promise<EmailRequest> {
+  const [w] = await sql<{ email: string | null; confirmed: boolean; recent: boolean }[]>`
+    select email, email_confirmed_at is not null as confirmed,
+           coalesce(email_requested_at > now() - interval '1 minute', false) as recent
+    from watchers where id = ${watcherId}`;
+  if (w?.email === email && w.confirmed) return { ok: true, send: false };
+  if (w?.recent) return { ok: false, reason: "too_soon" };
+  const [n] = await sql<{ n: number }[]>`
+    select count(*)::int as n from watchers where email = ${email} and email_requested_at > now() - interval '1 day'`;
+  if ((n?.n ?? 0) >= 5) return { ok: false, reason: "too_many" };
+  await sql`update watchers set email = ${email}, email_confirmed_at = null, email_token_hash = ${tokenHash},
+    email_token_expires_at = now() + interval '2 days', email_requested_at = now(), email_stop_code = ${stopCode}
+    where id = ${watcherId}`;
+  return { ok: true, send: true };
+}
+
+/** The confirmation link was opened and its button pressed: alerts may now go to the address. */
+export async function confirmWatcherEmail(sql: postgres.Sql, tokenHash: string): Promise<{ email: string; locale: "ru" | "kk" } | null> {
+  const [r] = await sql<{ email: string; locale: "ru" | "kk" }[]>`
+    update watchers set email_confirmed_at = now(), email_token_hash = null, email_token_expires_at = null
+    where email_token_hash = ${tokenHash} and email_token_expires_at > now() and email is not null
+    returning email, locale`;
+  return r ?? null;
+}
+
+/** Unsubscribe from an email's link (no cookie needed): forgets the address. */
+export async function stopWatcherEmailByCode(sql: postgres.Sql, code: string): Promise<boolean> {
+  const r = await sql`update watchers set email = null, email_confirmed_at = null, email_token_hash = null,
+    email_token_expires_at = null, email_stop_code = null where email_stop_code = ${code}`;
+  return r.count > 0;
+}
+
+/** "Мои товары": stop emails for this watcher. */
+export async function removeWatcherEmail(sql: postgres.Sql, watcherId: string): Promise<void> {
+  await sql`update watchers set email = null, email_confirmed_at = null, email_token_hash = null,
+    email_token_expires_at = null, email_stop_code = null where id = ${watcherId}`;
 }

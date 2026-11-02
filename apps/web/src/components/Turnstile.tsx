@@ -33,7 +33,7 @@ function loadTurnstile(): Promise<TurnstileApi> {
  * or null when it expires. Remount (change `key`) to get a new token after one was used.
  */
 export function Turnstile({ action, locale, onToken, onError }: {
-  action: "lookup" | "resolve";
+  action: "lookup" | "resolve" | "email";
   locale: string;
   onToken: (token: string | null) => void;
   /** "blocked": the script did not load (often an ad blocker); "failed": Cloudflare kept failing the check. */

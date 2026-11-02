@@ -1,6 +1,7 @@
 import "server-only";
 import { createHash, randomBytes } from "node:crypto";
 import { cookies } from "next/headers";
+import type { TrackInitial } from "@/components/TrackPanel";
 import { getSql, createWatcher, getWatcherBySecret, rotateLinkCode, getWatcherTracking, type Watcher } from "@baga/db";
 
 /**
@@ -14,7 +15,7 @@ const YEAR_S = 365 * 24 * 3600;
 
 const isSecret = (v: string | undefined): v is string => !!v && /^[A-Za-z0-9_-]{43}$/.test(v);
 export const hashSecret = (s: string) => createHash("sha256").update(s).digest("hex");
-const randomCode = () => randomBytes(18).toString("base64url"); // 24 chars, Telegram start param safe
+export const randomCode = () => randomBytes(18).toString("base64url"); // 24 chars, Telegram start param safe
 
 export function cookieOptions() {
   return { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax" as const, path: "/", maxAge: YEAR_S };
@@ -65,17 +66,24 @@ export async function telegramConnectUrl(w: Watcher): Promise<string | null> {
   return `https://t.me/${bot}?start=${code}`;
 }
 
+/** Email alerts can be offered: Resend is configured (outside production the confirmation link goes to the log). */
+export function emailReady(): boolean {
+  return !!process.env.RESEND_API_KEY?.trim() || process.env.NODE_ENV !== "production";
+}
+
 /** What the product page's coupon starts with for this visitor. Server components only (no cookie is set). */
-export async function trackInitial(externalId: string): Promise<{ target: number | null; linked: boolean; telegramUrl: string | null; botReady: boolean }> {
+export async function trackInitial(externalId: string): Promise<TrackInitial> {
   const botReady = !!botUsername();
+  const base = { botReady, emailReady: emailReady() };
   const found = await currentWatcher().catch(() => null);
   const sql = getSql();
-  if (!found || !sql) return { target: null, linked: false, telegramUrl: null, botReady };
+  if (!found || !sql) return { ...base, target: null, linked: false, telegramUrl: null, email: { address: null, confirmed: false } };
   const t = await getWatcherTracking(sql, found.watcher.id, externalId);
   return {
+    ...base,
     target: t?.targetPrice ?? null,
     linked: !!found.watcher.telegramChatId,
     telegramUrl: t ? await telegramConnectUrl(found.watcher) : null,
-    botReady,
+    email: { address: found.watcher.email, confirmed: found.watcher.emailConfirmed },
   };
 }

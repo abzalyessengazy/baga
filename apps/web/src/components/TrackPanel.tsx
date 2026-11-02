@@ -4,12 +4,17 @@ import { useLocale, useTranslations } from "next-intl";
 import { formatTenge } from "@baga/core";
 import { Link } from "@/i18n/navigation";
 import { TearCoupon } from "./TearCoupon";
+import { EmailConnect, type EmailInitial } from "./EmailConnect";
 
-export interface TrackInitial { target: number | null; linked: boolean; telegramUrl: string | null; botReady: boolean }
+export interface TrackInitial {
+  target: number | null; linked: boolean; telegramUrl: string | null; botReady: boolean;
+  email: EmailInitial; emailReady: boolean;
+}
 
 /**
  * Tear the coupon off the receipt to set your price (pre-filled 10% below today's when we have one). Tracking
- * starts at once, before registration exists; alerts go to Telegram (DECISIONS.md, 2026-11-02).
+ * starts at once, before registration exists; alerts go to Telegram and/or a confirmed email address
+ * (DECISIONS.md, 2026-11-02).
  * `current` is null while the product waits for its first price.
  */
 export function TrackPanel({ productId, current, initial }: { productId: string; current: number | null; initial: TrackInitial }) {
@@ -69,8 +74,16 @@ export function TrackPanel({ productId, current, initial }: { productId: string;
               <a className="btn btn-stamp" href={tg.url} target="_blank" rel="noopener" style={{ width: "100%" }}>{t("telegramConnect")}</a>
               <p className="note">{t("telegramHint")}</p>
             </>
-          ) : (
-            <p className="note">{initial.botReady ? t("telegramLinked") : t("telegramSoon")}</p>
+          ) : initial.botReady ? (
+            <p className="note">{t("telegramLinked")}</p>
+          ) : !initial.emailReady ? (
+            <p className="note">{t("telegramSoon")}</p>
+          ) : null}
+          {initial.emailReady && (
+            <>
+              {(tg.url || tg.linked || initial.botReady) && <p className="or-rule"><span>{t("or")}</span></p>}
+              <EmailConnect initial={initial.email} />
+            </>
           )}
           <div className="track-actions">
             <button type="button" className="link-btn" onClick={() => setOpen(true)}>{t("change")}</button>

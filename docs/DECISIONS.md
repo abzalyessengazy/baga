@@ -71,3 +71,12 @@ Visitors should never get only "come back tomorrow". Kaspi's robots.txt still ru
 
 ## 2026-11-02 — Unreadable responses do not stop the collector; one odd seller entry does not lose a product
 The 2 Nov run stopped after 14 checks because 3 offers responses failed schema validation (21% > 20%). Kaspi was answering normally; our parser was too strict. Now: offers are validated one by one and only the seller id and a positive price are required (a seller without a name is shown by id; entries without a price are skipped, never guessed). The circuit breaker still stops at once on 2 responses with 403/429 and on > 20% other failures, but parse errors count separately and stop the run only above 50% over ≥ 20 checks, which means Kaspi changed its format. Parse errors now log the failing fields.
+
+## 2026-11-02 — Email alerts with confirmation (bagaapp.com)
+Not everyone uses Telegram. Email needs a domain of our own: **bagaapp.com** (Namecheap), verified in Resend (DKIM, SPF via the `send` subdomain, DMARC `p=none`). A watcher can connect Telegram, email, or both; every alert goes to each connected channel (one `notifications` row per channel; email keys end in `:email`).
+- **Double opt-in.** The coupon and "Мои товары" take an address after Turnstile; the website sends a confirmation link (the only email it sends) and alerts start once the owner presses "Подтвердить" on `/[locale]/email?confirm=…`. Only the SHA-256 of the token is stored; it expires after 2 days. Confirming and unsubscribing need a button press (POST), so mail scanners that open links change nothing.
+- **Abuse limits:** 5 requests an hour per IP, one a minute per watcher, 5 a day per address across all watchers.
+- **Unsubscribe:** every alert has a visible "Не присылать письма" link and the RFC 8058 one-click header (`/api/email/stop?c=…`), which Gmail and Yahoo expect. Unsubscribing forgets the address.
+- Migration 0008 adds the columns to `watchers`. The old email path for registered users (`auth.users`, `profiles`) is gone from the collector: no accounts exist yet, and Phase 4 moves watchers into accounts.
+- No new dependency: Resend is a plain `fetch`. Personal data: an email address is now stored, which makes the privacy policy (Phase 5) a launch blocker.
+
