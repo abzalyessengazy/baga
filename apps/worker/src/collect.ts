@@ -305,13 +305,13 @@ async function sendTelegramQueued() {
     order by n.created_at limit 30`;
   for (const q of queued) {
     const site = env.siteUrl();
-    const text = renderTelegramAlert({
+    const msg = renderTelegramAlert({
       type: q.type, locale: q.locale, title: q.title,
       price: q.type === "first_price" ? q.current : q.price, target: q.target_price, offerCount: q.offer_count,
       productUrl: `${site}/${q.locale}/p/${q.external_id}`, kaspiUrl: `${site}/go/${q.external_id}?n=${q.id}`,
     });
     try {
-      const messageId = await sendTelegram(token, q.chat_id, text);
+      const messageId = await sendTelegram(token, q.chat_id, msg);
       await sql`update notifications set status = 'sent', sent_at = now(), provider_message_id = ${String(messageId)} where id = ${q.id}`;
     } catch (e) {
       await sql`update notifications set status = 'failed' where id = ${q.id}`;

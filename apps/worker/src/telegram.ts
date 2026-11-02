@@ -1,11 +1,11 @@
 import { formatTenge } from "@baga/core";
 
-/** Telegram alert texts (like email.ts, the worker's copy lives next to its sender). Plain text, no markup. */
+/** Telegram alert texts (like email.ts, the worker's copy lives next to its sender). Sent as Telegram HTML. */
 type Locale = "ru" | "kk";
 const copy = {
   ru: {
-    first: "BAGA: цена получена",
-    target: "BAGA: цена дошла до вашей",
+    first: "Цена получена",
+    target: "Цена дошла до вашей!",
     now: "Сейчас на Kaspi",
     yours: "Ваша цена",
     sellers: (n: number) => `продавцов: ${n}`,
@@ -17,8 +17,8 @@ const copy = {
     noOffers: "сейчас нет в продаже",
   },
   kk: {
-    first: "BAGA: баға алынды",
-    target: "BAGA: баға сіздің бағаңызға жетті",
+    first: "Баға алынды",
+    target: "Баға сіздің бағаңызға жетті!",
     now: "Қазір Kaspi-де",
     yours: "Сіздің бағаңыз",
     sellers: (n: number) => `сатушылар: ${n}`,
@@ -31,35 +31,43 @@ const copy = {
   },
 } as const;
 
+const esc = (s: string) => s.replace(/[&<>]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[ch]!);
+
+/** An alert as Telegram HTML plus link buttons (Kaspi first: that is where the visitor buys). */
 export function renderTelegramAlert(p: {
   type: "first_price" | "target_reached"; locale: Locale; title: string; price: number | null; target: number;
   offerCount: number; productUrl: string; kaspiUrl: string;
-}): string {
+}): { html: string; buttons: { text: string; url: string }[] } {
   const c = copy[p.locale];
   const f = (n: number) => formatTenge(n, p.locale);
-  const now = p.price !== null ? `${f(p.price)}${p.offerCount ? ` (${c.sellers(p.offerCount)})` : ""}` : c.noOffers;
-  const note = p.type === "target_reached" ? "" : p.price !== null && p.price <= p.target ? c.hitNote : c.waitNote;
-  return [
-    p.type === "first_price" ? c.first : c.target,
+  const hit = p.price !== null && p.price <= p.target;
+  const now = p.price !== null
+    ? `<b>${f(p.price)}</b>${p.offerCount ? ` · ${c.sellers(p.offerCount)}` : ""}`
+    : c.noOffers;
+  const note = p.type === "target_reached" ? "" : hit ? `✅ ${c.hitNote}` : `⏳ ${c.waitNote}`;
+  const html = [
+    p.type === "first_price" ? `🧾 <b>${c.first}</b>` : `🎯 <b>${c.target}</b>`,
     "",
-    p.title,
-    `${c.now}: ${now}`,
-    `${c.yours}: ${f(p.target)}`,
+    `<b>${esc(p.title)}</b>`,
+    "",
+    `💰 ${c.now}: ${now}`,
+    `🎯 ${c.yours}: ${f(p.target)}`,
     ...(note ? ["", note] : []),
     "",
-    `${c.open}: ${p.productUrl}`,
-    `${c.buy}: ${p.kaspiUrl}`,
-    "",
-    c.footer,
+    `<i>${c.footer}</i>`,
   ].join("\n");
+  return { html, buttons: [{ text: c.buy, url: p.kaspiUrl }, { text: c.open, url: p.productUrl }] };
 }
 
 /** Telegram Bot API (not Kaspi). Throws on failure so the notification is marked failed. */
-export async function sendTelegram(token: string, chatId: string, text: string): Promise<number> {
+export async function sendTelegram(token: string, chatId: string, msg: { html: string; buttons: { text: string; url: string }[] }): Promise<number> {
   const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: chatId, text, link_preview_options: { is_disabled: true } }),
+    body: JSON.stringify({
+      chat_id: chatId, text: msg.html, parse_mode: "HTML", link_preview_options: { is_disabled: true },
+      reply_markup: { inline_keyboard: msg.buttons.map((b) => [b]) },
+    }),
     signal: AbortSignal.timeout(10_000),
   });
   const body = (await res.json().catch(() => ({}))) as { ok?: boolean; result?: { message_id?: number }; description?: string };

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getTranslations } from "next-intl/server";
 import { getSql, linkTelegram, getWatcherByChat, unlinkTelegram, listWatched, type Watcher } from "@baga/db";
 import { formatTenge, slugName } from "@baga/core";
-import { sendTelegram } from "@/lib/telegram";
+import { sendTelegram, tgEscape } from "@/lib/telegram";
 import { siteUrl } from "@/lib/site";
 
 /**
@@ -28,34 +28,40 @@ export async function POST(req: Request) {
   if (cmd === "/start" && arg && /^[A-Za-z0-9_-]{16,64}$/.test(arg)) {
     const w = await linkTelegram(sql, arg, chat);
     const t = await getTranslations({ locale: w?.locale ?? guess, namespace: "bot" });
-    await sendTelegram(chat, w ? `${t("linked")}\n\n${await listText(w)}` : t("badCode"));
+    await sendTelegram(chat, w ? `${tgEscape(t("linked"))}\n\n${await listText(w)}` : tgEscape(t("badCode")));
   } else if (cmd === "/list" || cmd === "/start") {
     const w = await getWatcherByChat(sql, chat);
     const t = await getTranslations({ locale: w?.locale ?? guess, namespace: "bot" });
-    await sendTelegram(chat, w ? await listText(w) : t("welcome", { site: siteUrl() }));
+    await sendTelegram(chat, w ? await listText(w) : tgEscape(t("welcome", { site: siteUrl() })));
   } else if (cmd === "/stop") {
     const w = await getWatcherByChat(sql, chat);
     const t = await getTranslations({ locale: w?.locale ?? guess, namespace: "bot" });
     await unlinkTelegram(sql, chat);
-    await sendTelegram(chat, t("stopped"));
+    await sendTelegram(chat, tgEscape(t("stopped")));
   } else {
     const w = await getWatcherByChat(sql, chat);
     const t = await getTranslations({ locale: w?.locale ?? guess, namespace: "bot" });
-    await sendTelegram(chat, t("help"));
+    await sendTelegram(chat, tgEscape(t("help")));
   }
   return NextResponse.json({ ok: true });
 }
 
+/** The /list reply (Telegram HTML): a numbered receipt of what this watcher tracks, names linking to BAGA. */
 async function listText(w: Watcher): Promise<string> {
   const sql = getSql()!;
   const t = await getTranslations({ locale: w.locale, namespace: "bot" });
   const items = await listWatched(sql, w.id);
-  if (!items.length) return t("empty", { site: `${siteUrl()}/${w.locale}` });
+  if (!items.length) return tgEscape(t("empty", { site: `${siteUrl()}/${w.locale}` }));
   const f = (n: number) => formatTenge(n, w.locale);
-  const lines = items.map((i) => {
-    const name = i.title ?? (i.slug ? slugName(i.slug) : i.externalId ? `№ ${i.externalId}` : t("shortLinkItem"));
-    const now = i.currentMinPrice !== null ? f(i.currentMinPrice) : t("noPriceYet");
-    return `• ${name}\n  ${t("line", { now, target: f(i.targetPrice) })}\n  ${siteUrl()}/${w.locale}${i.pagePath}`;
+  const lines = items.map((i, n) => {
+    const full = i.title ?? (i.slug ? slugName(i.slug) : i.externalId ? `№ ${i.externalId}` : t("shortLinkItem"));
+    const name = full.length > 70 ? `${full.slice(0, 68).trimEnd()}…` : full;
+    const url = `${siteUrl()}/${w.locale}${i.pagePath}`;
+    const hit = i.currentMinPrice !== null && i.currentMinPrice <= i.targetPrice;
+    const now = i.currentMinPrice !== null
+      ? `💰 ${tgEscape(t("now"))} <b>${f(i.currentMinPrice)}</b>${hit ? ` ✅ ${tgEscape(t("reached"))}` : ""}`
+      : `⏳ ${tgEscape(t("noPriceYet"))}`;
+    return `${n + 1}. <a href="${tgEscape(url)}"><b>${tgEscape(name)}</b></a>\n${now}\n🎯 ${tgEscape(t("target"))} ${f(i.targetPrice)}`;
   });
-  return `${t("listTitle", { count: items.length })}\n\n${lines.join("\n\n")}`;
+  return `🧾 <b>${tgEscape(t("listTitle", { count: items.length }))}</b>\n\n${lines.join("\n\n")}\n\n<i>${tgEscape(t("help"))}</i>`;
 }
