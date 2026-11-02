@@ -2,7 +2,7 @@
 import { motion, useInView, useReducedMotion, animate } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { formatTenge } from "@baga/core";
+import { formatTenge, shortTitle } from "@baga/core";
 import { Link } from "@/i18n/navigation";
 
 type L = "ru" | "kk";
@@ -26,7 +26,7 @@ const count = (n: number) => new Intl.NumberFormat("ru-RU").format(n);
 const almaty = (iso: string, opts: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat("ru-RU", { timeZone: "Asia/Almaty", ...opts }).format(new Date(iso));
 const ddmm = (iso: string) => almaty(iso, { day: "2-digit", month: "2-digit" });
 const hhmm = (iso: string) => almaty(iso, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
-const dropTitle = (d: { title: string; titleKk: string | null }, locale: L) => (locale === "kk" && d.titleKk) || d.title;
+const dropTitle = (d: { title: string; titleKk: string | null }, locale: L) => shortTitle((locale === "kk" && d.titleKk) || d.title);
 
 /** Counts up to `to` once `go` turns true; shows the final number right away when motion is reduced. */
 function CountUp({ to, go }: { to: number; go: boolean }) {
@@ -81,14 +81,14 @@ function DaysSlip({ days }: { days: Stats["days"] }) {
   const ref = useRef<HTMLDivElement>(null);
   const reduce = useReducedMotion();
   const go = useInView(ref, { once: true, amount: 0.4 }) || !!reduce;
-  const rows = days.slice(-9);
+  const rows = days.slice(-14);
   const max = Math.max(...rows.map((r) => r.checks));
   return (
     <div className="slip-screen" ref={ref}>
       <div style={{ display: "flex", flexDirection: "column", justifyContent: "flex-end", height: "100%" }}>
         {rows.map((r, i) => (
-          <motion.div key={r.day} className={`tape-row${r.checks === max ? " is-min" : ""}`}
-            initial={reduce ? false : { opacity: 0, y: 14 }} animate={go ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.35, delay: i * 0.12 }}>
+          <motion.div key={r.day} className={`tape-row z-day${r.checks === max ? " is-min" : ""}`}
+            initial={reduce ? false : { opacity: 0, y: 14 }} animate={go ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.3, delay: i * 0.07 }}>
             <span className="tape-date">{r.day.slice(8, 10)}.{r.day.slice(5, 7)}</span>
             <span className="tape-bar" style={{ width: `${12 + (r.checks / max) * 88}%` }} />
             <span className="tape-price">{count(r.checks)}</span>
@@ -107,7 +107,7 @@ function MovesSlip({ moves, locale }: { moves: Stats["moves"]; locale: L }) {
   const go = useInView(ref, { once: true, amount: 0.4 }) || !!reduce;
   const [dir, setDir] = useState<keyof Moves>("drops");
   const [period, setPeriod] = useState<keyof Stats["moves"]>("day");
-  const rows = moves[period][dir].slice(0, 4);
+  const rows = moves[period][dir].slice(0, 5);
   const tab = <K extends string>(on: boolean, label: string, set: () => void, key: K) => (
     <button key={key} type="button" className={`z-tab${on ? " is-on" : ""}`} aria-pressed={on} onClick={set}>{label}</button>
   );
@@ -138,7 +138,7 @@ function ListSlip({ items, locale, dated }: { items: Item[]; locale: L; dated?: 
   const go = useInView(ref, { once: true, amount: 0.4 }) || !!reduce;
   return (
     <div className="slip-screen" ref={ref}>
-      {items.slice(0, 4).map((d, i) => (
+      {items.slice(0, 5).map((d, i) => (
         <motion.div key={d.externalId} initial={reduce ? false : { opacity: 0, y: 10 }} animate={go ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.3, delay: i * 0.1 }}>
           <Link href={`/p/${d.externalId}`} className="seller-row z-drop">
             <span className="name">{dated && <span className="z-date">{ddmm(d.at)}</span>}{dropTitle(d, locale)}</span>

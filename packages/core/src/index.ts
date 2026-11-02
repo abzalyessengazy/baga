@@ -6,3 +6,4 @@ export * from "./window";
 export * from "./search";
 export * from "./seedCatalog";
 export * from "./email";
+export * from "./title";
