@@ -17,7 +17,11 @@ export interface TrackInitial {
  * (DECISIONS.md, 2026-11-02).
  * `current` is null while the product waits for its first price.
  */
-export function TrackPanel({ productId, current, initial }: { productId: string; current: number | null; initial: TrackInitial }) {
+export function TrackPanel({ productId, shortLink, current, initial }: {
+  productId: string; current: number | null; initial: TrackInitial;
+  /** On a short link's waiting page: the tracking waits on the link until the collector resolves it. */
+  shortLink?: string;
+}) {
   const t = useTranslations("track");
   const tr = useTranslations("receipt");
   const locale = useLocale() as "ru" | "kk";
@@ -38,7 +42,7 @@ export function TrackPanel({ productId, current, initial }: { productId: string;
     if (!n || (current !== null && n >= current)) return setMsg(t("invalidTarget"));
     setBusy(true);
     setMsg(null);
-    const res = await fetch("/api/track", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ productId, target: n, locale }) }).catch(() => null);
+    const res = await fetch("/api/track", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...(shortLink ? { shortLink } : { productId }), target: n, locale }) }).catch(() => null);
     const data = (await res?.json().catch(() => null)) as { code?: string; linked?: boolean; telegramUrl?: string | null } | null;
     setBusy(false);
     if (data?.code === "tracking") {

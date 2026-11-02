@@ -2,7 +2,7 @@ import "server-only";
 import { createHash, randomBytes } from "node:crypto";
 import { cookies } from "next/headers";
 import type { TrackInitial } from "@/components/TrackPanel";
-import { getSql, createWatcher, getWatcherBySecret, rotateLinkCode, getWatcherTracking, type Watcher } from "@baga/db";
+import { getSql, createWatcher, getWatcherBySecret, rotateLinkCode, getWatcherTracking, getWatcherShortLinkTracking, type Watcher } from "@baga/db";
 
 /**
  * Tracking before registration (DECISIONS.md, 2026-11-02): the visitor's secret lives in an httpOnly cookie and in
@@ -71,14 +71,19 @@ export function emailReady(): boolean {
   return !!process.env.RESEND_API_KEY?.trim() || process.env.NODE_ENV !== "production";
 }
 
-/** What the product page's coupon starts with for this visitor. Server components only (no cookie is set). */
-export async function trackInitial(externalId: string): Promise<TrackInitial> {
+/**
+ * What the coupon starts with for this visitor, on a product page or on a short link's waiting page.
+ * Server components only (no cookie is set).
+ */
+export async function trackInitial(key: string | { shortLink: string }): Promise<TrackInitial> {
   const botReady = !!botUsername();
   const base = { botReady, emailReady: emailReady() };
   const found = await currentWatcher().catch(() => null);
   const sql = getSql();
   if (!found || !sql) return { ...base, target: null, linked: false, telegramUrl: null, email: { address: null, confirmed: false } };
-  const t = await getWatcherTracking(sql, found.watcher.id, externalId);
+  const t = typeof key === "string"
+    ? await getWatcherTracking(sql, found.watcher.id, key)
+    : await getWatcherShortLinkTracking(sql, found.watcher.id, key.shortLink);
   return {
     ...base,
     target: t?.targetPrice ?? null,

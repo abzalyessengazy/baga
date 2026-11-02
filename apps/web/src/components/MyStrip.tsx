@@ -4,7 +4,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { formatTenge } from "@baga/core";
 import { Link } from "@/i18n/navigation";
 
-type Item = { externalId: string; imageUrl: string | null; name: string; targetPrice: number; currentMinPrice: number | null };
+type Item = { trackingId: string; href: string; imageUrl: string | null; name: string; targetPrice: number; currentMinPrice: number | null };
 
 /** On the home page, for a returning visitor: the first few tracked products and a link to the whole list. */
 export function MyStrip() {
@@ -13,8 +13,8 @@ export function MyStrip() {
   const [data, setData] = useState<{ count: number; items: Item[] } | null>(null);
 
   useEffect(() => {
-    fetch("/api/my/items").then((r) => (r.ok ? r.json() : null)).then(setData).catch(() => undefined);
-  }, []);
+    fetch(`/api/my/items?l=${locale}`).then((r) => (r.ok ? r.json() : null)).then(setData).catch(() => undefined);
+  }, [locale]);
 
   if (!data || data.count === 0) return null;
   const f = (n: number) => formatTenge(n, locale);
@@ -23,8 +23,8 @@ export function MyStrip() {
       <h2 className="my-strip-title">{t("homeTitle")}</h2>
       <ul className="catalog-list">
         {data.items.map((i) => (
-          <li key={i.externalId}>
-            <Link href={`/p/${i.externalId}`} className="catalog-item">
+          <li key={i.trackingId}>
+            <Link href={i.href} className="catalog-item">
               {i.imageUrl ? <img src={i.imageUrl} alt="" width={40} height={40} loading="lazy" /> : <span className="catalog-thumb" aria-hidden />}
               <span className="catalog-title">{i.name}</span>
               <span className="catalog-price">{i.currentMinPrice !== null ? f(i.currentMinPrice) : t("waiting")}</span>

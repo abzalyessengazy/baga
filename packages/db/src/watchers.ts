@@ -10,7 +10,9 @@ export interface Watcher {
   email: string | null; emailConfirmed: boolean;
 }
 export interface WatchedItem {
-  trackingId: string; externalId: string; title: string | null; slug: string | null; imageUrl: string | null;
+  /** externalId is null while the tracking waits on an unresolved short link (migration 0009); pagePath links to
+   * the product page, or to the short link's waiting page. */
+  trackingId: string; externalId: string | null; pagePath: string; title: string | null; slug: string | null; imageUrl: string | null;
   targetPrice: number; currentMinPrice: number | null; lastCheckedAt: Date | null; status: string; createdAt: Date;
 }
 
@@ -65,7 +67,9 @@ export async function unlinkTelegram(sql: postgres.Sql, chatId: string): Promise
 
 export async function listWatched(sql: postgres.Sql, watcherId: string): Promise<WatchedItem[]> {
   return sql<WatchedItem[]>`
-    select t.id as "trackingId", t.external_id as "externalId", p.title, coalesce(p.slug, q.slug) as slug,
+    select t.id as "trackingId", t.external_id as "externalId",
+           case when t.external_id is not null then '/p/' || t.external_id else '/l/' || t.short_link_code end as "pagePath",
+           p.title, coalesce(p.slug, q.slug) as slug,
            p.image_url as "imageUrl", t.target_price as "targetPrice", s.current_min_price as "currentMinPrice",
            s.last_checked_at as "lastCheckedAt", t.status, t.created_at as "createdAt"
     from trackings t
@@ -156,4 +160,50 @@ export async function stopWatcherEmailByCode(sql: postgres.Sql, code: string): P
 export async function removeWatcherEmail(sql: postgres.Sql, watcherId: string): Promise<void> {
   await sql`update watchers set email = null, email_confirmed_at = null, email_token_hash = null,
     email_token_expires_at = null, email_stop_code = null where id = ${watcherId}`;
+}
+
+/**
+ * Tracking on a Kaspi app short link the website could not resolve (migration 0009). The link must be waiting in
+ * short_link_queue; the collector moves the tracking onto the product when it resolves the link.
+ */
+export async function upsertWatcherShortLinkTracking(sql: postgres.Sql, watcherId: string, code: string, target: number, limit: number): Promise<TrackResult> {
+  const [link] = await sql<{ status: string; externalId: string | null }[]>`
+    select status, external_id as "externalId" from short_link_queue where code = ${code}`;
+  if (!link || link.status === "failed") return { ok: false, reason: "unknown_product" };
+  if (link.status === "resolved" && link.externalId) return upsertWatcherTracking(sql, watcherId, link.externalId, target, limit);
+  const [existing] = await sql<{ id: string }[]>`
+    select id from trackings where watcher_id = ${watcherId} and short_link_code = ${code} and external_id is null`;
+  if (!existing) {
+    const [n] = await sql<{ n: number }[]>`select count(*)::int as n from trackings where watcher_id = ${watcherId} and status in ('active', 'paused')`;
+    if ((n?.n ?? 0) >= limit) return { ok: false, reason: "limit" };
+  }
+  const [t] = await sql<{ id: string }[]>`
+    insert into trackings (watcher_id, short_link_code, target_price, status)
+    values (${watcherId}, ${code}, ${target}, 'active')
+    on conflict (watcher_id, short_link_code) where watcher_id is not null and short_link_code is not null and external_id is null
+      do update set target_price = excluded.target_price, status = 'active', alert_state = 'armed', above_since = null
+    returning id`;
+  return { ok: true, trackingId: t!.id };
+}
+
+export async function getWatcherShortLinkTracking(sql: postgres.Sql, watcherId: string, code: string) {
+  const [t] = await sql<{ id: string; targetPrice: number }[]>`
+    select id, target_price as "targetPrice" from trackings
+    where watcher_id = ${watcherId} and short_link_code = ${code} and external_id is null and status = 'active'`;
+  return t ?? null;
+}
+
+/**
+ * The collector resolved a short link: its waiting trackings move onto the product. A watcher who already tracks
+ * that product keeps the existing tracking. The first-price message follows the product's next check.
+ */
+export async function attachShortLinkTrackings(sql: postgres.Sql, code: string, externalId: string): Promise<number> {
+  return sql.begin(async (tx) => {
+    await tx`delete from trackings t where t.short_link_code = ${code} and t.external_id is null
+      and exists (select 1 from trackings o where o.watcher_id = t.watcher_id and o.external_id = ${externalId})`;
+    const r = await tx`update trackings set external_id = ${externalId},
+      product_id = (select id from products where external_id = ${externalId}), first_price_sent_at = null
+      where short_link_code = ${code} and external_id is null`;
+    return r.count;
+  });
 }

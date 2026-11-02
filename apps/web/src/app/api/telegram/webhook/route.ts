@@ -53,9 +53,9 @@ async function listText(w: Watcher): Promise<string> {
   if (!items.length) return t("empty", { site: `${siteUrl()}/${w.locale}` });
   const f = (n: number) => formatTenge(n, w.locale);
   const lines = items.map((i) => {
-    const name = i.title ?? (i.slug ? slugName(i.slug) : `№ ${i.externalId}`);
+    const name = i.title ?? (i.slug ? slugName(i.slug) : i.externalId ? `№ ${i.externalId}` : t("shortLinkItem"));
     const now = i.currentMinPrice !== null ? f(i.currentMinPrice) : t("noPriceYet");
-    return `• ${name}\n  ${t("line", { now, target: f(i.targetPrice) })}\n  ${siteUrl()}/${w.locale}/p/${i.externalId}`;
+    return `• ${name}\n  ${t("line", { now, target: f(i.targetPrice) })}\n  ${siteUrl()}/${w.locale}${i.pagePath}`;
   });
   return `${t("listTitle", { count: items.length })}\n\n${lines.join("\n\n")}`;
 }

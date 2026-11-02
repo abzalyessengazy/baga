@@ -4,7 +4,7 @@ import { useTranslations } from "next-intl";
 import { formatTenge } from "@baga/core";
 import { Link } from "@/i18n/navigation";
 
-export interface MyItem { trackingId: string; externalId: string; name: string; imageUrl: string | null; targetPrice: number; currentMinPrice: number | null }
+export interface MyItem { trackingId: string; href: string; name: string; imageUrl: string | null; targetPrice: number; currentMinPrice: number | null }
 
 /** The visitor's tracked products: today's observed price against their target; stop tracking in one tap. */
 export function MyList({ items, locale }: { items: MyItem[]; locale: "ru" | "kk" }) {
@@ -26,7 +26,7 @@ export function MyList({ items, locale }: { items: MyItem[]; locale: "ru" | "kk"
           <li key={i.trackingId} className="my-item">
             {i.imageUrl ? <img src={i.imageUrl} alt="" width={48} height={48} loading="lazy" /> : <span className="ph" />}
             <div>
-              <Link href={`/p/${i.externalId}`} className="my-title">{i.name}</Link>
+              <Link href={i.href} className="my-title">{i.name}</Link>
               <div className="my-prices">
                 {i.currentMinPrice !== null
                   ? <span className={hit ? "is-hit" : undefined}>{t("now", { price: f(i.currentMinPrice) })}</span>

@@ -37,9 +37,9 @@ export default async function MyPage({ params }: Props) {
           <MyList
             locale={locale as "ru" | "kk"}
             items={items.map((i) => ({
-              trackingId: i.trackingId, externalId: i.externalId, imageUrl: i.imageUrl, targetPrice: i.targetPrice,
+              trackingId: i.trackingId, href: i.pagePath, imageUrl: i.imageUrl, targetPrice: i.targetPrice,
               currentMinPrice: i.currentMinPrice,
-              name: i.title ?? (i.slug ? slugName(i.slug) : `№ ${i.externalId}`),
+              name: i.title ?? (i.slug ? slugName(i.slug) : i.externalId ? `№ ${i.externalId}` : t("shortLinkItem")),
             }))}
           />
         )}

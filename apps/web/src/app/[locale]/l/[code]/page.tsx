@@ -5,6 +5,8 @@ import { isInVisitWindow, nextVisitWindowDay } from "@baga/core";
 import { redirect } from "@/i18n/navigation";
 import { shortLinkStatus, collectorRunning } from "@/lib/product";
 import { QueuedWatcher } from "@/components/QueuedWatcher";
+import { TrackPanel } from "@/components/TrackPanel";
+import { trackInitial } from "@/lib/watcher";
 
 type Props = { params: Promise<{ locale: string; code: string }> };
 
@@ -44,6 +46,8 @@ export default async function ShortLinkPage({ params }: Props) {
         {live && <QueuedWatcher />}
         <a className="kaspi-link" href={`https://l.kaspi.kz${row.path}`} rel="noopener noreferrer">{t("openOnKaspi")}</a>
       </article>
+      {/* The visitor can set a price now; it moves onto the product when the collector resolves the link. */}
+      <TrackPanel productId={code} shortLink={code} current={null} initial={await trackInitial({ shortLink: code })} />
     </main>
   );
 }

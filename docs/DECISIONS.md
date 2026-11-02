@@ -80,3 +80,6 @@ Not everyone uses Telegram. Email needs a domain of our own: **bagaapp.com** (Na
 - Migration 0008 adds the columns to `watchers`. The old email path for registered users (`auth.users`, `profiles`) is gone from the collector: no accounts exist yet, and Phase 4 moves watchers into accounts.
 - No new dependency: Resend is a plain `fetch`. Personal data: an email address is now stored, which makes the privacy policy (Phase 5) a launch blocker.
 
+## 2026-11-02 — Tracking a short link before it is resolved
+Links shared from the Kaspi app are `l.kaspi.kz` short links, and Kaspi usually does not answer Vercel, so the visitor lands on `/l/<code>` without a product id. That page now has the same price form: the tracking is stored on the short link (`trackings.short_link_code`, migration 0009). When the collector resolves the link in the visit window, it moves the waiting trackings onto the product (a watcher who already tracks that product keeps the existing one), and the first price follows the product's first check. "Мои товары" and the bot's `/list` show such an item as "Товар по ссылке из приложения Kaspi" linking to `/l/<code>`.
+

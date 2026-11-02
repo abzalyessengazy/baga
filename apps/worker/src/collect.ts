@@ -5,7 +5,7 @@
  * target alerts to Telegram right after each check, queued emails at the end. Started by .github/workflows/collect.yml at 03:50 UTC; waits for the window to open.
  */
 import { createKaspiClient, buildSnapshot, KaspiHttpError, KaspiParseError, canonicalProductUrl, parseKaspiUrl, shortLinkUrl } from "@baga/kaspi";
-import { saveSnapshot, connectionOptions, requestProduct } from "@baga/db";
+import { saveSnapshot, connectionOptions, requestProduct, attachShortLinkTrackings } from "@baga/db";
 import {
   evaluateAlert, priorityFor, INTERVAL_MINUTES, backoffMinutes, isSuspiciousJump, type TrackingAlertState,
   KASPI_CRAWL_DELAY_MS, isInVisitWindow, msUntilVisitWindow,
@@ -120,6 +120,8 @@ async function resolveShortLinks(): Promise<number> {
       }
       await requestProduct(sql, p.productId, p.slug, 10_000);
       await sql`update short_link_queue set status = 'resolved', external_id = ${p.productId}, slug = ${p.slug}, resolved_at = now() where code = ${r.code}`;
+      // Prices set on the waiting page move onto the product (migration 0009).
+      await attachShortLinkTrackings(sql, r.code, p.productId);
       breaker.record(true);
     } catch (e) {
       const http = e instanceof KaspiHttpError ? e : null;
