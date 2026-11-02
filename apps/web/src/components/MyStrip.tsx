@@ -32,7 +32,7 @@ export function MyStrip() {
           </li>
         ))}
       </ul>
-      <Link href="/my" className="my-strip-all">{t("homeAll", { count: data.count })}</Link>
+      {data.count > data.items.length && <Link href="/my" className="my-strip-all">{t("homeAll", { count: data.count })}</Link>}
     </section>
   );
 }

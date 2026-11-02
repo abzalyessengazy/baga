@@ -4,6 +4,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { formatTenge } from "@baga/core";
 import { TearCoupon } from "./TearCoupon";
 import { Line } from "./ReceiptBits";
+import { Wordmark } from "./Wordmark";
 
 /** Sample receipt for the landing page. Clearly stamped as a sample: the numbers are illustrative. */
 const WEEKS = [759990, 749990, 739990, 744990, 729990, 719990, 734990, 714990, 689990, 709990, 704990, 699990];
@@ -39,7 +40,7 @@ export function HeroReceipt({ onTorn }: { onTorn?: () => void }) {
           <div className="receipt">
             <span className="stamp stamp-sample" aria-hidden>{t("sample")}</span>
             <div className="receipt-center">
-              <div className="receipt-store">{t("store")}</div>
+              <div className="receipt-store"><Wordmark /></div>
               <div className="receipt-sub">{t("storeLine")}</div>
             </div>
             <hr className="rule" />
