@@ -1,5 +1,5 @@
 "use client";
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { Turnstile } from "./Turnstile";
 
@@ -18,23 +18,30 @@ export function EmailConnect({ initial, removable = false }: { initial: EmailIni
     initial.address ? (initial.confirmed ? "confirmed" : "sent") : "form",
   );
   const [address, setAddress] = useState(initial.address ?? "");
-  const [token, setToken] = useState<string | null>(null);
+  const token = useRef<string | null>(null);
+  // A submit made before Turnstile has finished waits for it (up to 15 s) instead of asking to press again.
+  const waiter = useRef<((t: string | null) => void) | null>(null);
+  const onToken = (v: string | null) => { token.current = v; if (v) { waiter.current?.(v); waiter.current = null; } };
+  const nextToken = () => token.current ? Promise.resolve(token.current) : new Promise<string | null>((resolve) => {
+    const timer = setTimeout(() => resolve(null), 15_000);
+    waiter.current = (t) => { clearTimeout(timer); resolve(t); };
+  });
   const [attempt, setAttempt] = useState(0);
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!token) return setMsg(t("checking"));
     setBusy(true);
     setMsg(null);
+    const tok = await nextToken();
     const res = await fetch("/api/email", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: address, locale, token }),
+      body: JSON.stringify({ email: address, locale, token: tok }),
     }).catch(() => null);
     const data = (await res?.json().catch(() => null)) as { code?: string; email?: string } | null;
     setBusy(false);
-    setToken(null);
+    token.current = null;
     setAttempt((n) => n + 1); // tokens are single-use
     if (data?.code === "sent" || data?.code === "confirmed") {
       setAddress(data.email ?? address);
@@ -71,8 +78,8 @@ export function EmailConnect({ initial, removable = false }: { initial: EmailIni
           onChange={(e) => setAddress(e.target.value)} placeholder="name@mail.kz" />
       </div>
       <button className="btn" type="submit" disabled={busy || !address.trim()} style={{ width: "100%" }}>{t("submit")}</button>
-      <Turnstile key={attempt} action="email" locale={locale} onToken={setToken}
-        onError={(why) => setMsg(te(why === "blocked" ? "check_blocked" : "check_failed"))} />
+      <Turnstile key={attempt} action="email" locale={locale} onToken={onToken}
+        onError={(why) => { waiter.current?.(null); waiter.current = null; setMsg(te(why === "blocked" ? "check_blocked" : "check_failed")); }} />
       {msg && <p className="form-msg is-error" role="alert">{msg}</p>}
       <p className="note">{t("hint")}</p>
     </form>

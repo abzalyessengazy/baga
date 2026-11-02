@@ -9,7 +9,7 @@ const DRAFT_KEY = "baga.pasteDraft";
 const read = () => { try { return sessionStorage.getItem(DRAFT_KEY) ?? ""; } catch { return ""; } };
 const write = (v: string) => { try { sessionStorage.setItem(DRAFT_KEY, v); } catch { /* storage unavailable */ } };
 
-type ErrorCode = "not_a_url" | "not_kaspi" | "not_a_product" | "short_link" | "check_failed" | "too_many" | "generic";
+type ErrorCode = "not_a_url" | "not_kaspi" | "not_a_product" | "short_link" | "check_failed" | "check_blocked" | "too_many" | "generic";
 const isShortLink = (v: string) => /l\.kaspi\.kz\//i.test(v);
 /** Links go to /api/resolve; anything else searches BAGA's own catalog. */
 const looksLikeLink = (v: string) => /https?:\/\/|www\.|kaspi\.kz|\.kz\//i.test(v);
@@ -32,6 +32,33 @@ export const PasteForm = forwardRef<HTMLInputElement>(function PasteForm(_, ref)
   const [armed, setArmed] = useState(false);
   const [widgetKey, setWidgetKey] = useState(0);
   const token = useRef<string | null>(null);
+  // Submits waiting for the bot check: on a phone the link is often pasted and sent before Turnstile has finished.
+  const waiters = useRef<((t: string | null) => void)[]>([]);
+  const blocked = useRef(false);
+
+  function onToken(v: string | null) {
+    token.current = v;
+    if (v) waiters.current.splice(0).forEach((f) => f(v));
+  }
+  function onCheckError(why: "blocked" | "failed") {
+    blocked.current = why === "blocked";
+    waiters.current.splice(0).forEach((f) => f(null));
+  }
+  /** A fresh token, waiting up to 15 s for the widget. Takes it, so the next request gets a new one. */
+  function takeToken(): Promise<string | null> {
+    const ready = token.current;
+    if (ready) { token.current = null; setWidgetKey((k) => k + 1); return Promise.resolve(ready); }
+    setArmed(true);
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => resolve(null), 15_000);
+      waiters.current.push((t) => {
+        clearTimeout(timer);
+        token.current = null;
+        setWidgetKey((k) => k + 1); // tokens are single-use
+        resolve(t);
+      });
+    });
+  }
 
   useEffect(() => setValue(read()), []);
 
@@ -65,13 +92,18 @@ export const PasteForm = forwardRef<HTMLInputElement>(function PasteForm(_, ref)
     setError(null);
     try {
       const short = isShortLink(q);
-      const res = await fetch("/api/resolve", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ input: q, token: short ? token.current : undefined }),
-      });
-      if (short) { token.current = null; setWidgetKey((k) => k + 1); } // tokens are single-use
-      const data = (await res.json()) as { productId?: string; slug?: string | null; pendingLink?: string; error?: ErrorCode };
+      const send = async () => {
+        const res = await fetch("/api/resolve", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ input: q, token: short ? await takeToken() : undefined }),
+        });
+        return (await res.json()) as { productId?: string; slug?: string | null; pendingLink?: string; error?: ErrorCode };
+      };
+      let data = await send();
+      // One quiet retry with a fresh check before telling the visitor anything.
+      if (short && data.error === "check_failed" && !blocked.current) data = await send();
+      if (data.error === "check_failed" && blocked.current) data.error = "check_blocked";
       if (data.productId) {
         write("");
         router.push(`/p/${data.productId}${data.slug ? `?s=${encodeURIComponent(data.slug)}` : ""}`);
@@ -115,7 +147,7 @@ export const PasteForm = forwardRef<HTMLInputElement>(function PasteForm(_, ref)
           )}
         </div>
       )}
-      {armed && <Turnstile key={widgetKey} action="resolve" locale={locale} onToken={(v) => { token.current = v; }} />}
+      {armed && <Turnstile key={widgetKey} action="resolve" locale={locale} onToken={onToken} onError={onCheckError} />}
     </form>
   );
 });
