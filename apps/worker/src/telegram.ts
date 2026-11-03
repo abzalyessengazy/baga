@@ -35,12 +35,14 @@ const esc = (s: string) => s.replace(/[&<>]/g, (ch) => ({ "&": "&amp;", "<": "&l
 
 /** An alert as Telegram HTML plus link buttons (Kaspi first: that is where the visitor buys). */
 export function renderTelegramAlert(p: {
-  type: "first_price" | "target_reached"; locale: Locale; title: string; price: number | null; target: number;
+  type: "first_price" | "target_reached"; locale: Locale; title: string; price: number | null;
+  /** Null only for a percentage target on a product that had no offers at its first check (migration 0010). */
+  target: number | null;
   offerCount: number; productUrl: string; kaspiUrl: string;
 }): { html: string; buttons: { text: string; url: string }[] } {
   const c = copy[p.locale];
   const f = (n: number) => formatTenge(n, p.locale);
-  const hit = p.price !== null && p.price <= p.target;
+  const hit = p.price !== null && p.target !== null && p.price <= p.target;
   const now = p.price !== null
     ? `<b>${f(p.price)}</b>${p.offerCount ? ` · ${c.sellers(p.offerCount)}` : ""}`
     : c.noOffers;
@@ -51,7 +53,7 @@ export function renderTelegramAlert(p: {
     `<b>${esc(p.title)}</b>`,
     "",
     `💰 ${c.now}: ${now}`,
-    `🎯 ${c.yours}: ${f(p.target)}`,
+    ...(p.target !== null ? [`🎯 ${c.yours}: ${f(p.target)}`] : []),
     ...(note ? ["", note] : []),
     "",
     `<i>${c.footer}</i>`,

@@ -27,4 +27,9 @@ describe("renderTelegramAlert", () => {
     const m = renderTelegramAlert({ ...base, type: "first_price", locale: "ru", price: null, offerCount: 0 });
     expect(m.html).toContain("сейчас нет в продаже");
   });
+  it("a percentage target still waiting for a price leaves out the target line", () => {
+    const m = renderTelegramAlert({ ...base, type: "first_price", locale: "ru", price: null, target: null, offerCount: 0 });
+    expect(m.html).not.toContain("Ваша цена");
+    expect(m.html).toContain("Напишем, когда цена опустится до вашей.");
+  });
 });

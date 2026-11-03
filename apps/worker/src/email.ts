@@ -40,7 +40,7 @@ const copy = {
 } as const;
 
 export interface AlertEmail {
-  type: "first_price" | "target_reached"; locale: Locale; title: string; price: number | null; target: number;
+  type: "first_price" | "target_reached"; locale: Locale; title: string; price: number | null; target: number | null;
   seller: string | null; offerCount: number; productUrl: string; kaspiUrl: string; stopUrl: string;
 }
 
@@ -48,10 +48,10 @@ export function renderAlertEmail(p: AlertEmail) {
   const c = copy[p.locale];
   const f = (n: number) => formatTenge(n, p.locale);
   const first = p.type === "first_price";
-  const note = first ? (p.price !== null && p.price <= p.target ? c.hitNote : c.waitNote) : "";
+  const note = first ? (p.price !== null && p.target !== null && p.price <= p.target ? c.hitNote : c.waitNote) : "";
   const rows: [string, string][] = [
     [c.now, p.price !== null ? `<strong>${f(p.price)}</strong>` : c.noOffers],
-    [c.target, f(p.target)],
+    ...(p.target !== null ? [[c.target, f(p.target)] as [string, string]] : []),
     ...(p.seller && !first ? [[c.seller, escapeHtml(p.seller)] as [string, string]] : []),
     ...(p.offerCount && first ? [[c.sellers, String(p.offerCount)] as [string, string]] : []),
   ];

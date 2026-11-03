@@ -4,7 +4,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { formatTenge } from "@baga/core";
 import { Link } from "@/i18n/navigation";
 
-type Item = { trackingId: string; href: string; imageUrl: string | null; name: string; targetPrice: number; currentMinPrice: number | null };
+type Item = { trackingId: string; href: string; imageUrl: string | null; name: string; targetPrice: number | null; currentMinPrice: number | null };
 
 /** On the home page, for a returning visitor: the first few tracked products and a link to the whole list. */
 export function MyStrip() {

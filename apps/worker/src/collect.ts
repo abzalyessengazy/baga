@@ -8,7 +8,7 @@ import { createKaspiClient, buildSnapshot, KaspiHttpError, KaspiParseError, cano
 import { saveSnapshot, connectionOptions, requestProduct, attachShortLinkTrackings } from "@baga/db";
 import {
   evaluateAlert, priorityFor, INTERVAL_MINUTES, backoffMinutes, isSuspiciousJump, type TrackingAlertState,
-  KASPI_CRAWL_DELAY_MS, isInVisitWindow, msUntilVisitWindow,
+  KASPI_CRAWL_DELAY_MS, isInVisitWindow, msUntilVisitWindow, targetForDrop,
 } from "@baga/core";
 import postgres from "postgres";
 import { env } from "./env";
@@ -232,11 +232,21 @@ async function reschedule(productId: number, minPrice: number | null) {
 }
 
 /**
- * After every saved check: watchers who set a price while the product was queued get its first price, then target
+ * After every saved check: percentage targets set before the first price become prices (migration 0010), watchers
+ * who set a price while the product was queued get its first price (with their price in tenge), then target
  * alerts are evaluated; messages go out at once to every channel the watcher connected (Telegram, a confirmed
  * email address), with no Kaspi request, so a visitor hears within minutes.
  */
 async function afterSave(productId: number, externalId: string, price: number | null, seller: string | null) {
+  if (price !== null) {
+    const pending = await sql<{ id: string; pct: number }[]>`
+      select id, target_drop_pct as pct from trackings
+      where product_id = ${productId} and target_price is null and target_drop_pct is not null`;
+    for (const p of pending) {
+      const target = targetForDrop(price, p.pct);
+      if (target) await sql`update trackings set target_price = ${target} where id = ${p.id} and target_price is null`;
+    }
+  }
   const waiting = await sql<{ id: string; tg: boolean; mail: boolean }[]>`
     update trackings t set first_price_sent_at = now()
     from watchers w
@@ -263,7 +273,7 @@ async function evaluateTrackings(productId: number, externalId: string, price: n
     select t.id, t.target_price, t.alert_state, t.episode, t.last_triggered_at, t.above_since,
            coalesce(w.telegram_chat_id is not null, false) as tg, coalesce(w.email_confirmed_at is not null, false) as mail
     from trackings t left join watchers w on w.id = t.watcher_id
-    where t.product_id = ${productId} and t.status = 'active'`;
+    where t.product_id = ${productId} and t.status = 'active' and t.target_price is not null`;
   for (const r of rows) {
     const state: TrackingAlertState = {
       trackingId: r.id, targetPrice: r.target_price, state: r.alert_state, episode: r.episode,
@@ -292,7 +302,7 @@ async function evaluateTrackings(productId: number, externalId: string, price: n
 async function sendTelegramQueued() {
   const token = env.telegramBotToken();
   if (!token) return;
-  const queued = await sql<{ id: number; type: "first_price" | "target_reached"; price: number; target_price: number; chat_id: string; locale: "ru" | "kk"; title: string; external_id: string; current: number | null; offer_count: number }[]>`
+  const queued = await sql<{ id: number; type: "first_price" | "target_reached"; price: number; target_price: number | null; chat_id: string; locale: "ru" | "kk"; title: string; external_id: string; current: number | null; offer_count: number }[]>`
     select n.id, n.type, n.price, t.target_price, w.telegram_chat_id::text as chat_id, w.locale, p.title, p.external_id,
            s.current_min_price as current, coalesce(s.offer_count, 0) as offer_count
     from notifications n
@@ -332,7 +342,7 @@ async function sendQueued() {
 async function sendEmailQueued() {
   const key = env.resendApiKey();
   if (!key) return;
-  const queued = await sql<{ id: number; type: "first_price" | "target_reached"; price: number; target_price: number; email: string; stop_code: string; locale: "ru" | "kk"; title: string; external_id: string; current: number | null; offer_count: number }[]>`
+  const queued = await sql<{ id: number; type: "first_price" | "target_reached"; price: number; target_price: number | null; email: string; stop_code: string; locale: "ru" | "kk"; title: string; external_id: string; current: number | null; offer_count: number }[]>`
     select n.id, n.type, n.price, t.target_price, w.email, w.email_stop_code as stop_code, w.locale, p.title, p.external_id,
            s.current_min_price as current, coalesce(s.offer_count, 0) as offer_count
     from notifications n

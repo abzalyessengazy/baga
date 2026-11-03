@@ -57,11 +57,11 @@ async function listText(w: Watcher): Promise<string> {
     const full = i.title ?? (i.slug ? slugName(i.slug) : i.externalId ? `№ ${i.externalId}` : t("shortLinkItem"));
     const name = full.length > 70 ? `${full.slice(0, 68).trimEnd()}…` : full;
     const url = `${siteUrl()}/${w.locale}${i.pagePath}`;
-    const hit = i.currentMinPrice !== null && i.currentMinPrice <= i.targetPrice;
+    const hit = i.currentMinPrice !== null && i.targetPrice !== null && i.currentMinPrice <= i.targetPrice;
     const now = i.currentMinPrice !== null
       ? `💰 ${tgEscape(t("now"))} <b>${f(i.currentMinPrice)}</b>${hit ? ` ✅ ${tgEscape(t("reached"))}` : ""}`
       : `⏳ ${tgEscape(t("noPriceYet"))}`;
-    return `${n + 1}. <a href="${tgEscape(url)}"><b>${tgEscape(name)}</b></a>\n${now}\n🎯 ${tgEscape(t("target"))} ${f(i.targetPrice)}`;
+    return `${n + 1}. <a href="${tgEscape(url)}"><b>${tgEscape(name)}</b></a>\n${now}\n🎯 ${i.targetPrice !== null ? `${tgEscape(t("target"))} ${f(i.targetPrice)}` : tgEscape(t("targetDrop", { pct: i.targetDropPct ?? 0 }))}`;
   });
   return `🧾 <b>${tgEscape(t("listTitle", { count: items.length }))}</b>\n\n${lines.join("\n\n")}\n\n<i>${tgEscape(t("help"))}</i>`;
 }

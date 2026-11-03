@@ -13,7 +13,8 @@ export interface WatchedItem {
   /** externalId is null while the tracking waits on an unresolved short link (migration 0009); pagePath links to
    * the product page, or to the short link's waiting page. */
   trackingId: string; externalId: string | null; pagePath: string; title: string | null; slug: string | null; imageUrl: string | null;
-  targetPrice: number; currentMinPrice: number | null; lastCheckedAt: Date | null; status: string; createdAt: Date;
+  /** targetPrice is null while a percentage target waits for the product's first price (migration 0010). */
+  targetPrice: number | null; targetDropPct: number | null; currentMinPrice: number | null; lastCheckedAt: Date | null; status: string; createdAt: Date;
 }
 
 const watcherCols = (sql: postgres.Sql) =>
@@ -70,7 +71,8 @@ export async function listWatched(sql: postgres.Sql, watcherId: string): Promise
     select t.id as "trackingId", t.external_id as "externalId",
            case when t.external_id is not null then '/p/' || t.external_id else '/l/' || t.short_link_code end as "pagePath",
            p.title, coalesce(p.slug, q.slug) as slug,
-           p.image_url as "imageUrl", t.target_price as "targetPrice", s.current_min_price as "currentMinPrice",
+           p.image_url as "imageUrl", t.target_price as "targetPrice",
+           t.target_drop_pct as "targetDropPct", s.current_min_price as "currentMinPrice",
            s.last_checked_at as "lastCheckedAt", t.status, t.created_at as "createdAt"
     from trackings t
     left join products p on p.id = t.product_id
@@ -81,13 +83,17 @@ export async function listWatched(sql: postgres.Sql, watcherId: string): Promise
 }
 
 export type TrackResult = { ok: true; trackingId: string } | { ok: false; reason: "unknown_product" | "limit" };
+/** A price in tenge, or a drop in percent while the product has no price yet (migration 0010). */
+export type TrackTarget = { price: number } | { dropPct: number };
+const targetCols = (t: TrackTarget) => "price" in t ? { price: t.price, pct: null } : { price: null, pct: t.dropPct };
 
 /**
  * Creates or updates the watcher's tracking. The product must be in our catalog or queued for the collector, so
  * arbitrary ids cannot be stored. Changing the target re-arms the alert. A product we already have a price for
- * gets no "first price" message (the visitor saw it on the page).
+ * gets no "first price" message (the visitor saw it on the page). A percentage target is only for a product with
+ * no price yet; the caller turns it into a price when there is one.
  */
-export async function upsertWatcherTracking(sql: postgres.Sql, watcherId: string, externalId: string, target: number, limit: number): Promise<TrackResult> {
+export async function upsertWatcherTracking(sql: postgres.Sql, watcherId: string, externalId: string, target: TrackTarget, limit: number): Promise<TrackResult> {
   const [prod] = await sql<{ id: number | null; queued: boolean }[]>`
     select (select id from products where external_id = ${externalId}) as id,
            exists (select 1 from seed_queue where external_id = ${externalId} and status = 'pending') as queued`;
@@ -98,10 +104,10 @@ export async function upsertWatcherTracking(sql: postgres.Sql, watcherId: string
     if ((n?.n ?? 0) >= limit) return { ok: false, reason: "limit" };
   }
   const [t] = await sql<{ id: string }[]>`
-    insert into trackings (watcher_id, external_id, product_id, target_price, status, first_price_sent_at)
-    values (${watcherId}, ${externalId}, ${prod.id}, ${target}, 'active', ${prod.id ? new Date() : null})
+    insert into trackings (watcher_id, external_id, product_id, target_price, target_drop_pct, status, first_price_sent_at)
+    values (${watcherId}, ${externalId}, ${prod.id}, ${targetCols(target).price}, ${targetCols(target).pct}, 'active', ${prod.id ? new Date() : null})
     on conflict (watcher_id, external_id) where watcher_id is not null do update
-      set target_price = excluded.target_price, status = 'active', alert_state = 'armed', above_since = null
+      set target_price = excluded.target_price, target_drop_pct = excluded.target_drop_pct, status = 'active', alert_state = 'armed', above_since = null
     returning id`;
   return { ok: true, trackingId: t!.id };
 }
@@ -112,8 +118,8 @@ export async function deleteWatcherTracking(sql: postgres.Sql, watcherId: string
 }
 
 export async function getWatcherTracking(sql: postgres.Sql, watcherId: string, externalId: string) {
-  const [t] = await sql<{ id: string; targetPrice: number }[]>`
-    select id, target_price as "targetPrice" from trackings where watcher_id = ${watcherId} and external_id = ${externalId} and status = 'active'`;
+  const [t] = await sql<{ id: string; targetPrice: number | null; targetDropPct: number | null }[]>`
+    select id, target_price as "targetPrice", target_drop_pct as "targetDropPct" from trackings where watcher_id = ${watcherId} and external_id = ${externalId} and status = 'active'`;
   return t ?? null;
 }
 
@@ -166,7 +172,7 @@ export async function removeWatcherEmail(sql: postgres.Sql, watcherId: string): 
  * Tracking on a Kaspi app short link the website could not resolve (migration 0009). The link must be waiting in
  * short_link_queue; the collector moves the tracking onto the product when it resolves the link.
  */
-export async function upsertWatcherShortLinkTracking(sql: postgres.Sql, watcherId: string, code: string, target: number, limit: number): Promise<TrackResult> {
+export async function upsertWatcherShortLinkTracking(sql: postgres.Sql, watcherId: string, code: string, target: TrackTarget, limit: number): Promise<TrackResult> {
   const [link] = await sql<{ status: string; externalId: string | null }[]>`
     select status, external_id as "externalId" from short_link_queue where code = ${code}`;
   if (!link || link.status === "failed") return { ok: false, reason: "unknown_product" };
@@ -178,17 +184,17 @@ export async function upsertWatcherShortLinkTracking(sql: postgres.Sql, watcherI
     if ((n?.n ?? 0) >= limit) return { ok: false, reason: "limit" };
   }
   const [t] = await sql<{ id: string }[]>`
-    insert into trackings (watcher_id, short_link_code, target_price, status)
-    values (${watcherId}, ${code}, ${target}, 'active')
+    insert into trackings (watcher_id, short_link_code, target_price, target_drop_pct, status)
+    values (${watcherId}, ${code}, ${targetCols(target).price}, ${targetCols(target).pct}, 'active')
     on conflict (watcher_id, short_link_code) where watcher_id is not null and short_link_code is not null and external_id is null
-      do update set target_price = excluded.target_price, status = 'active', alert_state = 'armed', above_since = null
+      do update set target_price = excluded.target_price, target_drop_pct = excluded.target_drop_pct, status = 'active', alert_state = 'armed', above_since = null
     returning id`;
   return { ok: true, trackingId: t!.id };
 }
 
 export async function getWatcherShortLinkTracking(sql: postgres.Sql, watcherId: string, code: string) {
-  const [t] = await sql<{ id: string; targetPrice: number }[]>`
-    select id, target_price as "targetPrice" from trackings
+  const [t] = await sql<{ id: string; targetPrice: number | null; targetDropPct: number | null }[]>`
+    select id, target_price as "targetPrice", target_drop_pct as "targetDropPct" from trackings
     where watcher_id = ${watcherId} and short_link_code = ${code} and external_id is null and status = 'active'`;
   return t ?? null;
 }
