@@ -7,8 +7,8 @@
 import { createKaspiClient, buildSnapshot, KaspiHttpError, KaspiParseError, canonicalProductUrl, parseKaspiUrl, queuedLinkUrl, variantLinkCode } from "@baga/kaspi";
 import { saveSnapshot, connectionOptions, requestProduct, attachShortLinkTrackings, weekMovers } from "@baga/db";
 import {
-  evaluateAlert, priorityFor, INTERVAL_MINUTES, backoffMinutes, isSuspiciousJump, type TrackingAlertState,
-  KASPI_CRAWL_DELAY_MS, isInVisitWindow, msUntilVisitWindow, targetForDrop, almatyDay, runningSale,
+  evaluateAlert, priorityFor, INTERVAL_MINUTES, PRIORITY_ORDER, CATALOG, backoffMinutes, isSuspiciousJump, type TrackingAlertState,
+  KASPI_CRAWL_DELAY_MS, isInVisitWindow, msUntilVisitWindow, targetForDrop, almatyDay, runningSale, type Priority,
 } from "@baga/core";
 import postgres from "postgres";
 import { env } from "./env";
@@ -22,7 +22,6 @@ const sql = postgres(env.databaseUrl(), { max: 2, ...connectionOptions(env.datab
 const kaspi = createKaspiClient({ minIntervalMs: KASPI_CRAWL_DELAY_MS, jitterMs: 2_000 });
 const breaker = new CircuitBreaker();
 
-const PAGE_REFRESH_MS = 7 * 24 * 3_600_000;
 // Worst case for one product: page + offers + suspicious re-check + alert confirmation = 4 requests ≈ 48 s.
 // Stop starting new products when less than this remains, so no request lands after 08:30 UTC.
 const WINDOW_MARGIN_MS = 60_000;
@@ -31,7 +30,7 @@ const inWindow = () => isInVisitWindow(new Date(), WINDOW_MARGIN_MS);
 type DueRow = {
   product_id: number; external_id: string; slug: string | null; fail_count: number; interval_minutes: number;
   current_min_price: number | null; title: string; image_url: string | null; category_path: string[];
-  page_checked_at: Date | null;
+  page_checked_at: Date | null; priority: Priority;
 };
 
 async function main() {
@@ -143,7 +142,10 @@ async function resolveShortLinks(): Promise<number> {
   return rows.length;
 }
 
-/** Claims due rows; locked_until stops an overlapping run from taking the same product. */
+/**
+ * Claims due rows, watched products first (PRIORITY_ORDER), so when the day's requests run short the catalog
+ * slips, not a tracked product. locked_until stops an overlapping run from taking the same product.
+ */
 function claimDue(limit: number) {
   return sql<DueRow[]>`
     update collection_schedule cs set locked_until = now() + interval '45 minutes'
@@ -151,19 +153,21 @@ function claimDue(limit: number) {
     where cs.product_id = p.id and cs.product_id in (
       select product_id from collection_schedule
       where next_check_at <= now() and fail_count < 10 and (locked_until is null or locked_until < now())
-      order by next_check_at limit ${limit} for update skip locked)
+      order by array_position(${sql.array(PRIORITY_ORDER)}::text[], priority), next_check_at
+      limit ${limit} for update skip locked)
     returning cs.product_id, p.external_id, p.slug, cs.fail_count, cs.interval_minutes, s.current_min_price,
-              p.title, p.image_url, p.category_path, p.page_checked_at`;
+              p.title, p.image_url, p.category_path, p.page_checked_at, cs.priority`;
 }
 
 function release(productId: number) {
   return sql`update collection_schedule set locked_until = null where product_id = ${productId}`;
 }
 
-/** Routine check: offers only (1 request); the product page too when it is older than a week. */
+/** Routine check: offers only (1 request); the product page too when it is older than its tier allows (7 or 30 days). */
 async function checkProduct(row: DueRow, runId: number): Promise<boolean> {
   try {
-    const needPage = !row.page_checked_at || Date.now() - row.page_checked_at.getTime() > PAGE_REFRESH_MS;
+    const refreshMs = (CATALOG.pageRefreshDays[row.priority] ?? 7) * 86_400_000;
+    const needPage = !row.page_checked_at || Date.now() - row.page_checked_at.getTime() > refreshMs;
     const page = needPage
       ? await kaspi.fetchProductPage(row.external_id)
       : { id: row.external_id, title: row.title, imageUrl: row.image_url, categoryPath: row.category_path };
@@ -228,11 +232,16 @@ async function reschedule(productId: number, minPrice: number | null) {
   const [t] = await sql<{ n: number; dist: number | null }[]>`
     select count(*)::int as n, min((${minPrice}::int - target_price)::float / target_price * 100) as dist
     from trackings where product_id = ${productId} and status = 'active'`;
-  const [p] = await sql<{ is_seed: boolean; viewed_days: number | null }[]>`
-    select is_seed, extract(day from now() - last_viewed_at)::int as viewed_days from products where id = ${productId}`;
+  // seed_rank: active seed products with more Kaspi reviews. A product whose reviews are not known yet ranks 0
+  // (daily) until its page is refreshed, and does not push known ones down.
+  const [p] = await sql<{ is_seed: boolean; viewed_days: number | null; seed_rank: number }[]>`
+    select is_seed, extract(day from now() - last_viewed_at)::int as viewed_days,
+           case when kaspi_reviews is null then 0 else (select count(*)::int from products o
+             where o.is_seed and o.status = 'active' and o.kaspi_reviews > p.kaspi_reviews) end as seed_rank
+    from products p where id = ${productId}`;
   const priority = priorityFor({
     activeTrackings: t?.n ?? 0, minDistanceToTargetPct: minPrice === null ? null : (t?.dist ?? null),
-    isSeed: p?.is_seed ?? false, lastViewedDaysAgo: p?.viewed_days ?? null,
+    isSeed: p?.is_seed ?? false, lastViewedDaysAgo: p?.viewed_days ?? null, seedRank: p?.seed_rank ?? 0,
   });
   const minutes = INTERVAL_MINUTES[priority];
   await sql`update collection_schedule set priority = ${priority}, interval_minutes = ${minutes}, fail_count = 0,

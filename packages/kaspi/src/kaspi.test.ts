@@ -68,6 +68,8 @@ describe("parsers", () => {
     expect(p.title).toBe("Смартфон Apple iPhone 18 Pro 256Gb NanoSIM+eSIM серебристый");
     expect(p.imageUrl).toContain("gallery-large");
     expect(p.categoryPath).toEqual(["Телефоны и гаджеты", "Смартфоны"]);
+    expect(p.reviews).toBe(81);
+    expect(p.rating).toBe(5);
   });
   it("throws when the data block is missing", () => {
     expect(() => parseProductPage("<html></html>")).toThrow(KaspiParseError);

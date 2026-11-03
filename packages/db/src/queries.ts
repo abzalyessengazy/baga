@@ -61,13 +61,16 @@ export async function saveSnapshot(
   const pageFetched = opts.pageFetched ?? true;
   return sql.begin(async (tx) => {
     const [p] = await tx<{ id: number }[]>`
-      insert into products (marketplace_id, external_id, slug, title, image_url, category_path, page_checked_at)
+      insert into products (marketplace_id, external_id, slug, title, image_url, category_path, page_checked_at, kaspi_reviews, kaspi_rating)
       values ((select id from marketplaces where code = 'kaspi'), ${snap.externalId}, ${slug}, ${snap.title},
-              ${snap.imageUrl}, ${snap.categoryPath}, ${pageFetched ? new Date() : null})
+              ${snap.imageUrl}, ${snap.categoryPath}, ${pageFetched ? new Date() : null},
+              ${pageFetched ? snap.reviews : null}, ${pageFetched ? snap.rating : null})
       on conflict (marketplace_id, external_id) do update
         set title = excluded.title, image_url = excluded.image_url, category_path = excluded.category_path,
             slug = coalesce(excluded.slug, products.slug), status = 'active',
-            page_checked_at = coalesce(excluded.page_checked_at, products.page_checked_at)
+            page_checked_at = coalesce(excluded.page_checked_at, products.page_checked_at),
+            kaspi_reviews = case when excluded.page_checked_at is null then products.kaspi_reviews else excluded.kaspi_reviews end,
+            kaspi_rating = case when excluded.page_checked_at is null then products.kaspi_rating else excluded.kaspi_rating end
       returning id`;
     const productId = p!.id;
     // Watcher trackings made while the product was still queued (migration 0007).

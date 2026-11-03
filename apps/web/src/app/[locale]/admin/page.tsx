@@ -12,6 +12,7 @@ export const metadata: Metadata = { robots: { index: false, follow: false } };
 // A run without finished_at is still going while its checks keep coming; otherwise it was cancelled or killed.
 const LIVE_MS = 20 * 60_000;
 const count = (n: number) => new Intl.NumberFormat("ru-RU").format(n);
+const share = (n: number, of: number) => (of ? `${count(n)} · ${Math.round((n / of) * 100)}%` : "—");
 const at = (d: Date | null) =>
   d ? new Intl.DateTimeFormat("ru-RU", { timeZone: "Asia/Almaty", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(d) : "—";
 
@@ -124,6 +125,12 @@ export default async function AdminPage({ params, searchParams }: Props) {
                 ...(["yes", "later", "no"] as const).map((a): [string, number] =>
                   [t(a === "yes" ? "boughtYes" : a === "later" ? "boughtLater" : "boughtNo"), funnel.bought.find((b) => b.answer === a)?.n ?? 0]),
                 [t("returned"), funnel.returned]])}
+            </div>
+            <div>
+              <h3>{t("hitTitle")}</h3>
+              {kv([[t("hitViews"), funnel.views.total],
+                [t("hitPriced"), share(funnel.views.priced, funnel.views.total)],
+                [t("hitWeek"), share(funnel.views.week, funnel.views.total)]])}
             </div>
           </div>
         </section>

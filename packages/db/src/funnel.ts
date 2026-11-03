@@ -56,6 +56,11 @@ export interface FunnelStats {
   asked: number;
   /** Watchers seen again a day or more after they first tracked something. */
   returned: number;
+  /**
+   * Hit rate (DECISIONS.md, 2026-11-03 "More products in the same Kaspi budget"): product pages opened (once per
+   * visit and product), how many already had a price when opened, and how many had a week of history.
+   */
+  views: { total: number; priced: number; week: number };
 }
 
 /** Visits that reached each step in the last `days` days, counted once per visit. */
@@ -74,9 +79,20 @@ export async function getFunnel(sql: postgres.Sql, days = 7): Promise<FunnelStat
   const bought = await sql<{ answer: BoughtAnswer; n: number }[]>`select bought as answer, count(*)::int as n from trackings where bought is not null group by 1`;
   const [asked] = await sql<{ n: number }[]>`select count(*)::int as n from trackings where bought_asked_at is not null`;
   const [returned] = await sql<{ n: number }[]>`select count(*)::int as n from watchers where last_seen_at > created_at + interval '1 day'`;
+  const [views] = await sql<{ total: number; priced: number; week: number }[]>`
+    with v as (
+      select distinct on (sid, external_id) external_id, at from events
+      where at > ${since} and name = 'product_view' and external_id is not null order by sid, external_id, at)
+    select count(*)::int as total,
+           count(*) filter (where f.first < v.at)::int as priced,
+           count(*) filter (where f.first < v.at - interval '7 days')::int as week
+    from v left join lateral (
+      select min(o.observed_at) as first from products p join price_observations o on o.product_id = p.id
+      where p.external_id = v.external_id) f on true`;
   const by = new Map(steps.map((s) => [s.name, s.sessions]));
   return {
     days, steps: EVENT_NAMES.map((name) => ({ name, sessions: by.get(name) ?? 0 })),
     byLocale, byDevice, sources, bought, asked: asked!.n, returned: returned!.n,
+    views: views ?? { total: 0, priced: 0, week: 0 },
   };
 }

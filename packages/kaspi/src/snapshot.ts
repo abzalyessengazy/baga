@@ -18,6 +18,9 @@ export interface ProductSnapshot {
   title: string;
   imageUrl: string | null;
   categoryPath: string[];
+  /** Kaspi's review count and rating from the product page; null when the page was not fetched or has none. */
+  reviews: number | null;
+  rating: number | null;
   offers: OfferSnapshot[]; // sorted by price ascending
   minPrice: Tenge | null;
   offerCount: number;
@@ -73,7 +76,9 @@ export function parseOffers(json: unknown): OfferSnapshot[] {
 }
 
 /** Reads `BACKEND.components.item = {...}` from a product page. */
-export function parseProductPage(html: string): { title: string; imageUrl: string | null; categoryPath: string[]; id: string } {
+export interface ProductPage { id: string; title: string; imageUrl: string | null; categoryPath: string[]; reviews?: number | null; rating?: number | null }
+
+export function parseProductPage(html: string): ProductPage {
   const marker = "BACKEND.components.item = ";
   const i = html.indexOf(marker);
   if (i < 0) throw new KaspiParseError("Product data block not found");
@@ -93,11 +98,13 @@ export function parseProductPage(html: string): { title: string; imageUrl: strin
     title: decodeEntities(d.card.title),
     imageUrl: d.galleryImages?.[0]?.large ?? d.galleryImages?.[0]?.medium ?? null,
     categoryPath: (d.breadcrumbs ?? []).filter((b) => b.id !== "Categories").map((b) => b.title),
+    reviews: d.card.reviewsQuantity ?? null,
+    rating: d.card.rating ?? null,
   };
 }
 
 export function buildSnapshot(
-  page: ReturnType<typeof parseProductPage>,
+  page: ProductPage,
   offers: OfferSnapshot[],
   now = new Date(),
 ): ProductSnapshot {
@@ -107,6 +114,8 @@ export function buildSnapshot(
     title: page.title,
     imageUrl: page.imageUrl,
     categoryPath: page.categoryPath,
+    reviews: page.reviews ?? null,
+    rating: page.rating ?? null,
     offers,
     minPrice: offers[0]?.price ?? null,
     offerCount: offers.length,
