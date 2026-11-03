@@ -321,6 +321,24 @@ a { color: inherit; }
 .legal a { color: var(--stamp); overflow-wrap: anywhere; }
 .legal-updated { color: var(--ink-faint); font: 0.75rem/1.4 var(--font-receipt); }
 
+/* sales and week movers */
+.sale-check { margin-top: 14px; padding: 12px 14px; border: 1.5px dashed var(--stamp); border-radius: 6px; font-family: var(--font-ui); font-size: 0.875rem; color: var(--ink-soft); }
+.sale-check p { margin: 0 0 4px; }
+.sale-check p:last-child { margin-bottom: 0; }
+.sale-check .sale-title { font: 700 0.8125rem/1.3 var(--font-receipt); color: var(--stamp); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 8px; }
+.sale-banner { max-width: 720px; margin: 8px auto 24px; padding: 14px 18px; background: var(--paper); border-left: 4px solid var(--stamp); border-radius: 6px; box-shadow: var(--paper-shadow); font-size: var(--step--1); }
+.sale-banner p { margin: 0 0 6px; color: var(--ink); }
+.sale-banner a { color: var(--stamp); font-weight: 650; }
+.drops-intro { color: var(--ink-on-counter, var(--ink-soft)); font-size: var(--step--1); margin: 0 0 18px; max-width: 62ch; }
+.drops-h { font: 700 var(--step-0)/1.3 var(--font-receipt); color: var(--ink-on-counter, var(--ink)); margin: 22px 0 8px; }
+.untracked .movers { background: var(--paper); border-radius: 10px; box-shadow: var(--paper-shadow); padding: 4px 8px; }
+.movers .catalog-title small, .movers .catalog-price small { display: block; font-size: 0.75rem; color: var(--ink-faint); font-weight: 400; }
+.movers .catalog-title { -webkit-line-clamp: 3; }
+.movers .catalog-price { text-align: right; }
+.movers .catalog-price small.is-down { color: var(--stamp); font-weight: 650; }
+.movers .catalog-price small.is-up { color: var(--stamp-red); font-weight: 650; }
+.z-all { display: inline-block; margin-top: 10px; font-size: 0.8125rem; color: var(--stamp); }
+
 /* "Вы купили?" */
 .bought { padding: 14px 0; border-bottom: 1.5px dashed var(--rule); margin-bottom: 14px; }
 .bought .channel-title { margin: 0 0 4px; }

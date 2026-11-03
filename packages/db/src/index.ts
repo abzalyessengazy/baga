@@ -6,3 +6,4 @@ export * from "./stats";
 export * from "./admin";
 export * from "./feedback";
 export * from "./funnel";
+export * from "./movers";

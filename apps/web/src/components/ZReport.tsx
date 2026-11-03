@@ -127,6 +127,7 @@ function MovesSlip({ moves, locale }: { moves: Stats["moves"]; locale: L }) {
           </Link>
         </motion.div>
       ))}
+      <Link href="/drops" className="z-all">{t("allMoves")} →</Link>
     </div>
   );
 }

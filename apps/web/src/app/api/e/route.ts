@@ -11,6 +11,8 @@ const BOTS = /bot|crawl|spider|slurp|preview|headless|lighthouse|monitor/i;
  */
 export async function POST(req: Request) {
   const done = new NextResponse(null, { status: 204 });
+  // Local dev servers share the production database: their visits are not real ones.
+  if (new URL(req.url).hostname === "localhost") return done;
   if (BOTS.test(req.headers.get("user-agent") ?? "") || !allow(`e:${clientIp(req)}`, 120, 60 * 60 * 1000)) return done;
   const b = (await req.json().catch(() => ({}))) as Record<string, unknown>;
   const str = (v: unknown, re: RegExp) => (typeof v === "string" && re.test(v) ? v : null);

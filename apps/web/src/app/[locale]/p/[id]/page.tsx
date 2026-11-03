@@ -8,6 +8,7 @@ import { alreadyTracked } from "@/lib/catalog";
 import { Related } from "@/components/Related";
 import { PriceChart } from "@/components/PriceChart";
 import { TrackPanel } from "@/components/TrackPanel";
+import { SaleCheck } from "@/components/SaleCheck";
 import { ProductLookup } from "@/components/ProductLookup";
 import { trackInitial } from "@/lib/watcher";
 import { PrintIn, StampIn } from "@/components/PrintIn";
@@ -142,6 +143,7 @@ export default async function ProductPage({ params, searchParams }: Props) {
             <p className="verdict-text">{verdictText}</p>
           </>
         )}
+        <SaleCheck history={v.history} locale={L} />
         <hr className="rule" />
         <h2 className="receipt-caption" style={{ fontSize: "inherit", fontWeight: 400, margin: "0 0 6px" }}>{t("historyTitle")}</h2>
         <PriceChart history={v.history} />

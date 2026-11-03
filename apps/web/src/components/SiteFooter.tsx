@@ -9,7 +9,7 @@ export async function SiteFooter() {
   return (
     <footer className="wrap site-footer">
       <Feedback />
-      <p><Link href="/privacy">{t("privacy")}</Link> · <Link href="/terms">{t("terms")}</Link></p>
+      <p><Link href="/drops">{t("drops")}</Link> · <Link href="/privacy">{t("privacy")}</Link> · <Link href="/terms">{t("terms")}</Link></p>
       <p>{t("disclaimer")}</p>
       <p>{t("contact")} <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a> · {t("since")}</p>
     </footer>

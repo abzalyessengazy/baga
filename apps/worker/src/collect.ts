@@ -5,16 +5,17 @@
  * target alerts to Telegram right after each check, queued emails at the end. Started by .github/workflows/collect.yml at 03:50 UTC; waits for 04:05.
  */
 import { createKaspiClient, buildSnapshot, KaspiHttpError, KaspiParseError, canonicalProductUrl, parseKaspiUrl, queuedLinkUrl, variantLinkCode } from "@baga/kaspi";
-import { saveSnapshot, connectionOptions, requestProduct, attachShortLinkTrackings } from "@baga/db";
+import { saveSnapshot, connectionOptions, requestProduct, attachShortLinkTrackings, weekMovers } from "@baga/db";
 import {
   evaluateAlert, priorityFor, INTERVAL_MINUTES, backoffMinutes, isSuspiciousJump, type TrackingAlertState,
-  KASPI_CRAWL_DELAY_MS, isInVisitWindow, msUntilVisitWindow, targetForDrop,
+  KASPI_CRAWL_DELAY_MS, isInVisitWindow, msUntilVisitWindow, targetForDrop, almatyDay, runningSale,
 } from "@baga/core";
 import postgres from "postgres";
 import { env } from "./env";
 import { CircuitBreaker } from "./breaker";
 import { renderAlertEmail, renderBoughtEmail, sendViaResend } from "./email";
 import { renderTelegramAlert, renderTelegramBoughtAsk, sendTelegram } from "./telegram";
+import { renderChannelPost } from "./channel";
 
 const sql = postgres(env.databaseUrl(), { max: 2, ...connectionOptions(env.databaseUrl()) });
 // Every request this run makes (page, offers, re-checks, alert confirmations) goes through this gate.
@@ -102,6 +103,7 @@ async function main() {
     select (select count(*)::int from collection_schedule where next_check_at <= now() and fail_count < 10) as due,
            (select count(*)::int from seed_queue where status = 'pending' and attempts < 3) as queued`;
   console.log(JSON.stringify({ runId, checked: breaker.checked, changed, seeded, failed: breaker.failed, aborted, stillDue: left?.due, stillQueued: left?.queued }));
+  if (!aborted) await postToChannel(runId).catch((e) => console.error(`channel post: ${e}`));
   const hc = env.healthcheckUrl();
   if (hc) await fetch(aborted ? `${hc}/fail` : hc, { method: "POST", body: aborted ?? "ok" }).catch(() => {});
   if (aborted) process.exitCode = 2;
@@ -341,6 +343,26 @@ async function sendQueued() {
   await queueBoughtAsks();
   await sendTelegramQueued();
   await sendEmailQueued();
+}
+
+/**
+ * The daily drops post in the public channel, after a finished collection run. Once a day: skipped when another
+ * run already finished checks today (a backup trigger after a crash). Database and Telegram only, no Kaspi.
+ */
+async function postToChannel(runId: number) {
+  const token = env.telegramBotToken();
+  const channel = env.telegramChannel();
+  if (!token || !channel) return;
+  const [earlier] = await sql<{ n: number }[]>`
+    select count(*)::int as n from collection_runs where id <> ${runId} and checked > 0 and finished_at is not null
+      and (finished_at at time zone 'Asia/Almaty')::date = (now() at time zone 'Asia/Almaty')::date`;
+  if (earlier!.n > 0) return;
+  const movers = await weekMovers(sql, "down", 5, 5);
+  if (!movers.length) { console.log("channel post: no drops of 5% or more"); return; }
+  const day = almatyDay();
+  const msg = renderChannelPost({ locale: env.telegramChannelLocale(), movers, site: env.siteUrl(), day, saleId: runningSale(day)?.id ?? null });
+  await sendTelegram(token, channel, msg);
+  console.log(`channel post: ${movers.length} drops`);
 }
 
 /**
