@@ -9,13 +9,13 @@ export async function POST(req: NextRequest) {
   const form = await req.formData().catch(() => null);
   const locale = form?.get("l") === "kk" ? "kk" : "ru";
   const back = new URL(`/${locale}/admin`, req.nextUrl.origin);
-  if (!allow(`admin:${ip}`, 5, 15 * 60_000)) return NextResponse.redirect(back, 303);
+  const fail = (e: "wrong" | "limit") => { back.searchParams.set("e", e); return NextResponse.redirect(back, 303); };
+  if (!allow(`admin:${ip}`, 5, 15 * 60_000)) return fail("limit");
   const value = adminCookieFor(String(form?.get("token") ?? ""));
+  if (!value) return fail("wrong");
   const res = NextResponse.redirect(back, 303);
-  if (value) {
-    res.cookies.set(ADMIN_COOKIE, value, {
-      httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "strict", path: "/", maxAge: 30 * 24 * 3600,
-    });
-  }
+  res.cookies.set(ADMIN_COOKIE, value, {
+    httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: 30 * 24 * 3600,
+  });
   return res;
 }

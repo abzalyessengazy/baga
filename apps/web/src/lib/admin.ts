@@ -11,7 +11,8 @@ const MIN_TOKEN = 24;
 
 const digest = (s: string) => createHash("sha256").update(`baga-admin:${s}`).digest();
 const token = () => {
-  const t = process.env.ADMIN_TOKEN;
+  // Trimmed: `openssl rand … | pbcopy` copies a trailing newline, which Vercel keeps and a password field drops.
+  const t = process.env.ADMIN_TOKEN?.trim();
   return t && t.length >= MIN_TOKEN ? t : null;
 };
 
@@ -21,7 +22,7 @@ export const adminEnabled = () => token() !== null;
 export function adminCookieFor(input: string): string | null {
   const t = token();
   if (!t) return null;
-  const a = digest(input), b = digest(t);
+  const a = digest(input.trim()), b = digest(t);
   return timingSafeEqual(a, b) ? b.toString("hex") : null;
 }
 

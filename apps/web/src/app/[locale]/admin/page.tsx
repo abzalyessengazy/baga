@@ -5,7 +5,7 @@ import { getSql, getAdminHealth, type AdminRun } from "@baga/db";
 import { isInVisitWindow } from "@baga/core";
 import { adminEnabled, isAdmin } from "@/lib/admin";
 
-type Props = { params: Promise<{ locale: string }> };
+type Props = { params: Promise<{ locale: string }>; searchParams: Promise<{ e?: string }> };
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { robots: { index: false, follow: false } };
 
@@ -16,8 +16,9 @@ const at = (d: Date | null) =>
   d ? new Intl.DateTimeFormat("ru-RU", { timeZone: "Asia/Almaty", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(d) : "—";
 
 /** The owner's health page (DECISIONS.md, 2026-11-03 "Admin page"): read-only numbers straight from the database. */
-export default async function AdminPage({ params }: Props) {
+export default async function AdminPage({ params, searchParams }: Props) {
   const { locale } = await params;
+  const { e } = await searchParams;
   setRequestLocale(locale);
   if (!adminEnabled()) notFound();
   const t = await getTranslations("admin");
@@ -28,6 +29,7 @@ export default async function AdminPage({ params }: Props) {
           <label htmlFor="admin-token">{t("token")}</label>
           <input id="admin-token" name="token" type="password" autoComplete="current-password" required />
           <input type="hidden" name="l" value={locale} />
+          {(e === "wrong" || e === "limit") && <p className="paste-error" role="alert">{t(e === "wrong" ? "wrongKey" : "tooMany")}</p>}
           <button type="submit" className="btn">{t("signIn")}</button>
         </form>
       </main>
