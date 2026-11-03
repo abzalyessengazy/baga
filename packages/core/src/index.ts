@@ -7,3 +7,4 @@ export * from "./search";
 export * from "./seedCatalog";
 export * from "./email";
 export * from "./title";
+export * from "./target";

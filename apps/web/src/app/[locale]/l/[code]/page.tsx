@@ -7,6 +7,9 @@ import { shortLinkStatus, collectorRunning } from "@/lib/product";
 import { QueuedWatcher } from "@/components/QueuedWatcher";
 import { TrackPanel } from "@/components/TrackPanel";
 import { trackInitial } from "@/lib/watcher";
+import { alreadyTracked } from "@/lib/catalog";
+import { Related } from "@/components/Related";
+import { PrintIn, StampIn } from "@/components/PrintIn";
 
 type Props = { params: Promise<{ locale: string; code: string }> };
 
@@ -36,8 +39,8 @@ export default async function ShortLinkPage({ params }: Props) {
   const live = isInVisitWindow(new Date()) && (await collectorRunning());
   return (
     <main className="wrap untracked">
-      <article className="receipt">
-        <span className="stamp">{t("queuedStamp")}</span>
+      <PrintIn className="receipt">
+        <StampIn>{t("queuedStamp")}</StampIn>
         <p className="untracked-name">{t("shortLinkNote")}</p>
         <hr className="rule" />
         <p className="untracked-status" role="status">
@@ -45,9 +48,10 @@ export default async function ShortLinkPage({ params }: Props) {
         </p>
         {live && <QueuedWatcher />}
         <a className="kaspi-link" href={`https://l.kaspi.kz${row.path}`} rel="noopener noreferrer">{t("openOnKaspi")}</a>
-      </article>
+      </PrintIn>
       {/* The visitor can set a price now; it moves onto the product when the collector resolves the link. */}
-      <TrackPanel productId={code} shortLink={code} current={null} initial={await trackInitial({ shortLink: code })} />
+      <TrackPanel productId={code} shortLink={code} current={null} initial={await trackInitial({ shortLink: code })}
+        related={<Related lists={await alreadyTracked("", null)} locale={locale as "ru" | "kk"} />} />
     </main>
   );
 }

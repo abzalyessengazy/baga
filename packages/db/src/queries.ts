@@ -175,6 +175,11 @@ export interface CatalogItem {
   inStock: boolean;
 }
 
+/** How many people track a product: products others watch come first in "similar" and "popular" lists. */
+function watched(sql: postgres.Sql) {
+  return sql`(select count(*) from trackings t where t.product_id = p.id)`;
+}
+
 function catalogSelect(sql: postgres.Sql) {
   return sql`select p.external_id as "externalId", p.title, p.image_url as "imageUrl",
       s.current_min_price as "minPrice", coalesce(s.in_stock, false) as "inStock"
@@ -199,11 +204,11 @@ export async function similarProducts(sql: postgres.Sql, words: string[], exclud
   const score = words.map((w) => sql`(p.title ilike ${likePattern(w)})::int`).reduce((a, b) => sql`${a} + ${b}`);
   const need = words.length >= 2 ? 2 : 1;
   return sql<CatalogItem[]>`${catalogSelect(sql)} and p.external_id <> ${excludeExternalId} and (${score}) >= ${need}
-    order by (${score}) desc, s.in_stock desc, p.last_viewed_at desc nulls last, p.id limit ${limit}`;
+    order by (${score}) desc, s.in_stock desc, ${watched(sql)} desc, p.last_viewed_at desc nulls last, p.id limit ${limit}`;
 }
 
 /** Fallback list: in-stock tracked products, seed catalog first, most recently viewed first. */
 export async function popularProducts(sql: postgres.Sql, excludeExternalId: string, limit = 6): Promise<CatalogItem[]> {
   return sql<CatalogItem[]>`${catalogSelect(sql)} and p.external_id <> ${excludeExternalId} and s.in_stock
-    order by p.is_seed desc, p.last_viewed_at desc nulls last, s.last_checked_at desc nulls last limit ${limit}`;
+    order by ${watched(sql)} desc, p.is_seed desc, p.last_viewed_at desc nulls last, s.last_checked_at desc nulls last limit ${limit}`;
 }

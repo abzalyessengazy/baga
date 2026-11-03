@@ -54,7 +54,7 @@ export function ProductLookup({ id, slug }: { id: string; slug: string | null })
   }
   return (
     <>
-      <p className="untracked-status" role="status" aria-live="polite">{t("lookingUp")}</p>
+      <p className="untracked-status is-working" role="status" aria-live="polite">{t("lookingUp")}<span className="dots" aria-hidden /></p>
       <Turnstile key={attempt} action="lookup" locale={locale} onToken={request} onError={(why) => setError(why === "blocked" ? "check_blocked" : "check_failed")} />
     </>
   );

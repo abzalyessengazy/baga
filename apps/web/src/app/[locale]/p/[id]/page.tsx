@@ -5,11 +5,12 @@ import { computeVerdict, formatTenge, nextVisitWindowDay, isValidSlug, slugName,
 import { getProductView, queuedSlug, collectorRunning } from "@/lib/product";
 import { QueuedWatcher } from "@/components/QueuedWatcher";
 import { alreadyTracked } from "@/lib/catalog";
-import { CatalogList } from "@/components/CatalogList";
+import { Related } from "@/components/Related";
 import { PriceChart } from "@/components/PriceChart";
 import { TrackPanel } from "@/components/TrackPanel";
 import { ProductLookup } from "@/components/ProductLookup";
 import { trackInitial } from "@/lib/watcher";
+import { PrintIn, StampIn } from "@/components/PrintIn";
 
 type Props = { params: Promise<{ locale: string; id: string }>; searchParams: Promise<{ s?: string | string[] }> };
 const fmtDate = (iso: string, locale: string) =>
@@ -49,10 +50,10 @@ export default async function ProductPage({ params, searchParams }: Props) {
     const live = r.reason === "queued" && isInVisitWindow(new Date()) && (await collectorRunning());
     return (
       <main className="wrap untracked">
-        <article className="receipt">
+        <PrintIn className="receipt">
           {r.reason === "unknown"
             ? <p className="receipt-sub" style={{ margin: 0 }}>{t("lookupNote")}</p>
-            : <span className="stamp">{t("queuedStamp")}</span>}
+            : <StampIn>{t("queuedStamp")}</StampIn>}
           {name && <p className="untracked-name">{t("fromLink", { name })}</p>}
           <hr className="rule" />
           {r.reason === "unknown"
@@ -69,20 +70,11 @@ export default async function ProductPage({ params, searchParams }: Props) {
               )
             )}
           <a className="kaspi-link" href={`/go/${id}`} rel="noopener">{t("openOnKaspi")}</a>
-        </article>
+        </PrintIn>
         {/* Queued: the visitor can set a price now; the first price goes to Telegram when the collector gets it. */}
-        {r.reason === "queued" && <TrackPanel productId={id} current={null} initial={await trackInitial(id)} />}
-        {tracked.similar.length > 0 && (
-          <>
-            <h2>{t("similarTracked")}</h2>
-            <CatalogList items={tracked.similar} locale={locale as "ru" | "kk"} outOfStock={t("outOfStock")} />
-          </>
-        )}
-        {tracked.popular.length > 0 && (
-          <>
-            <h2>{tracked.similar.length ? t("moreTracked") : t("popularTracked")}</h2>
-            <CatalogList items={tracked.popular} locale={locale as "ru" | "kk"} outOfStock={t("outOfStock")} />
-          </>
+        {r.reason === "queued" && (
+          <TrackPanel productId={id} current={null} initial={await trackInitial(id)}
+            related={<Related lists={tracked} locale={locale as "ru" | "kk"} />} />
         )}
       </main>
     );
@@ -173,7 +165,8 @@ export default async function ProductPage({ params, searchParams }: Props) {
         <a className="kaspi-link" href={`/go/${v.externalId}`} rel="noopener">{t("openOnKaspi")}</a>
         <div className="barcode" aria-hidden />
       </article>
-      <TrackPanel productId={v.externalId} current={v.minPrice} initial={await trackInitial(v.externalId)} />
+      <TrackPanel productId={v.externalId} current={v.minPrice} initial={await trackInitial(v.externalId)}
+        related={<Related lists={await alreadyTracked(v.externalId, null, 6, v.title)} locale={L} />} />
     </main>
   );
 }
