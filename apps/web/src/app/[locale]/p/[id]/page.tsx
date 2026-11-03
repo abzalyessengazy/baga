@@ -29,7 +29,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return {
     title: t("productTitle", { title: r.view.title }),
     description: t("productDescription", { price }),
-    alternates: { languages: { "ru-KZ": `/ru/p/${id}`, "kk-KZ": `/kk/p/${id}` } },
+    // Canonical on bagaapp.com (metadataBase), so the vercel.app copy and ?s= variants are not indexed twice.
+    alternates: { canonical: `/${locale}/p/${id}`, languages: { "ru-KZ": `/ru/p/${id}`, "kk-KZ": `/kk/p/${id}`, "x-default": `/ru/p/${id}` } },
   };
 }
 
