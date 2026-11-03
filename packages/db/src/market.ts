@@ -1,5 +1,5 @@
 import type postgres from "postgres";
-import { weekMovers, type Mover } from "./movers";
+import { dayMoves, weekMovers, type Mover } from "./movers";
 
 /** One product where sellers ask very different prices right now (offers of its latest check). */
 export interface MarketSpread { externalId: string; title: string; titleKk: string | null; lo: number; hi: number; sellers: number }
@@ -7,8 +7,8 @@ export interface MarketSpread { externalId: string; title: string; titleKk: stri
 export interface MarketCategory { name: string; products: number; from: number; median: number; weekPct: number | null; compared: number }
 
 /**
- * The home page's find of the day, with the reason it was picked: the biggest week drop (the /drops rule), or,
- * while there is none, the product whose cheapest seller is furthest below the median of its sellers' prices.
+ * The home page's find of the day, with the reason it was picked: the biggest week drop (rule W) or the product
+ * whose cheapest seller is furthest below the median of its sellers' prices, whichever is bigger in percent.
  */
 export interface MarketPick {
   kind: "drop" | "seller";
@@ -18,12 +18,11 @@ export interface MarketPick {
 }
 
 export interface Market {
-  /** The latest Almaty day with a successful check, and how many products were checked that day. */
+  /** Rule D (docs/STATS.md): the latest shift, products checked, compared with an earlier day, and changed by MOVE_MIN_PCT. */
   day: string | null;
   checked: number;
-  /** Products checked on two different days: their latest daily low against the previous one. */
   compared: number; down: number; up: number; same: number;
-  /** Products with at least MARKET_CONFIG.lowsMinDays observed days whose latest price is below every earlier one. */
+  /** Products seen in stock on the latest shift and on MARKET_CONFIG.lowsMinDays or more days, whose latest daily low is below every earlier one. */
   newLows: number;
   spread: { products: number; over10: number; over25: number; medianPct: number | null; top: MarketSpread[] };
   categories: MarketCategory[];
@@ -50,25 +49,17 @@ export const MARKET_CONFIG = {
  */
 export async function getMarket(sql: postgres.Sql): Promise<Market> {
   const c = MARKET_CONFIG;
-  const [moves] = await sql<{ day: string | null; checked: number; compared: number; down: number; up: number; same: number; lows: number }[]>`
+  const moves = await dayMoves(sql);
+  const [lows] = moves.day ? await sql<{ n: number }[]>`
     with d as (
       select product_id, (observed_at at time zone 'Asia/Almaty')::date as day, min(min_price) as p
       from price_observations where min_price is not null group by 1, 2),
     r as (
       select product_id, day, p, row_number() over (w order by day desc) as rn, count(*) over w as days,
              min(p) over (w order by day rows between unbounded preceding and 1 preceding) as before_low
-      from d window w as (partition by product_id)),
-    latest as (select max(day) as day from d),
-    a as (select r.* from r, latest where r.rn = 1 and r.day >= latest.day - 1),
-    b as (select * from r where rn = 2)
-    select to_char((select day from latest), 'YYYY-MM-DD') as day,
-           (select count(*)::int from a, latest where a.day = latest.day) as checked,
-           count(b.p)::int as compared,
-           count(*) filter (where a.p < b.p)::int as down,
-           count(*) filter (where a.p > b.p)::int as up,
-           count(*) filter (where a.p = b.p)::int as same,
-           count(*) filter (where a.days >= ${c.lowsMinDays} and a.p < a.before_low)::int as lows
-    from a join b using (product_id)`;
+      from d window w as (partition by product_id))
+    select count(*)::int as n from r
+    where rn = 1 and day = ${moves.day}::date and days >= ${c.lowsMinDays} and p < before_low` : [];
   const offers = sql`
     select o.product_id, min(o.price)::int as lo, max(o.price)::int as hi, count(*)::int as sellers,
            round(percentile_cont(0.5) within group (order by o.price))::int as med
@@ -109,25 +100,23 @@ export async function getMarket(sql: postgres.Sql): Promise<Market> {
     from x group by name having count(*) >= ${c.categoryMin}
     order by count(*) desc limit ${c.categoryTop}`;
   const deals = await weekMovers(sql, "down", c.deals);
-  let pick: MarketPick | null = null;
   const d = deals[0];
-  if (d) {
-    pick = { kind: "drop", externalId: d.externalId, title: d.title, titleKk: d.titleKk, imageUrl: d.imageUrl,
-      price: d.now, ref: d.was, pct: d.pct, sellers: d.offerCount };
-  } else {
-    const [x] = await sql<Omit<MarketPick, "kind">[]>`
-      with x as (${offers})
-      select p.external_id as "externalId", p.title, p.title_kk as "titleKk", p.image_url as "imageUrl",
-             x.lo as price, x.med as ref, round((x.lo - x.med) * 100.0 / x.med)::int as pct, x.sellers
-      from x join products p on p.id = x.product_id
-      where x.sellers >= ${c.pickMinSellers} and x.lo >= ${c.pickMinPrice} and x.med > x.lo
-      order by (x.med - x.lo)::numeric / x.med desc limit 1`;
-    if (x) pick = { kind: "seller", ...x };
-  }
+  const drop: MarketPick | null = d ? { kind: "drop", externalId: d.externalId, title: d.title, titleKk: d.titleKk,
+    imageUrl: d.imageUrl, price: d.now, ref: d.was, pct: d.pct, sellers: d.offerCount } : null;
+  const [x] = await sql<Omit<MarketPick, "kind">[]>`
+    with x as (${offers})
+    select p.external_id as "externalId", p.title, p.title_kk as "titleKk", p.image_url as "imageUrl",
+           x.lo as price, x.med as ref, round((x.lo - x.med) * 100.0 / x.med)::int as pct, x.sellers
+    from x join products p on p.id = x.product_id
+    where x.sellers >= ${c.pickMinSellers} and x.lo >= ${c.pickMinPrice} and x.med > x.lo
+    order by (x.med - x.lo)::numeric / x.med desc limit 1`;
+  const seller: MarketPick | null = x ? { kind: "seller", ...x } : null;
+  const pick = drop && (!seller || Math.abs(drop.pct) >= Math.abs(seller.pct)) ? drop : seller;
+  const down = moves.down.length, up = moves.up.length;
   return {
-    day: moves?.day ?? null, checked: moves?.checked ?? 0,
-    compared: moves?.compared ?? 0, down: moves?.down ?? 0, up: moves?.up ?? 0, same: moves?.same ?? 0,
-    newLows: moves?.lows ?? 0,
+    day: moves.day, checked: moves.checked,
+    compared: moves.compared, down, up, same: moves.compared - down - up,
+    newLows: lows?.n ?? 0,
     spread: { products: spread?.products ?? 0, over10: spread?.over10 ?? 0, over25: spread?.over25 ?? 0, medianPct: spread?.median ?? null, top },
     categories, deals, pick,
   };

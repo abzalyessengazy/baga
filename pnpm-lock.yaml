@@ -84,6 +84,9 @@ importers:
 
   packages/db:
     dependencies:
+      '@baga/core':
+        specifier: workspace:^
+        version: link:../core
       '@baga/kaspi':
         specifier: workspace:^
         version: link:../kaspi

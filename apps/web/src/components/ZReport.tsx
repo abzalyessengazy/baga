@@ -8,7 +8,7 @@ import { Link } from "@/i18n/navigation";
 import { loadMarket } from "@/lib/market";
 
 type L = "ru" | "kk";
-type Drop = { externalId: string; title: string; titleKk: string | null; from: number; to: number; at: string };
+type Drop = { externalId: string; title: string; titleKk: string | null; from: number; to: number; pct: number; at: string };
 type Item = { externalId: string; title: string; titleKk: string | null; price: number | null; at: string };
 type Moves = { drops: Drop[]; rises: Drop[] };
 type Stats = {
@@ -95,7 +95,7 @@ function Totals({ s }: { s: Stats & { lastRun: NonNullable<Stats["lastRun"]> } }
   );
 }
 
-/* 2. Price moves: biggest drops or rises of the latest day or the week, one line per product, the top line inked. */
+/* 2. Price moves (docs/STATS.md rules D and W): biggest drops or rises in percent, one line per product, the top line inked. */
 function MovesSlip({ moves, locale }: { moves: Stats["moves"]; locale: L }) {
   const t = useTranslations("home");
   const ref = useRef<HTMLDivElement>(null);
@@ -120,8 +120,8 @@ function MovesSlip({ moves, locale }: { moves: Stats["moves"]; locale: L }) {
         <motion.div key={`${dir}${period}${d.externalId}`} initial={reduce ? false : { opacity: 0, x: -10 }} animate={go ? { opacity: 1, x: 0 } : {}}
           transition={{ type: "spring", stiffness: 300, damping: 30, delay: Math.min(i, ROWS) * 0.1 }}>
           <Link href={`/p/${d.externalId}`} className={`seller-row z-drop${i === 0 ? " is-best" : ""}${dir === "rises" ? " is-rise" : ""}`}>
-            <span className="name">{dropTitle(d, locale)}</span>
-            <span className="p">{dir === "drops" ? "−" : "+"}{formatTenge(Math.abs(d.from - d.to), locale)}</span>
+            <span className="name">{dropTitle(d, locale)}<span className="z-sub">{formatTenge(d.from, locale)} → {formatTenge(d.to, locale)}</span></span>
+            <span className="p">{d.pct > 0 ? "+" : "−"}{Math.abs(d.pct)}%</span>
           </Link>
         </motion.div>
       ))}

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { renderChannelPost } from "./channel";
 
-const mover = { externalId: "123456", title: "Телевизор Samsung <55\">", titleKk: null, imageUrl: null, now: 199_990, was: 239_990, pct: -17, offerCount: 9 };
+const mover = { externalId: "123456", title: "Телевизор Samsung <55\">", titleKk: null, imageUrl: null, now: 199_990, was: 239_990, pct: -17, offerCount: 9, checkedAt: new Date("2026-11-04T04:30:00Z") };
 
 describe("renderChannelPost", () => {
   it("lists drops with the old price struck out and utm-tagged links", () => {

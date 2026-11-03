@@ -10,6 +10,7 @@
     "migrate": "node --env-file-if-exists=../../.env --import tsx src/migrate.ts"
   },
   "dependencies": {
+    "@baga/core": "workspace:^",
     "@baga/kaspi": "workspace:^",
     "postgres": "^3.4.5"
   },

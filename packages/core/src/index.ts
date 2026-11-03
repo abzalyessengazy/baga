@@ -9,3 +9,4 @@ export * from "./email";
 export * from "./title";
 export * from "./target";
 export * from "./sales";
+export * from "./moves";
