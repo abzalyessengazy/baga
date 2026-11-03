@@ -60,18 +60,20 @@ export interface FunnelStats {
 
 /** Visits that reached each step in the last `days` days, counted once per visit. */
 export async function getFunnel(sql: postgres.Sql, days = 7): Promise<FunnelStats> {
-  const since = sql`now() - make_interval(days => ${days})`;
+  // A plain timestamp parameter: a shared sql`` fragment reused across parallel queries made postgres.js hang.
+  const since = new Date(Date.now() - days * 86_400_000);
   const steps = await sql<{ name: EventName; sessions: number }[]>`
     select name, count(distinct sid)::int as sessions from events where at > ${since} group by name`;
   const visits = (col: "locale" | "device" | "source") => sql<{ label: string; n: number }[]>`
     select coalesce(${sql(col)}, '—') as label, count(distinct sid)::int as n from events
     where at > ${since} and name = 'visit' group by 1 order by 2 desc limit 8`;
-  const [byLocale, byDevice, sources, bought, [asked], [returned]] = await Promise.all([
-    visits("locale"), visits("device"), visits("source"),
-    sql<{ answer: BoughtAnswer; n: number }[]>`select bought as answer, count(*)::int as n from trackings where bought is not null group by 1`,
-    sql<{ n: number }[]>`select count(*)::int as n from trackings where bought_asked_at is not null`,
-    sql<{ n: number }[]>`select count(*)::int as n from watchers where last_seen_at > created_at + interval '1 day'`,
-  ]);
+  // One at a time: more parallel queries than pool connections get pipelined, and the Supabase pooler then stalls.
+  const byLocale = await visits("locale");
+  const byDevice = await visits("device");
+  const sources = await visits("source");
+  const bought = await sql<{ answer: BoughtAnswer; n: number }[]>`select bought as answer, count(*)::int as n from trackings where bought is not null group by 1`;
+  const [asked] = await sql<{ n: number }[]>`select count(*)::int as n from trackings where bought_asked_at is not null`;
+  const [returned] = await sql<{ n: number }[]>`select count(*)::int as n from watchers where last_seen_at > created_at + interval '1 day'`;
   const by = new Map(steps.map((s) => [s.name, s.sessions]));
   return {
     days, steps: EVENT_NAMES.map((name) => ({ name, sessions: by.get(name) ?? 0 })),

@@ -12,7 +12,7 @@ export async function SaleCheck({ history, locale }: { history: DailyLow[]; loca
   const f = (n: number) => formatTenge(n, locale);
   const lines = [
     t("during", { price: f(c.duringLow) }),
-    ...(c.before ? [t("before", { price: f(c.before.low) })] : []),
+    ...(c.before ? [t("before", { price: f(c.before.low), days: c.before.days })] : []),
     c.kind === "noBaseline" ? t("noBaseline") : t(c.kind, { pct: Math.abs(c.beforePct ?? 0) }),
     c.ongoing ? t("ongoing")
       : !c.after ? t("waitingAfter")

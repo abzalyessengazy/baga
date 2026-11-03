@@ -18,10 +18,12 @@ describe("saleCheck", () => {
     expect(saleCheck([...base, ...h([["2026-11-11", 99_000]])], sale, "2026-11-11")!.kind).toBe("same");
     expect(saleCheck([...base, ...h([["2026-11-11", 110_000]])], sale, "2026-11-11")!.kind).toBe("pricier");
   });
-  it("needs three observed days before the sale for a comparison", () => {
-    const c = saleCheck(h([["2026-11-09", 100_000], ["2026-11-10", 100_000], ["2026-11-11", 80_000]]), sale, "2026-11-11")!;
+  it("needs two observed days before the sale for a comparison", () => {
+    const c = saleCheck(h([["2026-11-10", 100_000], ["2026-11-11", 80_000]]), sale, "2026-11-11")!;
     expect(c.kind).toBe("noBaseline");
     expect(c.before).toBeNull();
+    expect(saleCheck(h([["2026-11-09", 100_000], ["2026-11-10", 100_000], ["2026-11-11", 80_000]]), sale, "2026-11-11")!)
+      .toMatchObject({ kind: "cheaper", before: { low: 100_000, days: 2 } });
   });
   it("reports the latest price after the sale against the sale price", () => {
     const c = saleCheck(h([["2026-11-11", 80_000], ["2026-11-12", 84_000], ["2026-11-14", 92_000]]), sale, "2026-11-14")!;

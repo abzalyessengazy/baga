@@ -3,7 +3,9 @@ import { motion, useInView, useReducedMotion, animate } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { formatTenge, shortTitle } from "@baga/core";
+import type { Market } from "@baga/db";
 import { Link } from "@/i18n/navigation";
+import { loadMarket } from "@/lib/market";
 
 type L = "ru" | "kk";
 type Drop = { externalId: string; title: string; titleKk: string | null; from: number; to: number; at: string };
@@ -27,6 +29,23 @@ const almaty = (iso: string, opts: Intl.DateTimeFormatOptions) => new Intl.DateT
 const ddmm = (iso: string) => almaty(iso, { day: "2-digit", month: "2-digit" });
 const hhmm = (iso: string) => almaty(iso, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 const dropTitle = (d: { title: string; titleKk: string | null }, locale: L) => shortTitle((locale === "kk" && d.titleKk) || d.title);
+
+// Lists show this many rows (two-line rows: fewer); the rest open under the slip with "Показать все".
+const ROWS = 5;
+const ROWS_TALL = 4;
+
+/** The show-all switch under a list. The slip grows to fit while it is open. */
+function useExpand(total: number, rows = ROWS) {
+  const t = useTranslations("home");
+  const [open, setOpen] = useState(false);
+  const more = total > rows;
+  const toggle = more ? (
+    <button type="button" className="z-more" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+      {open ? t("showLess") : t("showAll", { count: total })}
+    </button>
+  ) : null;
+  return { open, limit: open ? total : rows, toggle };
+}
 
 /** Counts up to `to` once `go` turns true; shows the final number right away when motion is reduced. */
 function CountUp({ to, go }: { to: number; go: boolean }) {
@@ -76,29 +95,6 @@ function Totals({ s }: { s: Stats & { lastRun: NonNullable<Stats["lastRun"]> } }
   );
 }
 
-/* 1. Checks per day: the price tape, printed one real day per line. */
-function DaysSlip({ days }: { days: Stats["days"] }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const reduce = useReducedMotion();
-  const go = useInView(ref, { once: true, amount: 0.4 }) || !!reduce;
-  const rows = days.slice(-14);
-  const max = Math.max(...rows.map((r) => r.checks));
-  return (
-    <div className="slip-screen" ref={ref}>
-      <div>
-        {rows.map((r, i) => (
-          <motion.div key={r.day} className={`tape-row z-day${r.checks === max ? " is-min" : ""}`}
-            initial={reduce ? false : { opacity: 0, y: 14 }} animate={go ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.3, delay: i * 0.07 }}>
-            <span className="tape-date">{r.day.slice(8, 10)}.{r.day.slice(5, 7)}</span>
-            <span className="tape-bar" style={{ width: `${12 + (r.checks / max) * 88}%` }} />
-            <span className="tape-price">{count(r.checks)}</span>
-          </motion.div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 /* 2. Price moves: biggest drops or rises of the latest day or the week, one line per product, the top line inked. */
 function MovesSlip({ moves, locale }: { moves: Stats["moves"]; locale: L }) {
   const t = useTranslations("home");
@@ -107,12 +103,14 @@ function MovesSlip({ moves, locale }: { moves: Stats["moves"]; locale: L }) {
   const go = useInView(ref, { once: true, amount: 0.4 }) || !!reduce;
   const [dir, setDir] = useState<keyof Moves>("drops");
   const [period, setPeriod] = useState<keyof Stats["moves"]>("day");
-  const rows = moves[period][dir].slice(0, 5);
+  const all = moves[period][dir];
+  const { open, limit, toggle } = useExpand(all.length);
+  const rows = all.slice(0, limit);
   const tab = <K extends string>(on: boolean, label: string, set: () => void, key: K) => (
     <button key={key} type="button" className={`z-tab${on ? " is-on" : ""}`} aria-pressed={on} onClick={set}>{label}</button>
   );
   return (
-    <div className="slip-screen z-moves" ref={ref}>
+    <div className={`slip-screen z-moves${open ? " is-open" : ""}`} ref={ref}>
       <div className="z-tabs">
         <span>{tab(dir === "drops", `↓ ${t("tabDrops")}`, () => setDir("drops"), "d")}{tab(dir === "rises", `↑ ${t("tabRises")}`, () => setDir("rises"), "r")}</span>
         <span>{tab(period === "day", t("periodDay"), () => setPeriod("day"), "day")}{tab(period === "week", t("periodWeek"), () => setPeriod("week"), "week")}</span>
@@ -120,33 +118,69 @@ function MovesSlip({ moves, locale }: { moves: Stats["moves"]; locale: L }) {
       {!rows.length && <p className="z-empty">{t("movesNone")}</p>}
       {rows.map((d, i) => (
         <motion.div key={`${dir}${period}${d.externalId}`} initial={reduce ? false : { opacity: 0, x: -10 }} animate={go ? { opacity: 1, x: 0 } : {}}
-          transition={{ type: "spring", stiffness: 300, damping: 30, delay: i * 0.1 }}>
+          transition={{ type: "spring", stiffness: 300, damping: 30, delay: Math.min(i, ROWS) * 0.1 }}>
           <Link href={`/p/${d.externalId}`} className={`seller-row z-drop${i === 0 ? " is-best" : ""}${dir === "rises" ? " is-rise" : ""}`}>
             <span className="name">{dropTitle(d, locale)}</span>
             <span className="p">{dir === "drops" ? "−" : "+"}{formatTenge(Math.abs(d.from - d.to), locale)}</span>
           </Link>
         </motion.div>
       ))}
-      <Link href="/drops" className="z-all">{t("allMoves")} →</Link>
+      <div className="z-foot">{toggle}<Link href="/drops" className="z-all">{t("allMoves")} →</Link></div>
     </div>
   );
 }
 
-/* 4–5. Plain product lists: most tracked, and newly added to the catalog. */
+/* Plain product lists: most tracked, and newly added to the catalog. */
 function ListSlip({ items, locale, dated }: { items: Item[]; locale: L; dated?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   const reduce = useReducedMotion();
   const go = useInView(ref, { once: true, amount: 0.4 }) || !!reduce;
+  const { open, limit, toggle } = useExpand(items.length);
   return (
-    <div className="slip-screen" ref={ref}>
-      {items.slice(0, 5).map((d, i) => (
-        <motion.div key={d.externalId} initial={reduce ? false : { opacity: 0, y: 10 }} animate={go ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.3, delay: i * 0.1 }}>
+    <div className={`slip-screen${open ? " is-open" : ""}`} ref={ref}>
+      {items.slice(0, limit).map((d, i) => (
+        <motion.div key={d.externalId} initial={reduce ? false : { opacity: 0, y: 10 }} animate={go ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.3, delay: Math.min(i, ROWS) * 0.1 }}>
           <Link href={`/p/${d.externalId}`} className="seller-row z-drop">
             <span className="name">{dated && <span className="z-date">{ddmm(d.at)}</span>}{dropTitle(d, locale)}</span>
             <span className="p">{d.price !== null ? formatTenge(d.price, locale) : "—"}</span>
           </Link>
         </motion.div>
       ))}
+      {toggle && <div className="z-foot">{toggle}</div>}
+    </div>
+  );
+}
+
+/* Seller spread: the same product, the cheapest and the dearest seller of its latest check. */
+function SpreadSlip({ rows, locale }: { rows: Market["spread"]["top"]; locale: L }) {
+  const { open, limit, toggle } = useExpand(rows.length, ROWS_TALL);
+  return (
+    <div className={`slip-screen${open ? " is-open" : ""}`}>
+      {rows.slice(0, limit).map((s) => (
+        <Link key={s.externalId} href={`/p/${s.externalId}`} className="seller-row z-drop z-spread">
+          <span className="name">{dropTitle(s, locale)}<span className="z-sub">{formatTenge(s.lo, locale)} – {formatTenge(s.hi, locale)}</span></span>
+          <span className="p">+{formatTenge(s.hi - s.lo, locale)}</span>
+        </Link>
+      ))}
+      {toggle && <div className="z-foot">{toggle}</div>}
+    </div>
+  );
+}
+
+/* Categories: how many products we watch in each, the lowest and the median price, the week change once known. */
+function CategorySlip({ rows, locale }: { rows: Market["categories"]; locale: L }) {
+  const t = useTranslations("home");
+  const { open, limit, toggle } = useExpand(rows.length, ROWS_TALL);
+  return (
+    <div className={`slip-screen${open ? " is-open" : ""}`}>
+      {rows.slice(0, limit).map((c) => (
+        <div key={c.name} className="seller-row z-spread">
+          <span className="name">{c.name}<span className="z-sub">{t("catLine", { count: c.products, median: formatTenge(c.median, locale) })}
+            {c.weekPct !== null && ` · ${t("catWeek", { pct: `${c.weekPct > 0 ? "+" : ""}${c.weekPct}%` })}`}</span></span>
+          <span className="p">{t("catFrom", { price: formatTenge(c.from, locale) })}</span>
+        </div>
+      ))}
+      {toggle && <div className="z-foot">{toggle}</div>}
     </div>
   );
 }
@@ -181,16 +215,19 @@ export function ZReport() {
   const t = useTranslations("home");
   const locale = useLocale() as L;
   const [s, setS] = useState<Stats | null>(null);
+  const [m, setM] = useState<Market | null>(null);
   useEffect(() => {
     let live = true;
     fetch("/api/stats").then((r) => (r.ok ? r.json() : null)).then((j: Stats | null) => { if (live) setS(j); }).catch(() => {});
+    loadMarket().then((x) => { if (live) setM(x); });
     return () => { live = false; };
   }, []);
   if (!s?.lastRun || !s.days.length) return null;
   const best = s.moves.week.drops[0];
   const slips = [
-    { title: t("daysTitle"), text: t("daysText"), el: <DaysSlip days={s.days} /> },
     { title: t("movesTitle"), text: t("movesText"), el: <MovesSlip moves={s.moves} locale={locale} /> },
+    ...(m?.spread.top.length ? [{ title: t("spreadTitle"), text: t("spreadText"), el: <SpreadSlip rows={m.spread.top} locale={locale} /> }] : []),
+    ...(m?.categories.length ? [{ title: t("catsTitle"), text: t("catsText"), el: <CategorySlip rows={m.categories} locale={locale} /> }] : []),
     ...(best ? [{ title: t("bestTitle"), text: t("bestText"), el: <BestSlip d={best} locale={locale} /> }] : []),
     ...(s.mostTracked.length ? [{ title: t("trackedTitle"), text: t("trackedText"), el: <ListSlip items={s.mostTracked} locale={locale} /> }] : []),
     ...(s.newest.length ? [{ title: t("newTitle"), text: t("newText"), el: <ListSlip items={s.newest} locale={locale} dated /> }] : []),

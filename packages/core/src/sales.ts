@@ -7,13 +7,13 @@ import type { Tenge } from "./money";
  */
 export interface SaleEvent { id: string; start: string; end: string | null }
 export const SALE_EVENTS: SaleEvent[] = [
-  { id: "kaspiJuma202611", start: "2026-11-03", end: null },
+  { id: "kaspiJuma202611", start: "2026-11-05", end: "2026-11-07" },
   { id: "singlesDay2026", start: "2026-11-11", end: "2026-11-11" },
 ];
 
 export const SALE_CONFIG = {
   /** Days before the start that make the baseline, and how many of them must be observed. */
-  beforeDays: 14, minBeforeDays: 3,
+  beforeDays: 14, minBeforeDays: 2,
   /** Differences under this many percent count as "the same price". */
   samePct: 3,
   /** How long after the end the check is still shown, and how far "after" looks. */

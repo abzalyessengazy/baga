@@ -31,7 +31,7 @@ export interface PlatformStats {
  * them are counted from what the collector observed (one price_observations row per successful check); a change or
  * drop needs two observations of a product.
  */
-export async function getPlatformStats(sql: postgres.Sql, dayCount = 14, listCount = 6): Promise<PlatformStats> {
+export async function getPlatformStats(sql: postgres.Sql, dayCount = 14, listCount = 12): Promise<PlatformStats> {
   const [totals] = await sql<{ products: number; sellers: number; checks: number; alerts: number; watchers: number }[]>`
     select (select count(*)::int from products where status = 'active') as products,
            (select count(*)::int from sellers) as sellers,
