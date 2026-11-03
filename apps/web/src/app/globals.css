@@ -283,10 +283,16 @@ a { color: inherit; }
 .how-bars span { flex: 1; transform-origin: bottom; background: radial-gradient(circle, var(--ink) 1px, transparent 1.3px) 0 0 / 4px 4px; }
 .how-bars span.is-min { background: radial-gradient(circle, var(--stamp) 1.2px, transparent 1.5px) 0 0 / 4px 4px; }
 
-.how-coupon { position: relative; border-top: 2px dashed var(--rule); padding: 16px 4px 4px; display: flex; flex-direction: column; gap: 10px; }
-.how-coupon-line { height: 10px; width: 70%; background: var(--paper-shade); border-radius: 2px; }
-.how-coupon-line.short { width: 42%; }
-.how-stamp { position: absolute; right: 4px; top: 18px; font-size: 0.9375rem; }
+.how-watch { justify-content: space-between; }
+.how-stamp { position: absolute; right: 14px; top: 12px; font-size: 0.8125rem; z-index: 2; }
+.how-chart { position: relative; height: 70px; margin-top: 26px; }
+.how-chart svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.how-target { stroke: var(--stamp); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.how-price { fill: none; stroke: var(--ink); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.how-target-label { position: absolute; left: 0; top: calc(76% + 4px); font: 600 0.6875rem/1 var(--font-receipt); color: var(--stamp); text-transform: uppercase; letter-spacing: 0.05em; }
+.how-hit { position: absolute; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; background: var(--stamp); box-shadow: 0 0 0 4px color-mix(in srgb, var(--stamp) 22%, transparent); }
+.how-alert { display: inline-flex; align-items: center; gap: 7px; align-self: flex-end; }
+.how-alert-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--stamp); }
 
 /* honest receipt: three promises printed, then stamped */
 .trust { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: clamp(28px, 5vw, 64px); align-items: center; }

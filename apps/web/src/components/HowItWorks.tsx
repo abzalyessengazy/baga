@@ -36,18 +36,33 @@ function HistorySlip({ go }: { go: boolean }) {
   );
 }
 
+// A descending price line meets the dashed line of the visitor's own price; the stamp says we watch it, and the
+// message arrives where they cross. An illustration: no prices, no numbers.
+const PATH = "M0 8 L24 12 L44 6 L70 18 L94 15 L120 27 L144 23 L170 41 L200 44";
+const CROSS = { x: 163.75, y: 38 }; // where the 144,23 → 170,41 segment meets the target line (y = 38)
+
 function CouponSlip({ go }: { go: boolean }) {
-  const t = useTranslations("track");
+  const t = useTranslations("home");
+  const track = useTranslations("track");
   return (
-    <div className="how-art" aria-hidden>
-      <motion.div className="how-coupon" initial={{ y: 0, rotate: 0 }} animate={go ? { y: 10, rotate: -3 } : {}} transition={{ duration: 0.5, delay: 1.6 }}>
-        <span className="how-coupon-line" />
-        <span className="how-coupon-line short" />
-        <motion.span className="stamp how-stamp" initial={{ scale: 1.7, opacity: 0, rotate: -14 }} animate={go ? { scale: 1, opacity: 0.92, rotate: -6 } : {}}
-          transition={{ type: "spring", stiffness: 480, damping: 18, delay: 2 }}>
-          {t("trackingStamp")}
-        </motion.span>
-      </motion.div>
+    <div className="how-art how-watch" aria-hidden>
+      <motion.span className="stamp how-stamp" initial={{ scale: 1.7, opacity: 0, rotate: -14 }} animate={go ? { scale: 1, opacity: 0.92, rotate: -6 } : {}}
+        transition={{ type: "spring", stiffness: 480, damping: 18, delay: 0.6 }}>
+        {track("trackingStamp")}
+      </motion.span>
+      <div className="how-chart">
+        <svg viewBox="0 0 200 50" preserveAspectRatio="none">
+          <line x1="0" y1="38" x2="200" y2="38" className="how-target" vectorEffect="non-scaling-stroke" />
+          <motion.path d={PATH} className="how-price" vectorEffect="non-scaling-stroke"
+            initial={{ pathLength: 0 }} animate={go ? { pathLength: 1 } : {}} transition={{ duration: 1.4, delay: 1, ease: "easeInOut" }} />
+        </svg>
+        <span className="how-target-label">{t("howTarget")}</span>
+        <motion.span className="how-hit" style={{ left: `${(CROSS.x / 200) * 100}%`, top: `${(CROSS.y / 50) * 100}%` }}
+          initial={{ scale: 0 }} animate={go ? { scale: 1 } : {}} transition={{ type: "spring", stiffness: 500, damping: 14, delay: 2.2 }} />
+      </div>
+      <motion.span className="how-chip how-alert" initial={{ opacity: 0, y: 8 }} animate={go ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.35, delay: 2.5 }}>
+        <span className="how-alert-dot" />{t("howAlert")}
+      </motion.span>
     </div>
   );
 }

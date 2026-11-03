@@ -68,7 +68,8 @@ function Totals({ s }: { s: Stats & { lastRun: NonNullable<Stats["lastRun"]> } }
   const go = useInView(ref, { once: true, amount: 0.4 }) || !!reduce;
   const cells: [string, number][] = [
     [t("zProducts"), s.products],
-    [t("zChecks"), s.checks],
+    // "today" only while the latest run is from today (Almaty); the next morning, before the run, it names its date.
+    [ddmm(s.lastRun.finishedAt) === ddmm(new Date().toISOString()) ? t("zChecks") : t("zChecksOn", { date: ddmm(s.lastRun.finishedAt) }), s.checks],
     [t("zChanges"), s.changes],
     [t("zDrops"), s.drops],
     [t("zSellers"), s.sellers],
