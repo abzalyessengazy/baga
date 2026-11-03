@@ -1,6 +1,8 @@
 /**
  * Queues the seed catalog (data/seed-products.txt, one Kaspi URL per line) for collection.
  * Makes no Kaspi requests: the collector fetches queued products inside Kaspi's robots.txt visit window.
+ * A "# min-price N" line applies to the URLs after it: the collector keeps such a product as a seed product only
+ * if its first price is N or more. Rows are queued in file order, which is the order the collector adds them.
  */
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -11,18 +13,20 @@ import { env } from "./env";
 
 const sql = postgres(env.databaseUrl(), { max: 1, ...connectionOptions(env.databaseUrl()) });
 const file = process.argv[2] ?? fileURLToPath(new URL("../data/seed-products.txt", import.meta.url));
-const lines = readFileSync(file, "utf8").split("\n").map((l) => l.trim()).filter((l) => l && !l.startsWith("#"));
+const lines = readFileSync(file, "utf8").split("\n").map((l) => l.trim()).filter((l) => l && (!l.startsWith("#") || /^# min-price \d+$/.test(l)));
 
 let queued = 0;
 let marked = 0;
 let skipped = 0;
+let minPrice: number | null = null;
 for (const line of lines) {
+  if (line.startsWith("# min-price ")) { minPrice = Number(line.slice(12)); continue; }
   const parsed = parseKaspiUrl(line);
   if (!parsed.ok) { console.warn(`skip (${parsed.reason}): ${line}`); skipped++; continue; }
   // Already collected: just make sure it is marked as a seed product.
   const updated = await sql`update products set is_seed = true where external_id = ${parsed.productId} returning id`;
   if (updated.length) { marked++; continue; }
-  const inserted = await sql`insert into seed_queue (external_id, slug) values (${parsed.productId}, ${parsed.slug})
+  const inserted = await sql`insert into seed_queue (external_id, slug, min_price) values (${parsed.productId}, ${parsed.slug}, ${minPrice})
     on conflict (external_id) do nothing returning external_id`;
   if (inserted.length) queued++;
 }

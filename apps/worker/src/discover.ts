@@ -7,24 +7,39 @@
  * so picking rules can be tuned without asking Kaspi again.
  *
  *   pnpm --filter @baga/worker discover [--per-category 70] [--max-requests 41]
- *   pnpm --filter @baga/worker discover --from-file [--per-category 70]
+ *   pnpm --filter @baga/worker discover --from-file [--per-category 70] [--rare 5] [--exclude data/seed-discovered.txt] [--out data/seed-2.txt]
+ *
+ * --more reads product sitemaps the first run did not (it read 40 spread evenly over the list) and adds their
+ * links to data/sitemap-links.txt. --index-from-fixture takes the sitemap index saved by the last run instead of
+ * asking kaspi.kz, so only Kaspi's CDN is asked (stops at the first failure if those addresses have expired).
+ *
+ * --exclude skips products already listed in an earlier seed file. Rare categories go last, under a
+ * "# min-price 50000" line: the seed command stores it, and the collector keeps such a product in the catalog only
+ * if its first price reaches it (DECISIONS.md, 2026-11-03 "Seed priorities").
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { createKaspiClient, parseKaspiUrl, KASPI_SITEMAP_URL, KaspiHttpError, canonicalProductUrl, type Sitemap } from "@baga/kaspi";
-import { isInVisitWindow, KASPI_CRAWL_DELAY_MS, pickSeedProducts, SEED_CATEGORIES } from "@baga/core";
+import { isInVisitWindow, KASPI_CRAWL_DELAY_MS, pickSeedProducts, pickRareProducts, SEED_CATEGORIES, RARE_CATEGORIES, SEED_MIN_PRICE } from "@baga/core";
 
 const arg = (name: string, dflt: number) => {
   const i = process.argv.indexOf(`--${name}`);
   const v = i > 0 ? Number(process.argv[i + 1]) : NaN;
   return Number.isFinite(v) && v > 0 ? v : dflt;
 };
+const text = (name: string) => { const i = process.argv.indexOf(`--${name}`); return i > 0 ? process.argv[i + 1] : undefined; };
 const perCategory = arg("per-category", 70);
+const perRare = arg("rare", 5);
 const maxRequests = arg("max-requests", 41); // the index + 40 of ~350 product sitemaps (those are on Kaspi's CDN)
-const out = fileURLToPath(new URL("../data/seed-discovered.txt", import.meta.url));
+const out = text("out") ?? fileURLToPath(new URL("../data/seed-discovered.txt", import.meta.url));
+const excludeFile = text("exclude");
+const excluded = new Set(excludeFile ? [...readFileSync(excludeFile, "utf8").matchAll(/-(\d{6,12})\/?\s*$/gm)].map((m) => m[1]) : []);
 const fixtures = fileURLToPath(new URL("../../../packages/kaspi/fixtures/", import.meta.url));
 const linksFile = fileURLToPath(new URL("../data/sitemap-links.txt", import.meta.url));
 const fromFile = process.argv.includes("--from-file");
+const more = process.argv.includes("--more");
+const indexFromFixture = process.argv.includes("--index-from-fixture");
+const FIRST_RUN_FILES = 40;
 
 if (!fromFile && !isInVisitWindow(new Date())) {
   console.error("Outside the collection window (04:05–08:30 UTC = 09:05–13:30 Almaty, inside kaspi.kz robots.txt 04:00–08:45). No requests made.");
@@ -58,20 +73,39 @@ const addLocs = (locs: string[]) => {
 const sample = (locs: string[]) => locs.slice(0, 200).map((l) => `  <url><loc>${l.replace(/&/g, "&amp;")}</loc></url>`).join("\n");
 
 function finish(): never {
-  if (!fromFile && candidates.length) writeFileSync(linksFile, candidates.map((c) => `${c.productId}\t${c.slug}`).join("\n") + "\n");
-  const picked = pickSeedProducts(candidates, perCategory);
+  if (!fromFile && candidates.length) {
+    // --more adds to the links already saved; a product id is kept once.
+    const prev = more && existsSync(linksFile) ? readFileSync(linksFile, "utf8").split("\n").filter(Boolean) : [];
+    const ids = new Set(prev.map((l) => l.split("\t")[0]));
+    const added = candidates.filter((c) => !ids.has(c.productId) && ids.add(c.productId));
+    writeFileSync(linksFile, [...prev, ...added.map((c) => `${c.productId}\t${c.slug}`)].join("\n") + "\n");
+    console.log(`${added.length} new links saved (${prev.length + added.length} in ${linksFile})`);
+    if (more) candidates.push(...prev.map((l) => { const [productId, slug] = l.split("\t"); return { productId: productId!, slug: slug! }; }));
+  }
+  const fresh = candidates.filter((c) => !excluded.has(c.productId));
+  const picked = pickSeedProducts(fresh, perCategory);
+  const rare = pickRareProducts(fresh, perRare);
   const lines = [
     `# Seed catalog from ${KASPI_SITEMAP_URL}, ${new Date().toISOString()}.`,
-    `# ${candidates.length} product links read with ${requests} requests; up to ${perCategory} per category. Review, then:`,
-    `#   pnpm --filter @baga/worker seed data/seed-discovered.txt`,
+    `# ${candidates.length} product links read with ${requests} requests (${excluded.size} excluded as already seeded); up to ${perCategory} per category, ${perRare} per rare category.`,
+    `# Order = queue order: categories usually from ${SEED_MIN_PRICE.premium} ₸ first, then popular brands, then rare categories. Review, then:`,
+    `#   pnpm --filter @baga/worker seed ${out.replace(/^.*\/apps\/worker\//, "")}`,
   ];
   let total = 0;
-  for (const { id } of SEED_CATEGORIES) {
-    const items = picked.get(id) ?? [];
+  for (const [id, items] of picked) {
     console.log(`${id.padEnd(12)} ${String(items.length).padStart(4)}`);
     if (!items.length) continue;
     total += items.length;
-    lines.push("", `# ${id}`, ...items.map((p) => canonicalProductUrl(p.productId, p.slug)));
+    const tier = SEED_CATEGORIES.find((c) => c.id === id)!.tier;
+    lines.push("", `# ${id} (tier ${tier})`, ...items.map((p) => canonicalProductUrl(p.productId, p.slug)));
+  }
+  if (rare.size) lines.push("", `# min-price ${SEED_MIN_PRICE.rare}`);
+  for (const { id } of RARE_CATEGORIES) {
+    const items = rare.get(id) ?? [];
+    console.log(`${`rare:${id}`.padEnd(18)} ${String(items.length).padStart(4)}`);
+    if (!items.length) continue;
+    total += items.length;
+    lines.push("", `# rare: ${id}`, ...items.map((p) => canonicalProductUrl(p.productId, p.slug)));
   }
   writeFileSync(out, lines.join("\n") + "\n");
   console.log(`\n${total} products from ${candidates.length} links → ${out}`);
@@ -89,7 +123,9 @@ if (fromFile) {
 }
 
 console.log(`Reading ${KASPI_SITEMAP_URL} (max ${maxRequests} requests, ≥10 s apart)…`);
-const root = await get(KASPI_SITEMAP_URL);
+const root: Sitemap | null = indexFromFixture
+  ? { kind: "index", locs: [...readFileSync(fixtures + "sitemap-index.xml", "utf8").matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]!.replace(/&amp;/g, "&")) }
+  : await get(KASPI_SITEMAP_URL);
 if (!root) finish();
 mkdirSync(fixtures, { recursive: true });
 if (root.kind === "urlset") {
@@ -101,10 +137,13 @@ if (root.kind === "urlset") {
   // Product sitemaps if they are named so; otherwise every child. Spread the few files we read across the list.
   const productish = root.locs.filter((l) => /product|goods|item|\/p[-_.]/i.test(l));
   const pool = productish.length ? productish : root.locs;
-  const n = Math.min(pool.length, maxRequests - 1);
+  // --more: the files the first run read are skipped, the rest spread evenly.
+  const firstRun = new Set(Array.from({ length: Math.min(pool.length, FIRST_RUN_FILES) }, (_, i) => Math.floor((i * pool.length) / Math.min(pool.length, FIRST_RUN_FILES))));
+  const files = more ? pool.filter((_, i) => !firstRun.has(i)) : pool;
+  const n = Math.min(files.length, maxRequests - (indexFromFixture ? 0 : 1));
   for (let i = 0; i < n; i++) {
-    const child = await get(pool[Math.floor((i * pool.length) / n)]!);
-    if (!child) continue;
+    const child = await get(files[Math.floor((i * files.length) / n)]!);
+    if (!child) { if (indexFromFixture) break; continue; }
     if (child.kind === "urlset") {
       if (!candidates.length) writeFileSync(fixtures + "sitemap-sample.xml", `<urlset>\n${sample(child.locs)}\n</urlset>\n`);
       addLocs(child.locs);

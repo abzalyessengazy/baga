@@ -11,27 +11,34 @@
  * fridges, dishwashers and vacuums are brand + model code ("atlant-hm-4623-101-belyi", "bosch-smv4hvx31e-belyi").
  * Those are recognised by the start of the link, tried only when no category word matched.
  */
-export interface SeedCategory { id: string; type: string[]; brands: string[]; exclude?: string[]; models?: RegExp }
+/**
+ * `tier` (DECISIONS.md, 2026-11-03 "Seed priorities"): 1 = usually 100 000 ₸ and up, queued first; 2 = popular
+ * brands at lower prices. `premium` puts a category's dearer lines first (flagships, large sizes).
+ */
+export interface SeedCategory { id: string; type: string[]; brands: string[]; exclude?: string[]; models?: RegExp; tier: 1 | 2; premium?: RegExp }
+
+/** First observed price a seed product needs to stay in the daily-first band (main) or in the catalog at all (rare). */
+export const SEED_MIN_PRICE = { premium: 100_000, rare: 50_000 } as const;
 
 const PHONE_BRANDS = ["apple", "samsung", "xiaomi", "redmi", "poco", "honor", "huawei", "realme", "tecno", "infinix", "oppo", "vivo", "google", "oneplus", "nothing", "motorola"];
 const BIG_APPLIANCE = ["samsung", "lg", "bosch", "beko", "haier", "indesit", "electrolux", "midea", "hisense", "artel", "atlant", "gorenje", "candy", "hotpoint", "siemens", "whirlpool", "tcl", "liebherr", "weissgauff", "korting"];
 
 export const SEED_CATEGORIES: SeedCategory[] = [
-  { id: "tablets", type: ["planshet", "ipad", "galaxytab", "redmipad", "xiaomipad", "matepad"], brands: ["apple", "samsung", "xiaomi", "redmi", "huawei", "honor", "lenovo", "realme", "tecno"] },
-  { id: "watches", type: ["smartchasy", "umnyechasy", "applewatch", "galaxywatch", "fitnesbraslet", "smartbraslet", "redmiwatch"], brands: ["apple", "samsung", "xiaomi", "redmi", "huawei", "honor", "amazfit", "garmin"] },
-  { id: "headphones", type: ["naushniki", "airpods", "galaxybuds", "redmibuds", "garnitura"], brands: ["apple", "samsung", "xiaomi", "redmi", "huawei", "honor", "sony", "jbl", "marshall", "sennheiser", "soundcore", "logitech", "hyperx", "razer", "beats", "bose"] },
-  { id: "phones", type: ["smartfon", "iphone", "galaxys", "galaxya", "galaxyz", "redminote", "poco", "pixel"], brands: PHONE_BRANDS },
-  { id: "laptops", type: ["noutbuk", "macbook", "ideapad", "vivobook", "zenbook", "thinkpad", "matebook", "magicbook"], brands: ["apple", "asus", "lenovo", "hp", "acer", "huawei", "honor", "msi", "dell", "gigabyte", "xiaomi", "machenike", "thunderobot"] },
-  { id: "monitors", type: ["monitor"], models: /^\d{2}(-\d)?-(samsung|lg|xiaomi|aoc|philips|asus|msi|dell|benq|acer|gigabyte|huawei|titan)-/, brands: ["samsung", "lg", "xiaomi", "aoc", "philips", "asus", "msi", "dell", "benq", "acer", "gigabyte", "huawei", "titan"] },
-  { id: "tvs", type: ["televizor"], models: /^(samsung|lg|xiaomi|tcl|hisense|haier|sony|artel|yasin|skyworth|philips|toshiba)-.*-(6\d|[7-9]\d|1\d\d|2[0-4]\d)-sm-/, brands: ["samsung", "lg", "xiaomi", "tcl", "hisense", "haier", "sony", "artel", "yasin", "skyworth", "philips", "toshiba"] },
-  { id: "consoles", type: ["igrovajapristavka", "igrovayapristavka", "playstation", "xboxseries", "nintendoswitch", "steamdeck"], brands: ["sony", "microsoft", "nintendo", "valve", "playstation", "xbox"], exclude: ["rus", "eng", "ps4", "joy", "signature"] }, // games and controllers ride on console names
-  { id: "fridges", type: ["holodilnik", "kholodilnik", "morozilnik"], models: /^(lg-g[abc]-|lg-gr-|samsung-r[bst]\d|midea-mdr[bst]|haier-(c2f|c4f|htf|hrf|a3fe|cef)|beko-(rcn|cnmv|rcsk|b1r|b3r|b5r)|atlant-(hm|xm|mhm)-|indesit-(its|ds|dfe|ibs)|bosch-kg[nvfe]|hotpoint-hts?|electrolux-(lnt|rnt)|gorenje-(nrk|rk|nrs))/, brands: BIG_APPLIANCE },
-  { id: "washers", type: ["stiralnajamashina", "stiralnayamashina", "sushilnajamashina", "sushilnayamashina"], brands: BIG_APPLIANCE },
-  { id: "dishwashers", type: ["posudomoechnaja", "posudomoechnaya"], models: /^(bosch-s[mp][sv]|midea-mfd|electrolux-ee[ms]|beko-d[ifs]n|weissgauff-b?dw)/, brands: BIG_APPLIANCE },
-  { id: "vacuums", type: ["pylesos", "robotpylesos"], models: /^(dreame-|roborock-|ecovacs-|dyson-(v\d|gen)|xiaomi-(vacuum|robot)|karcher-(fc|vc)\d|samsung-v[sr]\d|tefal-x-plorer|thomas-)/, brands: ["xiaomi", "dreame", "roborock", "dyson", "samsung", "lg", "philips", "karcher", "tefal", "bosch", "deerma", "kitfort", "midea", "ecovacs", "redmond", "polaris", "thomas"] },
-  { id: "kitchen", type: ["mikrovolnovajapech", "mikrovolnovayapech", "kofemashina", "multivarka", "blender", "elektrochainik", "chainik", "duhovka", "varochnajapanel", "mjasorubka", "myasorubka", "aerogril", "kuhonnyikombain"], brands: ["philips", "tefal", "bosch", "redmond", "polaris", "xiaomi", "delonghi", "kitfort", "moulinex", "braun", "samsung", "lg", "midea", "scarlett", "vitek", "kenwood", "krups", "nespresso", "dreame", "cosori", "garlyn", "electrolux", "beko"] },
-  { id: "climate", type: ["konditsioner", "kondicioner", "splitsistema", "obogrevatel", "uvlazhnitel", "ochistitelvozduha"], brands: ["midea", "gree", "haier", "lg", "samsung", "tcl", "electrolux", "ballu", "aux", "hisense", "chigo", "almacom", "artel", "xiaomi", "philips", "dyson", "levoit", "boneco", "polaris", "timberk"] },
-  { id: "beauty", type: ["fen", "stailer", "stajler", "elektrobritva", "trimmer", "vypriamitel", "vyprjamitel", "epiljator"], brands: ["dyson", "philips", "braun", "remington", "rowenta", "babyliss", "xiaomi", "dreame", "panasonic", "polaris", "laica", "enchen", "showsee", "harizma", "moser", "wahl"] },
+  { id: "tablets", type: ["planshet", "ipad", "galaxytab", "redmipad", "xiaomipad", "matepad"], brands: ["apple", "samsung", "xiaomi", "redmi", "huawei", "honor", "lenovo", "realme", "tecno"], tier: 1, premium: /ipad-pro|ipad-air|galaxy-tab-s|matepad-pro|xiaomi-pad-\d/ },
+  { id: "watches", type: ["smartchasy", "umnyechasy", "applewatch", "galaxywatch", "fitnesbraslet", "smartbraslet", "redmiwatch"], brands: ["apple", "samsung", "xiaomi", "redmi", "huawei", "honor", "amazfit", "garmin"], tier: 2 },
+  { id: "headphones", type: ["naushniki", "airpods", "galaxybuds", "redmibuds", "garnitura"], brands: ["apple", "samsung", "xiaomi", "redmi", "huawei", "honor", "sony", "jbl", "marshall", "sennheiser", "soundcore", "logitech", "hyperx", "razer", "beats", "bose"], tier: 2 },
+  { id: "phones", type: ["smartfon", "iphone", "galaxys", "galaxya", "galaxyz", "redminote", "poco", "pixel"], brands: PHONE_BRANDS, tier: 1, premium: /-pro|-ultra|-max|-fold|-flip|galaxy-s\d|galaxy-z|iphone-1[6-9]/ },
+  { id: "laptops", type: ["noutbuk", "macbook", "ideapad", "vivobook", "zenbook", "thinkpad", "matebook", "magicbook"], brands: ["apple", "asus", "lenovo", "hp", "acer", "huawei", "honor", "msi", "dell", "gigabyte", "xiaomi", "machenike", "thunderobot"], tier: 1, premium: /macbook-pro|rog|legion|zenbook|thinkpad|predator|omen|-rtx-?\d|-i7-|-i9-|ultra-[79]|ryzen-[79]/ },
+  { id: "monitors", type: ["monitor"], models: /^\d{2}(-\d)?-(samsung|lg|xiaomi|aoc|philips|asus|msi|dell|benq|acer|gigabyte|huawei|titan)-/, brands: ["samsung", "lg", "xiaomi", "aoc", "philips", "asus", "msi", "dell", "benq", "acer", "gigabyte", "huawei", "titan"], tier: 1, premium: /^(27|3\d|4\d)-|oled/ },
+  { id: "tvs", type: ["televizor"], models: /^(samsung|lg|xiaomi|tcl|hisense|haier|sony|artel|yasin|skyworth|philips|toshiba)-.*-(6\d|[7-9]\d|1\d\d|2[0-4]\d)-sm-/, brands: ["samsung", "lg", "xiaomi", "tcl", "hisense", "haier", "sony", "artel", "yasin", "skyworth", "philips", "toshiba"], tier: 1, premium: /-(1[4-9]\d|2\d\d)-sm-|oled|qled|neo/ },
+  { id: "consoles", type: ["igrovajapristavka", "igrovayapristavka", "playstation", "xboxseries", "nintendoswitch", "steamdeck"], brands: ["sony", "microsoft", "nintendo", "valve", "playstation", "xbox"], exclude: ["rus", "eng", "ps4", "joy", "signature"], tier: 1 }, // games and controllers ride on console names
+  { id: "fridges", type: ["holodilnik", "kholodilnik", "morozilnik"], models: /^(lg-g[abc]-|lg-gr-|samsung-r[bst]\d|midea-mdr[bst]|haier-(c2f|c4f|htf|hrf|a3fe|cef)|beko-(rcn|cnmv|rcsk|b1r|b3r|b5r)|atlant-(hm|xm|mhm)-|indesit-(its|ds|dfe|ibs)|bosch-kg[nvfe]|hotpoint-hts?|electrolux-(lnt|rnt)|gorenje-(nrk|rk|nrs))/, brands: BIG_APPLIANCE, tier: 1 },
+  { id: "washers", type: ["stiralnajamashina", "stiralnayamashina", "sushilnajamashina", "sushilnayamashina"], brands: BIG_APPLIANCE, tier: 1 },
+  { id: "dishwashers", type: ["posudomoechnaja", "posudomoechnaya"], models: /^(bosch-s[mp][sv]|midea-mfd|electrolux-ee[ms]|beko-d[ifs]n|weissgauff-b?dw)/, brands: BIG_APPLIANCE, tier: 1 },
+  { id: "vacuums", type: ["pylesos", "robotpylesos"], models: /^(dreame-|roborock-|ecovacs-|dyson-(v\d|gen)|xiaomi-(vacuum|robot)|karcher-(fc|vc)\d|samsung-v[sr]\d|tefal-x-plorer|thomas-)/, brands: ["xiaomi", "dreame", "roborock", "dyson", "samsung", "lg", "philips", "karcher", "tefal", "bosch", "deerma", "kitfort", "midea", "ecovacs", "redmond", "polaris", "thomas"], tier: 1, premium: /robot|dyson|roborock|dreame/ },
+  { id: "kitchen", type: ["mikrovolnovajapech", "mikrovolnovayapech", "kofemashina", "multivarka", "blender", "elektrochainik", "chainik", "duhovka", "varochnajapanel", "mjasorubka", "myasorubka", "aerogril", "kuhonnyikombain"], brands: ["philips", "tefal", "bosch", "redmond", "polaris", "xiaomi", "delonghi", "kitfort", "moulinex", "braun", "samsung", "lg", "midea", "scarlett", "vitek", "kenwood", "krups", "nespresso", "dreame", "cosori", "garlyn", "electrolux", "beko"], tier: 2 },
+  { id: "climate", type: ["konditsioner", "kondicioner", "splitsistema", "obogrevatel", "uvlazhnitel", "ochistitelvozduha"], brands: ["midea", "gree", "haier", "lg", "samsung", "tcl", "electrolux", "ballu", "aux", "hisense", "chigo", "almacom", "artel", "xiaomi", "philips", "dyson", "levoit", "boneco", "polaris", "timberk"], tier: 1 },
+  { id: "beauty", type: ["fen", "stailer", "stajler", "elektrobritva", "trimmer", "vypriamitel", "vyprjamitel", "epiljator"], brands: ["dyson", "philips", "braun", "remington", "rowenta", "babyliss", "xiaomi", "dreame", "panasonic", "polaris", "laica", "enchen", "showsee", "harizma", "moser", "wahl"], tier: 2 },
 ];
 
 /** Accessories and spare parts ride on popular product names ("chehol-dlja-iphone"); they are not what we track. */
@@ -89,7 +96,8 @@ export const FAMILY_CAP = 3;
  * models), one colour per model, at most FAMILY_CAP per product line. Deterministic for the same input.
  */
 export function pickSeedProducts<T extends { productId: string; slug: string }>(candidates: T[], perCategory: number): Map<string, T[]> {
-  const sorted = [...candidates].sort((a, b) => Number(b.productId) - Number(a.productId));
+  const premium = (c: T) => { const k = seedCategory(c.slug); return k && SEED_CATEGORIES.find((x) => x.id === k)?.premium?.test(c.slug) ? 1 : 0; };
+  const sorted = [...candidates].sort((a, b) => premium(b) - premium(a) || Number(b.productId) - Number(a.productId));
   const seenIds = new Set<string>();
   const seenModels = new Set<string>();
   const families = new Map<string, number>();
@@ -110,5 +118,63 @@ export function pickSeedProducts<T extends { productId: string; slug: string }>(
     list.push(c);
     out.set(cat, list);
   }
-  return new Map(SEED_CATEGORIES.filter((c) => out.has(c.id)).map((c) => [c.id, out.get(c.id)!]));
+  // Queue order: tier 1 before tier 2 (the collector adds queued products in this order).
+  const order = [...SEED_CATEGORIES].sort((a, b) => a.tier - b.tier);
+  return new Map(order.filter((c) => out.has(c.id)).map((c) => [c.id, out.get(c.id)!]));
+}
+
+/**
+ * Rare categories (DECISIONS.md, 2026-11-03 "Seed priorities"): a few products each from big-ticket categories with
+ * no brand list (furniture, bikes, tools, instruments, clothing), to see how such products behave. Their slug must
+ * open with the category word(s) as whole words ("divan-…", not "divanari-…"). Only products whose first price is SEED_MIN_PRICE.rare or more stay in the catalog.
+ */
+export const RARE_CATEGORIES: { id: string; type: string[]; exclude?: string[] }[] = [
+  { id: "sofas", type: ["divan"], exclude: ["naduvnoi", "naduvnoj", "nasos", "chehol"] },
+  { id: "beds", type: ["krovat"], exclude: ["detskaja", "detskaya", "manezh"] },
+  { id: "wardrobes", type: ["shkaf"] },
+  { id: "tables", type: ["stol"], exclude: ["stolik", "stoleshnitsa", "stul"] },
+  { id: "chairs", type: ["kreslo"], exclude: ["meshok", "detskoe", "kachalka"] },
+  { id: "mattresses", type: ["matras"], exclude: ["naduvnoi", "naduvnoj", "nakladka", "toper", "topper"] },
+  { id: "bikes", type: ["velosiped"], exclude: ["detskii", "detskij", "begovel"] },
+  { id: "scooters", type: ["elektrosamokat"] },
+  { id: "treadmills", type: ["begovaja-dorozhka", "begovaya-dorozhka"] },
+  { id: "exercisebikes", type: ["velotrenazher"] },
+  { id: "drills", type: ["perforator", "shurupovert"] },
+  { id: "generators", type: ["generator"] },
+  { id: "mowers", type: ["gazonokosilka"] },
+  { id: "waterheaters", type: ["vodonagrevatel"] },
+  { id: "printers", type: ["printer", "mfu"] },
+  { id: "projectors", type: ["proektor"] },
+  { id: "cameras", type: ["fotoapparat"] },
+  { id: "guitars", type: ["gitara"], exclude: ["struny", "detskaja"] },
+  { id: "synths", type: ["sintezator"], exclude: ["detskii", "detskij"] },
+  { id: "carseats", type: ["avtokreslo"] },
+  { id: "jackets", type: ["kurtka"], exclude: ["detskaja", "detskaya"] },
+];
+
+export function rareCategory(slug: string): string | null {
+  const words = tokens(slug);
+  const joined = words.join("");
+  if (words.some((w) => ACCESSORY_WORDS.includes(w)) || ACCESSORY_JOINED.some((a) => joined.includes(a))) return null;
+  if (seedCategory(slug)) return null;
+  const head = `${words.slice(Math.max(0, words.findIndex((w) => !/^\d+$/.test(w)))).join("-")}-`;
+  return RARE_CATEGORIES.find((c) => c.type.some((k) => head.startsWith(`${k}-`)) && !c.exclude?.some((x) => joined.includes(x)))?.id ?? null;
+}
+
+/** Up to `perCategory` per rare category: newest first, one product per line (brand and model words). */
+export function pickRareProducts<T extends { productId: string; slug: string }>(candidates: T[], perCategory: number): Map<string, T[]> {
+  const sorted = [...candidates].sort((a, b) => Number(b.productId) - Number(a.productId));
+  const seen = new Set<string>();
+  const out = new Map<string, T[]>();
+  for (const c of sorted) {
+    const cat = rareCategory(c.slug);
+    if (!cat) continue;
+    const list = out.get(cat) ?? [];
+    const line = tokens(c.slug).slice(0, 3).join("-");
+    if (list.length >= perCategory || seen.has(c.productId) || seen.has(line)) continue;
+    seen.add(c.productId).add(line);
+    list.push(c);
+    out.set(cat, list);
+  }
+  return new Map(RARE_CATEGORIES.filter((c) => out.has(c.id)).map((c) => [c.id, out.get(c.id)!]));
 }

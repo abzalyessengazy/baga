@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { seedCategory, pickSeedProducts, modelKey, familyKey, FAMILY_CAP } from "./seedCatalog";
+import { seedCategory, pickSeedProducts, pickRareProducts, rareCategory, modelKey, familyKey, FAMILY_CAP } from "./seedCatalog";
 
 describe("seedCategory", () => {
   it("needs a category word and a known brand", () => {
@@ -91,5 +91,29 @@ describe("pickSeedProducts", () => {
     }));
     expect(familyKey(air[0]!.slug, "laptops")).toBe("laptops:apple-macbook-air");
     expect(pickSeedProducts(air, 70).get("laptops")).toHaveLength(FAMILY_CAP);
+  });
+});
+
+describe("seed priorities", () => {
+  it("queues categories usually from 100 000 ₸ first, dearer lines first within a category", () => {
+    const got = pickSeedProducts([
+      { productId: "300000001", slug: "elektrochainik-midea-mk-8072-belyi" },
+      { productId: "100000002", slug: "noutbuk-asus-vivobook-15-x1504va-seryi" },
+      { productId: "100000001", slug: "noutbuk-asus-rog-strix-g16-g614ju-seryi" },
+    ], 10);
+    expect([...got.keys()]).toEqual(["laptops", "kitchen"]);
+    expect(got.get("laptops")!.map((p) => p.productId)).toEqual(["100000001", "100000002"]);
+  });
+  it("picks a few products from rare categories, not accessories or main categories", () => {
+    expect(rareCategory("divan-uglovoi-lounge-180-sm-seryi")).toBe("sofas");
+    expect(rareCategory("velosiped-trinx-m100-26-chernyi")).toBe("bikes");
+    expect(rareCategory("stolik-zhurnal-nyi-belyi")).toBeNull();
+    expect(rareCategory("divanari-turbo-g15-seryi")).toBeNull();
+    expect(rareCategory("begovaja-dorozhka-xiaomi-kingsmith-walkingpad-c2-seryi")).toBe("treadmills");
+    expect(rareCategory("chehol-dlja-divana-seryi")).toBeNull();
+    expect(rareCategory("apple-iphone-18-pro-256gb-nanosim-esim-serebristyi")).toBeNull();
+    const got = pickRareProducts(Array.from({ length: 9 }, (_, i) => ({ productId: String(200000000 + i), slug: `divan-model${i}-seryi` })), 5);
+    expect(got.get("sofas")).toHaveLength(5);
+    expect(got.get("sofas")![0]!.productId).toBe("200000008");
   });
 });

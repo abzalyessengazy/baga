@@ -7,7 +7,7 @@
 import { createKaspiClient, buildSnapshot, KaspiHttpError, KaspiParseError, canonicalProductUrl, parseKaspiUrl, queuedLinkUrl, variantLinkCode } from "@baga/kaspi";
 import { saveSnapshot, connectionOptions, requestProduct, attachShortLinkTrackings, weekMovers } from "@baga/db";
 import {
-  evaluateAlert, priorityFor, INTERVAL_MINUTES, PRIORITY_ORDER, CATALOG, backoffMinutes, isSuspiciousJump, type TrackingAlertState,
+  evaluateAlert, priorityFor, INTERVAL_MINUTES, PRIORITY_ORDER, CATALOG, SEED_MIN_PRICE, backoffMinutes, isSuspiciousJump, type TrackingAlertState,
   KASPI_CRAWL_DELAY_MS, isInVisitWindow, msUntilVisitWindow, targetForDrop, almatyDay, runningSale, type Priority,
 } from "@baga/core";
 import postgres from "postgres";
@@ -197,21 +197,26 @@ async function checkProduct(row: DueRow, runId: number): Promise<boolean> {
   }
 }
 
-type Queued = { external_id: string; slug: string | null; source: "seed" | "visitor" };
+type Queued = { external_id: string; slug: string | null; source: "seed" | "visitor"; min_price: number | null };
 
 function nextQueued(source: "seed" | "visitor", tried: Set<string>) {
   return sql<Queued[]>`
-    select external_id, slug, source from seed_queue
+    select external_id, slug, source, min_price from seed_queue
     where source = ${source} and status = 'pending' and attempts < 3 and external_id <> all(${sql.array([...tried])})
     order by added_at limit ${env.chunkSize()}`;
 }
 
-/** First fetch of a queued product (page + offers = 2 requests). Seed rows become seed products. */
+/**
+ * First fetch of a queued product (page + offers = 2 requests). Seed rows become seed products, unless the row
+ * has a min_price (rare categories) and the first price is below it: then the product keeps its observed price
+ * but is checked like any product nobody watches.
+ */
 async function addQueued(q: Queued, runId: number): Promise<boolean> {
   try {
     const snap = await kaspi.fetchSnapshot(q.external_id);
     const { productId } = await saveSnapshot(sql, snap, q.slug, runId);
-    if (q.source === "seed") await sql`update products set is_seed = true where id = ${productId}`;
+    const keep = q.min_price === null || (snap.minPrice !== null && snap.minPrice >= q.min_price);
+    if (q.source === "seed" && keep) await sql`update products set is_seed = true where id = ${productId}`;
     else await sql`update products set last_viewed_at = now() where id = ${productId}`;
     await afterSave(productId, q.external_id, snap.minPrice, snap.offers[0]?.sellerName ?? null);
     await reschedule(productId, snap.minPrice); // next check in 18 h, not again in this window
@@ -232,13 +237,21 @@ async function reschedule(productId: number, minPrice: number | null) {
   const [t] = await sql<{ n: number; dist: number | null }[]>`
     select count(*)::int as n, min((${minPrice}::int - target_price)::float / target_price * 100) as dist
     from trackings where product_id = ${productId} and status = 'active'`;
-  // seed_rank: active seed products with more Kaspi reviews. A product whose reviews are not known yet ranks 0
-  // (daily) until its page is refreshed, and does not push known ones down.
+  // seed_rank: active seed products ahead of this one: priced SEED_MIN_PRICE.premium or more before cheaper ones,
+  // then more Kaspi reviews. A product whose reviews are not known yet ranks 0 (daily) until its page is
+  // refreshed, and does not push known ones down.
+  const premium = SEED_MIN_PRICE.premium;
   const [p] = await sql<{ is_seed: boolean; viewed_days: number | null; seed_rank: number }[]>`
+    with x as (
+      select p.id, p.is_seed, p.last_viewed_at, p.kaspi_reviews, coalesce(s.current_min_price, 0) >= ${premium} as top
+      from products p left join product_state s on s.product_id = p.id where p.id = ${productId})
     select is_seed, extract(day from now() - last_viewed_at)::int as viewed_days,
            case when kaspi_reviews is null then 0 else (select count(*)::int from products o
-             where o.is_seed and o.status = 'active' and o.kaspi_reviews > p.kaspi_reviews) end as seed_rank
-    from products p where id = ${productId}`;
+             left join product_state os on os.product_id = o.id
+             where o.is_seed and o.status = 'active' and o.kaspi_reviews is not null
+               and ((coalesce(os.current_min_price, 0) >= ${premium}) > x.top
+                 or ((coalesce(os.current_min_price, 0) >= ${premium}) = x.top and o.kaspi_reviews > x.kaspi_reviews))) end as seed_rank
+    from x`;
   const priority = priorityFor({
     activeTrackings: t?.n ?? 0, minDistanceToTargetPct: minPrice === null ? null : (t?.dist ?? null),
     isSeed: p?.is_seed ?? false, lastViewedDaysAgo: p?.viewed_days ?? null, seedRank: p?.seed_rank ?? 0,
