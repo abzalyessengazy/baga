@@ -9,6 +9,8 @@ on:
   # window: whichever arrives first collects. While a collector runs, GitHub keeps one later trigger waiting and
   # cancels the others ("cancelled" in the Actions list is expected). A trigger after 08:30 exits within seconds
   # without any Kaspi request.
+  # Main trigger since 3 Nov 2026: cron-job.org calls workflow_dispatch at 03:50 UTC plus backups (DECISIONS.md,
+  # "External trigger for the collector"). These schedule lines stay as a further backup.
   schedule:
     - cron: "50 3 * * *"
     - cron: "7,27,47 4-7 * * *"

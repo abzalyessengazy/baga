@@ -36,6 +36,11 @@ export const PasteForm = forwardRef<HTMLInputElement>(function PasteForm(_, ref)
   // Submits waiting for the bot check: on a phone the link is often pasted and sent before Turnstile has finished.
   const waiters = useRef<((t: string | null) => void)[]>([]);
   const blocked = useRef(false);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const setInput = (el: HTMLInputElement | null) => {
+    inputRef.current = el;
+    if (typeof ref === "function") ref(el); else if (ref) ref.current = el;
+  };
 
   function onToken(v: string | null) {
     token.current = v;
@@ -62,6 +67,19 @@ export const PasteForm = forwardRef<HTMLInputElement>(function PasteForm(_, ref)
   }
 
   useEffect(() => setValue(read()), []);
+  // The paste button needs the async Clipboard API (all current browsers; the browser may ask once).
+  const [canPaste, setCanPaste] = useState(false);
+  useEffect(() => setCanPaste(typeof navigator !== "undefined" && !!navigator.clipboard?.readText), []);
+
+  /** Reads the clipboard on tap; a Kaspi link is checked right away, anything else just lands in the field. */
+  async function pasteFromClipboard() {
+    let text = "";
+    try { text = (await navigator.clipboard.readText()).trim(); } catch { /* denied or empty: focus the field instead */ }
+    if (!text) { inputRef.current?.focus(); return; }
+    setValue(text); write(text); setError(null); setArmed(true);
+    if (looksLikeLink(text)) void check(text);
+    else inputRef.current?.focus();
+  }
 
   // Debounced catalog search while typing text (not a link).
   useEffect(() => {
@@ -89,6 +107,10 @@ export const PasteForm = forwardRef<HTMLInputElement>(function PasteForm(_, ref)
       if (results?.[0]) { write(""); router.push(`/p/${results[0].externalId}`); }
       return;
     }
+    await check(q);
+  }
+
+  async function check(q: string) {
     setBusy(true);
     setError(null);
     try {
@@ -123,14 +145,19 @@ export const PasteForm = forwardRef<HTMLInputElement>(function PasteForm(_, ref)
     <form className="paste" onSubmit={submit} noValidate role="search">
       <label htmlFor={id} className="sr-only">{t("pasteLabel")}</label>
       <div className="paste-row">
+        <div className="paste-field">
         <input
-          ref={ref} id={id} inputMode="search" autoComplete="off" spellCheck={false}
+          ref={setInput} id={id} inputMode="search" autoComplete="off" spellCheck={false}
           placeholder={t("pastePlaceholder")} value={value}
           onFocus={() => setArmed(true)}
           onChange={(e) => { setValue(e.target.value); write(e.target.value); setError(null); setArmed(true); }}
           aria-invalid={error ? true : undefined} aria-describedby={`${id}-msg`}
           aria-controls={showSearch ? `${id}-results` : undefined}
         />
+        {canPaste && !value && (
+          <button type="button" className="paste-clip" onClick={pasteFromClipboard} disabled={busy}>{t("pasteFromClipboard")}</button>
+        )}
+        </div>
         <button className="btn" type="submit" disabled={busy}>{busy ? t("checking") : t("pasteButton")}</button>
       </div>
       <p id={`${id}-msg`} className={error ? "paste-error" : "paste-hint"} role={error ? "alert" : undefined}>

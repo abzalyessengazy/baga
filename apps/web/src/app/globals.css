@@ -92,6 +92,13 @@ a { color: inherit; }
 .paste input::placeholder { color: var(--ink-faint); }
 .paste input:focus { outline: none; }
 .paste-row:focus-within { outline: 2px solid var(--focus); outline-offset: 2px; }
+.paste-field { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; }
+.paste-clip {
+  flex: none; border: 1px solid var(--stamp); background: transparent; color: var(--stamp); cursor: pointer;
+  border-radius: 6px; padding: 7px 10px; font: 600 var(--step--1)/1 var(--font-ui);
+}
+.paste-clip:hover { background: color-mix(in srgb, var(--stamp) 8%, transparent); }
+.paste-clip:disabled { opacity: 0.6; cursor: progress; }
 .btn {
   border: 0; cursor: pointer; border-radius: 7px; padding: 12px 18px;
   font: 650 var(--step-0)/1.1 var(--font-ui); background: var(--ink); color: var(--paper); white-space: nowrap;
