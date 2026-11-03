@@ -1,6 +1,6 @@
 import { getTranslations } from "next-intl/server";
 import { almatyDay, formatTenge, latestSaleCheck, upcomingSale, type DailyLow } from "@baga/core";
-import { saleDates } from "@/lib/sale-dates";
+import { saleDates, type SaleT } from "@/lib/sale-dates";
 
 /**
  * "Kaspi Жұма: проверка" on the product page: the sale price against what we saw before it and after it
@@ -18,7 +18,7 @@ export async function SaleCheck({ history, locale }: { history: DailyLow[]; loca
     if (!next || !seen.length) return null;
     return (
       <div className="sale-check is-soon">
-        <p className="sale-title">{t("soonTitle", { sale: t(`names.${next.id}` as "names.kaspiJuma202611"), dates: saleDates(next, locale) })}</p>
+        <p className="sale-title">{t("soonTitle", { sale: t(`names.${next.id}` as "names.kaspiJuma202611"), dates: saleDates(next, t as unknown as SaleT) })}</p>
         <p>{t("soonText", { days: seen.length, price: f(Math.min(...seen.slice(-14).map((d) => d.price))) })}</p>
       </div>
     );

@@ -1,18 +1,17 @@
 "use client";
 import { useEffect, useState } from "react";
-import { useLocale, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 import { almatyDay, runningSale, upcomingSale, type SaleEvent } from "@baga/core";
 import { Link } from "@/i18n/navigation";
-import { saleDates } from "@/lib/sale-dates";
+import { saleDates, type SaleT } from "@/lib/sale-dates";
 
 /**
- * On the home page while a sale runs: what BAĞA does during it, and where to see the moves; up to two weeks before
- * it starts: its dates and that we are recording the prices before it. Decided in the browser,
- * because the home page is prerendered and a sale starts and ends between deploys.
+ * A slim strip above the header on every page: up to two weeks before a sale its dates and that we are recording
+ * the prices before it; while it runs, a link to the moves. Decided in the browser, because pages are prerendered
+ * and a sale starts and ends between deploys.
  */
 export function SaleBanner() {
   const t = useTranslations("sale");
-  const locale = useLocale() as "ru" | "kk";
   const [sale, setSale] = useState<{ s: SaleEvent; soon: boolean } | null>(null);
   useEffect(() => {
     const day = almatyDay();
@@ -21,13 +20,15 @@ export function SaleBanner() {
     setSale(now ? { s: now, soon: false } : next ? { s: next, soon: true } : null);
   }, []);
   if (!sale) return null;
-  const vars = { sale: t(`names.${sale.s.id}` as "names.kaspiJuma202611"), dates: saleDates(sale.s, locale) };
+  const vars = { sale: t(`names.${sale.s.id}` as "names.kaspiJuma202611"), dates: saleDates(sale.s, t as unknown as SaleT) };
   return (
-    <div className="wrap">
-      <aside className={`sale-banner${sale.soon ? " is-soon" : ""}`}>
-        <p>{sale.soon ? t.rich("bannerSoon", { ...vars, b: (c) => <strong>{c}</strong> }) : t("banner", vars)}</p>
-        {!sale.soon && <Link href="/drops">{t("bannerLink")} →</Link>}
-      </aside>
-    </div>
+    <aside className="sale-strip">
+      <div className="wrap sale-strip-in">
+        <span className="sale-strip-dot" aria-hidden />
+        <strong>{sale.soon ? t("stripSoon", vars) : t("stripNow", vars)}</strong>
+        <span className="sale-strip-text">{sale.soon ? t("stripSoonText") : t("stripNowText")}</span>
+        {!sale.soon && <Link href="/drops">{t("stripLink")} →</Link>}
+      </div>
+    </aside>
   );
 }

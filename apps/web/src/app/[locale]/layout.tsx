@@ -7,6 +7,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { routing } from "@/i18n/routing";
 import { SiteHeader } from "@/components/SiteHeader";
+import { SaleBanner } from "@/components/SaleBanner";
 import { SiteFooter } from "@/components/SiteFooter";
 import { Analytics } from "@/components/Analytics";
 import { siteUrl } from "@/lib/site";
@@ -36,6 +37,7 @@ export default async function LocaleLayout({ children, params }: { children: Rea
     <html lang={locale}>
       <body>
         <NextIntlClientProvider messages={messages} locale={locale}>
+          <SaleBanner />
           <SiteHeader />
           {children}
           <SiteFooter />
