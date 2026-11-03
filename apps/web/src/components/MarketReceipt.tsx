@@ -53,51 +53,47 @@ export function MarketReceipt() {
             {!has && <p className="market-empty">{t("empty")}</p>}
             {has && (
               <>
-                <dl className="market-cells">
+                <dl className="mk-stats">
                   <div><dt>{t("checked")}</dt><dd>{count(m!.checked)}</dd></div>
-                  <div><dt>↓ {t("down")}</dt><dd>{count(m!.down)}</dd></div>
+                  <div className="is-down"><dt>↓ {t("down")}</dt><dd>{count(m!.down)}</dd></div>
                   <div><dt>↑ {t("up")}</dt><dd>{count(m!.up)}</dd></div>
                 </dl>
-                <p className="market-note">{t("compared", { count: m!.compared })}</p>
-                {m!.newLows > 0 && <p className="market-note is-ink">{t("newLows", { count: m!.newLows, days: 7 })}</p>}
+                <p className="mk-note">{t("compared", { count: m!.compared })}</p>
+                {m!.newLows > 0 && <p className="mk-note is-ink">{t("newLows", { count: m!.newLows, days: 7 })}</p>}
               </>
             )}
             {has && spread && spread.products > 0 && spread.medianPct !== null && (
-              <>
-                <hr className="rule" />
-                <div className="receipt-caption">{t("spreadCaption")}</div>
-                <div className="market-big">
-                  <span className="market-big-n">{spread.medianPct}%</span>
-                  <span className="market-big-k">{t("spreadMedian")}</span>
-                </div>
-                <p className="market-note">{t("spreadMany", { over: spread.over25, count: spread.products })}</p>
-                <div className="market-rows">
+              <div className="mk-spread">
+                <p className="mk-label">{t("spreadCaption")}</p>
+                <p className="mk-big">{spread.medianPct}%</p>
+                <p className="mk-big-k">{t("spreadMedian")}</p>
+                <p className="mk-strong">{t("spreadMany", { over: spread.over25, count: spread.products })}</p>
+                <div className="mk-rows">
                   {spread.top.slice(0, 3).map((s) => (
-                    <Link key={s.externalId} href={`/p/${s.externalId}`} className="seller-row z-drop z-spread">
-                      <span className="name">{name(s, locale)}<span className="z-sub">{f(s.lo)} – {f(s.hi)}</span></span>
-                      <span className="p">+{f(s.hi - s.lo)}</span>
+                    <Link key={s.externalId} href={`/p/${s.externalId}`} className="mk-row">
+                      <span className="mk-row-name">{name(s, locale)}<span>{f(s.lo)} – {f(s.hi)}</span></span>
+                      <span className="mk-row-v">+{f(s.hi - s.lo)}</span>
                     </Link>
                   ))}
                 </div>
-              </>
+              </div>
             )}
-            {has && m!.deals.length > 0 && (
-              <>
-                <hr className="rule" />
-                <div className="receipt-caption">{t("deals")}</div>
-                <div className="market-rows">
-                  {m!.deals.slice(0, 3).map((d, i) => (
-                    <Link key={d.externalId} href={`/p/${d.externalId}`} className={`seller-row z-drop z-spread${i === 0 ? " is-best" : ""}`}>
-                      <span className="name">{name(d, locale)}<span className="z-sub">{f(d.was)} → {f(d.now)}</span></span>
-                      <span className="p">{d.pct}%</span>
-                    </Link>
-                  ))}
+            {has && m!.pick && (
+              <Link href={`/p/${m!.pick.externalId}`} className="mk-pick">
+                <p className="mk-label">{t("pickLabel")}</p>
+                <div className="mk-pick-body">
+                  {m!.pick.imageUrl ? <img src={m!.pick.imageUrl} alt="" width={72} height={72} loading="lazy" /> : <span className="mk-pick-img" aria-hidden />}
+                  <div>
+                    <p className="mk-pick-title">{name(m!.pick, locale)}</p>
+                    <p className="mk-pick-price">{f(m!.pick.price)}</p>
+                    <p className="mk-pick-why">{m!.pick.kind === "drop"
+                      ? t("pickDrop", { pct: Math.abs(m!.pick.pct), ref: f(m!.pick.ref) })
+                      : t("pickSeller", { pct: Math.abs(m!.pick.pct), ref: f(m!.pick.ref), sellers: m!.pick.sellers })}</p>
+                  </div>
                 </div>
-              </>
+                <span className="stamp mk-pick-stamp" aria-hidden>−{Math.abs(m!.pick.pct)}%</span>
+              </Link>
             )}
-            <hr className="rule" />
-            <p className="market-cta">{t("cta")}</p>
-            {has && <Link href="/drops" className="z-all">{t("allMoves")} →</Link>}
           </section>
         </motion.div>
       </div>

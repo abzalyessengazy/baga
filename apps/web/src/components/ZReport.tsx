@@ -157,7 +157,7 @@ function SpreadSlip({ rows, locale }: { rows: Market["spread"]["top"]; locale: L
   return (
     <div className={`slip-screen${open ? " is-open" : ""}`}>
       {rows.slice(0, limit).map((s) => (
-        <Link key={s.externalId} href={`/p/${s.externalId}`} className="seller-row z-drop z-spread">
+        <Link key={s.externalId} href={`/p/${s.externalId}`} className="seller-row z-drop z-spread z-gap">
           <span className="name">{dropTitle(s, locale)}<span className="z-sub">{formatTenge(s.lo, locale)} – {formatTenge(s.hi, locale)}</span></span>
           <span className="p">+{formatTenge(s.hi - s.lo, locale)}</span>
         </Link>

@@ -77,6 +77,12 @@ export function latestSaleCheck(history: DailyLow[], today: string, sales = SALE
 /** Today's date in Almaty (YYYY-MM-DD): the calendar day the sales and the daily history use. */
 export const almatyDay = (d = new Date()) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Almaty" }).format(d);
 
+/** The next sale starting within `withinDays` days (not today), if any: announced before it starts. */
+export function upcomingSale(today: string, withinDays = 14, sales = SALE_EVENTS): SaleEvent | null {
+  const limit = addDays(today, withinDays);
+  return [...sales].sort((a, b) => a.start.localeCompare(b.start)).find((s) => s.start > today && s.start <= limit) ?? null;
+}
+
 /** The sale running today, if any. */
 export function runningSale(today: string, sales = SALE_EVENTS): SaleEvent | null {
   return sales.find((s) => s.start <= today && (s.end === null || today <= s.end)) ?? null;

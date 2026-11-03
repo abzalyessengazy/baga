@@ -6,6 +6,17 @@ export interface MarketSpread { externalId: string; title: string; titleKk: stri
 /** A Kaspi leaf category we watch enough products in. `weekPct` stays null until enough of them have a week of history. */
 export interface MarketCategory { name: string; products: number; from: number; median: number; weekPct: number | null; compared: number }
 
+/**
+ * The home page's find of the day, with the reason it was picked: the biggest week drop (the /drops rule), or,
+ * while there is none, the product whose cheapest seller is furthest below the median of its sellers' prices.
+ */
+export interface MarketPick {
+  kind: "drop" | "seller";
+  externalId: string; title: string; titleKk: string | null; imageUrl: string | null;
+  /** The current lowest price, and what it is compared with: the week's high (drop) or the sellers' median (seller). */
+  price: number; ref: number; pct: number; sellers: number;
+}
+
 export interface Market {
   /** The latest Almaty day with a successful check, and how many products were checked that day. */
   day: string | null;
@@ -18,12 +29,15 @@ export interface Market {
   categories: MarketCategory[];
   /** Biggest drops against the previous 7 days (the same rule as /drops). */
   deals: Mover[];
+  pick: MarketPick | null;
 }
 
 export const MARKET_CONFIG = {
   lowsMinDays: 7,
   /** Seller spread: in-stock products with 2+ sellers checked in the last 3 days; cheap accessories are left out of the list. */
   spreadMinPrice: 5_000, spreadTop: 12,
+  /** The seller pick: 3+ sellers and a price where the gap means real money. */
+  pickMinSellers: 3, pickMinPrice: 20_000,
   /** A category is listed from this many priced products; its week change needs this many with history. */
   categoryMin: 8, categoryCompared: 5, categoryTop: 8,
   deals: 12,
@@ -56,7 +70,8 @@ export async function getMarket(sql: postgres.Sql): Promise<Market> {
            count(*) filter (where a.days >= ${c.lowsMinDays} and a.p < a.before_low)::int as lows
     from a join b using (product_id)`;
   const offers = sql`
-    select o.product_id, min(o.price)::int as lo, max(o.price)::int as hi, count(*)::int as sellers
+    select o.product_id, min(o.price)::int as lo, max(o.price)::int as hi, count(*)::int as sellers,
+           round(percentile_cont(0.5) within group (order by o.price))::int as med
     from offers_current o join product_state s on s.product_id = o.product_id join products p on p.id = o.product_id
     where p.status = 'active' and s.in_stock and s.last_checked_at > now() - interval '3 days'
     group by 1 having count(*) >= 2`;
@@ -94,11 +109,26 @@ export async function getMarket(sql: postgres.Sql): Promise<Market> {
     from x group by name having count(*) >= ${c.categoryMin}
     order by count(*) desc limit ${c.categoryTop}`;
   const deals = await weekMovers(sql, "down", c.deals);
+  let pick: MarketPick | null = null;
+  const d = deals[0];
+  if (d) {
+    pick = { kind: "drop", externalId: d.externalId, title: d.title, titleKk: d.titleKk, imageUrl: d.imageUrl,
+      price: d.now, ref: d.was, pct: d.pct, sellers: d.offerCount };
+  } else {
+    const [x] = await sql<Omit<MarketPick, "kind">[]>`
+      with x as (${offers})
+      select p.external_id as "externalId", p.title, p.title_kk as "titleKk", p.image_url as "imageUrl",
+             x.lo as price, x.med as ref, round((x.lo - x.med) * 100.0 / x.med)::int as pct, x.sellers
+      from x join products p on p.id = x.product_id
+      where x.sellers >= ${c.pickMinSellers} and x.lo >= ${c.pickMinPrice} and x.med > x.lo
+      order by (x.med - x.lo)::numeric / x.med desc limit 1`;
+    if (x) pick = { kind: "seller", ...x };
+  }
   return {
     day: moves?.day ?? null, checked: moves?.checked ?? 0,
     compared: moves?.compared ?? 0, down: moves?.down ?? 0, up: moves?.up ?? 0, same: moves?.same ?? 0,
     newLows: moves?.lows ?? 0,
     spread: { products: spread?.products ?? 0, over10: spread?.over10 ?? 0, over25: spread?.over25 ?? 0, medianPct: spread?.median ?? null, top },
-    categories, deals,
+    categories, deals, pick,
   };
 }

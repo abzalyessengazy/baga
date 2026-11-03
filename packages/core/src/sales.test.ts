@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { saleCheck, latestSaleCheck, type SaleEvent } from "./sales";
+import { saleCheck, latestSaleCheck, upcomingSale, runningSale, type SaleEvent } from "./sales";
 
 const sale: SaleEvent = { id: "s", start: "2026-11-11", end: "2026-11-11" };
 const h = (rows: [string, number][]) => rows.map(([day, price]) => ({ day, price }));
@@ -40,5 +40,12 @@ describe("saleCheck", () => {
     const sales: SaleEvent[] = [{ id: "a", start: "2026-11-03", end: "2026-11-05" }, sale];
     expect(latestSaleCheck(h([["2026-11-04", 10]]), "2026-11-12", sales)!.saleId).toBe("a");
     expect(latestSaleCheck(h([["2026-11-04", 10], ["2026-11-11", 9]]), "2026-11-12", sales)!.saleId).toBe("s");
+  });
+  it("upcomingSale announces the next sale up to two weeks ahead, runningSale takes over on its first day", () => {
+    const sales: SaleEvent[] = [{ id: "a", start: "2026-11-05", end: "2026-11-07" }, sale];
+    expect(upcomingSale("2026-11-03", 14, sales)!.id).toBe("a");
+    expect(upcomingSale("2026-11-05", 14, sales)!.id).toBe("s");
+    expect(runningSale("2026-11-05", sales)!.id).toBe("a");
+    expect(upcomingSale("2026-10-01", 14, sales)).toBeNull();
   });
 });

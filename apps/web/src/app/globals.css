@@ -241,7 +241,7 @@ a { color: inherit; }
 .z-cell dd { margin: 4px 0 0; font-size: clamp(1.5rem, 3vw, 2rem); font-weight: 800; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
 .z-stamp { position: absolute; right: 22px; bottom: 14px; font-size: 1rem; }
 .z-drop { color: inherit; text-decoration: none; align-items: start; }
-.z-slips .slip-screen { height: 300px; }
+.z-slips .slip-screen { height: 330px; }
 .z-day { height: 16px; }
 .z-drop .name { min-width: 0; }
 .z-drop:hover .name { text-decoration: underline; }
@@ -343,6 +343,15 @@ a { color: inherit; }
 .z-more { font: inherit; font-size: 0.8125rem; background: none; border: 0; padding: 4px 0; color: var(--stamp); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
 .z-more:focus-visible { outline: 2px solid var(--stamp); outline-offset: 2px; }
 .z-slips .slip-screen.is-open { height: auto; }
+/* Z-report numbers in the UI type, with air between rows (same voice as "Kaspi сегодня"). */
+.z-cell dd { font-family: var(--font-ui); font-size: clamp(1.75rem, 3.4vw, 2.5rem); }
+.z-cell:nth-child(4) dd { color: var(--stamp); }
+.z-grid { gap: 22px 24px; }
+.z-slips .seller-row { padding: 9px 8px; font-size: 0.875rem; }
+.z-slips .seller-row + .seller-row, .z-slips .slip-screen > div + div > .seller-row { border-top: 1px dashed color-mix(in srgb, var(--rule) 60%, transparent); }
+.z-slips .seller-row .p { font-family: var(--font-ui); font-weight: 800; }
+.z-moves .z-drop:not(.is-rise) .p, .z-slips .z-gap .p { color: var(--stamp); }
+.z-slips .seller-row.is-best .p { color: inherit; }
 .z-sub { display: block; color: var(--ink-soft); font-size: 0.75rem; font-weight: 400; white-space: normal; }
 .z-spread { padding-block: 5px; }
 
@@ -353,17 +362,33 @@ a { color: inherit; }
 .market-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px 16px; flex-wrap: wrap; }
 .market-brand { font-size: 1.125rem; font-weight: 800; letter-spacing: 0.3em; }
 .market-day { color: var(--ink-soft); font-size: 0.75rem; letter-spacing: 0.06em; text-transform: uppercase; }
-.market-cells { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 0; }
-.market-cells dt { color: var(--ink-soft); font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.04em; }
-.market-cells dd { margin: 2px 0 0; font-size: 1.5rem; font-weight: 800; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
-.market-note { margin: 8px 0 0; color: var(--ink-soft); font-size: 0.8125rem; line-height: 1.45; }
-.market-note.is-ink { color: var(--stamp); }
-.market-big { display: flex; align-items: center; gap: 12px; }
-.market-big-n { font-size: 2.25rem; font-weight: 800; letter-spacing: -0.03em; color: var(--stamp); line-height: 1; }
-.market-big-k { color: var(--ink-soft); font-size: 0.8125rem; line-height: 1.35; }
-.market-rows { margin: 8px -8px 0; }
-.market-rows .seller-row { padding-block: 5px; font-size: 0.8125rem; }
-.market-cta { margin: 0; line-height: 1.45; }
+/* Analytics speak in the UI type, larger and with air; the receipt frame and labels stay mono. */
+.mk-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 4px 0 0; }
+.mk-stats dt { color: var(--ink-soft); font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; }
+.mk-stats dd { margin: 6px 0 0; font-family: var(--font-ui); font-size: 2.25rem; font-weight: 800; letter-spacing: -0.03em; line-height: 1; font-variant-numeric: tabular-nums; }
+.mk-stats .is-down dd { color: var(--stamp); }
+.mk-note { margin: 14px 0 0; color: var(--ink-soft); font-family: var(--font-ui); font-size: 0.875rem; line-height: 1.45; }
+.mk-note.is-ink { color: var(--stamp); font-weight: 600; }
+.mk-label { margin: 0 0 10px; font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--stamp); }
+.mk-spread { margin: 22px -10px 0; padding: 18px 16px 10px; border-radius: 10px; background: color-mix(in srgb, var(--stamp) 8%, var(--paper)); font-family: var(--font-ui); }
+.mk-big { margin: 0; font-size: 3.5rem; font-weight: 800; letter-spacing: -0.04em; line-height: 0.95; color: var(--stamp); }
+.mk-big-k { margin: 8px 0 0; font-size: 0.9375rem; line-height: 1.4; color: var(--ink); }
+.mk-strong { margin: 10px 0 0; font-size: 0.9375rem; line-height: 1.4; font-weight: 700; }
+.mk-rows { margin: 14px -6px 0; border-top: 1px solid color-mix(in srgb, var(--stamp) 18%, transparent); padding-top: 6px; }
+.mk-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 6px; border-radius: 6px; color: inherit; text-decoration: none; }
+.mk-row + .mk-row { border-top: 1px dashed color-mix(in srgb, var(--stamp) 18%, transparent); }
+.mk-row:hover { background: color-mix(in srgb, var(--stamp) 8%, transparent); }
+.mk-row-name { min-width: 0; font-size: 0.9375rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mk-row-name span { display: block; margin-top: 2px; font-family: var(--font-receipt); font-size: 0.75rem; font-weight: 400; color: var(--ink-soft); }
+.mk-row-v { font-weight: 800; font-size: 1rem; color: var(--stamp); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mk-pick { position: relative; display: block; margin: 16px -10px 4px; padding: 16px; border-radius: 10px; border: 1.5px solid var(--stamp); color: inherit; text-decoration: none; font-family: var(--font-ui); }
+.mk-pick:hover .mk-pick-title { text-decoration: underline; }
+.mk-pick-body { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 14px; align-items: start; }
+.mk-pick-body img, .mk-pick-img { width: 72px; height: 72px; object-fit: contain; background: #fff; border-radius: 8px; display: block; }
+.mk-pick-title { margin: 0; font-size: 0.9375rem; font-weight: 600; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; padding-right: 56px; }
+.mk-pick-price { margin: 6px 0 0; font-size: 1.5rem; font-weight: 800; letter-spacing: -0.02em; }
+.mk-pick-why { margin: 4px 0 0; font-size: 0.8125rem; line-height: 1.4; color: var(--ink-soft); }
+.mk-pick-stamp { position: absolute; top: 12px; right: 12px; font-size: 0.875rem; transform: rotate(-6deg); }
 .market-empty { margin: 0; color: var(--ink-soft); }
 
 /* "Вы купили?" */
@@ -453,6 +478,7 @@ a { color: inherit; }
   .coupon-hint { max-width: none; }
   .tear-btn { top: 10px; bottom: auto; right: 18px; }
   .coupon-head span:last-child { visibility: hidden; }
+  .mk-row:nth-child(n + 3) { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -1,15 +1,28 @@
 import { getTranslations } from "next-intl/server";
-import { almatyDay, formatTenge, latestSaleCheck, type DailyLow } from "@baga/core";
+import { almatyDay, formatTenge, latestSaleCheck, upcomingSale, type DailyLow } from "@baga/core";
+import { saleDates } from "@/lib/sale-dates";
 
 /**
  * "Kaspi Жұма: проверка" on the product page: the sale price against what we saw before it and after it
  * (core/sales.ts). Observed prices only; says so when there is nothing to compare with.
  */
 export async function SaleCheck({ history, locale }: { history: DailyLow[]; locale: "ru" | "kk" }) {
-  const c = latestSaleCheck(history, almatyDay());
-  if (!c) return null;
+  const today = almatyDay();
+  const c = latestSaleCheck(history, today);
   const t = await getTranslations("sale");
   const f = (n: number) => formatTenge(n, locale);
+  if (!c) {
+    // Before a sale: its dates, and the prices we are recording for the comparison.
+    const next = upcomingSale(today);
+    const seen = next ? history.filter((d) => d.day < next.start) : [];
+    if (!next || !seen.length) return null;
+    return (
+      <div className="sale-check is-soon">
+        <p className="sale-title">{t("soonTitle", { sale: t(`names.${next.id}` as "names.kaspiJuma202611"), dates: saleDates(next, locale) })}</p>
+        <p>{t("soonText", { days: seen.length, price: f(Math.min(...seen.slice(-14).map((d) => d.price))) })}</p>
+      </div>
+    );
+  }
   const lines = [
     t("during", { price: f(c.duringLow) }),
     ...(c.before ? [t("before", { price: f(c.before.low), days: c.before.days })] : []),
