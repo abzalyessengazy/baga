@@ -4,14 +4,15 @@ on:
   # 10 s crawl delay. We keep off the edges: the worker sends requests only 04:05-08:30 UTC (09:05-13:30 Almaty).
   # The job starts at 03:50 UTC and the worker waits for 04:05.
   # See DECISIONS.md "Follow kaspi.kz/robots.txt". Manual runs outside the window exit without requests.
-  # GitHub delays scheduled runs under load and sometimes drops them (2 Nov 2026: no 03:50 run at all), so later
-  # triggers through the window act as backups. The concurrency group makes them wait for a running collector;
-  # once it has stopped at 08:30 they start outside the window (or arrive hours late) and exit without any Kaspi request.
+  # GitHub delays scheduled runs under load and often drops them (2 and 3 Nov 2026: no morning run at all; the
+  # triggers arrived at 11:42, 13:52 and 17:04 UTC). So there is a backup trigger every 20 minutes through the
+  # window: whichever arrives first collects. While a collector runs, GitHub keeps one later trigger waiting and
+  # cancels the others ("cancelled" in the Actions list is expected). A trigger after 08:30 exits within seconds
+  # without any Kaspi request.
   schedule:
     - cron: "50 3 * * *"
-    - cron: "23 4 * * *"
-    - cron: "47 5 * * *"
-    - cron: "13 7 * * *"
+    - cron: "7,27,47 4-7 * * *"
+    - cron: "7 8 * * *"
   workflow_dispatch:
 concurrency: { group: collect, cancel-in-progress: false } # one collector at a time; later triggers queue
 jobs:
