@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { parseKaspiUrl, canonicalProductUrl, shortLinkCode } from "./url";
+import { parseKaspiUrl, canonicalProductUrl, shortLinkCode, variantLinkCode, queuedLinkUrl } from "./url";
 import { parseOffers, parseProductPage, buildSnapshot, KaspiParseError } from "./snapshot";
 import { createKaspiClient, KaspiHttpError } from "./client";
 
@@ -187,5 +187,25 @@ describe("shortLinkCode", () => {
     expect(shortLinkCode("https://l.kaspi.kz/shop/../../etc")).toBeNull();
     expect(shortLinkCode("https://l.kaspi.kz.evil.example/shop/abcd")).toBeNull();
     expect(shortLinkCode("https://kaspi.kz/shop/p/x-1/")).toBeNull();
+  });
+});
+
+describe("variantLinkCode", () => {
+  const shared = "https://kaspi.kz/shop/p/polubotinki-tigran-tgrn0023m-chernyi-46-15956323b/?c=231010000&m=30340019&hasVariants=true&ref=shared_link";
+  it("reads the group code of a product with variants (seen 3 Nov 2026)", () => {
+    expect(parseKaspiUrl(shared)).toEqual({ ok: false, reason: "not_a_product" });
+    expect(variantLinkCode(shared)).toEqual({ code: "15956323b", path: "/shop/p/-15956323b/" });
+    expect(queuedLinkUrl("/shop/p/-15956323b/")).toBe("https://kaspi.kz/shop/p/-15956323b/");
+  });
+  it("the slug-less group URL redirects to a plain product (302s seen 3 Nov 2026)", () => {
+    const target = new URL("/shop/p/mahrovyi-halat-massimo-monelli-1028-belyi-3xl-114891272/?hasVariants=true", "https://kaspi.kz/shop/p/-11651361b/").toString();
+    expect(variantLinkCode(target)).toBeNull();
+    expect(parseKaspiUrl(target)).toMatchObject({ ok: true, productId: "114891272" });
+    expect(variantLinkCode("https://kaspi.kz/shop/p/mahrovyi-halat-massimo-monelli-belyi-11651361b/")).toEqual({ code: "11651361b", path: "/shop/p/-11651361b/" });
+  });
+  it("leaves plain product links, other hosts and short links alone", () => {
+    expect(variantLinkCode("https://kaspi.kz/shop/p/apple-iphone-18-pro-177318181/")).toBeNull();
+    expect(variantLinkCode("https://evil.kz/shop/p/x-15956323b/")).toBeNull();
+    expect(queuedLinkUrl("/shop/D5zGA9hPyp8zi3w")).toBe("https://l.kaspi.kz/shop/D5zGA9hPyp8zi3w");
   });
 });

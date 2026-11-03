@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { isInVisitWindow, nextVisitWindowDay } from "@baga/core";
+import { queuedLinkUrl } from "@baga/kaspi";
 import { redirect } from "@/i18n/navigation";
 import { shortLinkStatus, collectorRunning } from "@/lib/product";
 import { QueuedWatcher } from "@/components/QueuedWatcher";
@@ -41,13 +42,13 @@ export default async function ShortLinkPage({ params }: Props) {
     <main className="wrap untracked">
       <PrintIn className="receipt">
         <StampIn>{t("queuedStamp")}</StampIn>
-        <p className="untracked-name">{t("shortLinkNote")}</p>
+        <p className="untracked-name">{row.path.startsWith("/shop/p/") ? t("variantLinkNote") : t("shortLinkNote")}</p>
         <hr className="rule" />
         <p className="untracked-status" role="status">
           {live ? t("fetchingNow") : nextVisitWindowDay(new Date()) === "today" ? t("queuedToday") : t("queuedTomorrow")}
         </p>
         {live && <QueuedWatcher />}
-        <a className="kaspi-link" href={`https://l.kaspi.kz${row.path}`} rel="noopener noreferrer">{t("openOnKaspi")}</a>
+        <a className="kaspi-link" href={queuedLinkUrl(row.path)} rel="noopener noreferrer">{t("openOnKaspi")}</a>
       </PrintIn>
       {/* The visitor can set a price now; it moves onto the product when the collector resolves the link. */}
       <TrackPanel productId={code} shortLink={code} current={null} initial={await trackInitial({ shortLink: code })}

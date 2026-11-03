@@ -57,3 +57,22 @@ export function shortLinkCode(input: string): { code: string; path: string } | n
 }
 
 export const shortLinkUrl = (path: string) => `https://l.kaspi.kz${path}`;
+
+/**
+ * A link to a product with variants (clothes, shoes: size and colour) ends in a group code, not a product id:
+ * ".../polubotinki-...-46-15956323b/". Kaspi redirects it to the product: ".../polubotinki-...-46-134007098/"
+ * (seen 3 Nov 2026). The code is queued like a short link and the collector resolves it with one non-following
+ * GET of https://kaspi.kz/shop/p/-<code>/, a URL we build ourselves.
+ */
+export function variantLinkCode(input: string): { code: string; path: string } | null {
+  const raw = extractUrl(input);
+  if (!raw) return null;
+  let url: URL;
+  try { url = new URL(raw); } catch { return null; }
+  if (!(KASPI_HOSTS as readonly string[]).includes(url.hostname.toLowerCase())) return null;
+  const m = url.pathname.match(/\/shop\/p\/[a-z0-9-]*?-?(\d{5,12}[a-z]{1,3})\/?$/i);
+  return m ? { code: m[1]!.toLowerCase(), path: `/shop/p/-${m[1]!.toLowerCase()}/` } : null;
+}
+
+/** The URL the collector requests for a queued link: an l.kaspi.kz short link, or a variant link on kaspi.kz. */
+export const queuedLinkUrl = (path: string) => (path.startsWith("/shop/p/") ? `https://kaspi.kz${path}` : shortLinkUrl(path));

@@ -1,5 +1,5 @@
 "use client";
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useLocale, useTranslations } from "next-intl";
 import { DROP_PRESETS, formatTenge, targetForDrop } from "@baga/core";
@@ -41,6 +41,29 @@ export function TrackPanel({ productId, shortLink, current, initial, related }: 
     initial.target !== null || initial.dropPct !== null ? { price: initial.target, pct: initial.dropPct } : null);
   const [just, setJust] = useState(false); // set in this visit: play the stamp and show the related products
   const [tg, setTg] = useState({ linked: initial.linked, url: initial.telegramUrl });
+  // Alerts need somewhere to go: until Telegram or a confirmed address is connected, the coupon says so loudly.
+  const [mail, setMail] = useState<"form" | "sent" | "confirmed">(initial.email.address ? (initial.email.confirmed ? "confirmed" : "sent") : "form");
+  const [waitTg, setWaitTg] = useState(false); // the Telegram button was tapped: watch for the link
+  const reached = tg.linked || mail === "confirmed";
+  useEffect(() => {
+    if (tracked === null || reached) return;
+    const check = () => fetch("/api/my/channels").then((r) => (r.ok ? r.json() : null))
+      .then((c: { telegram?: boolean; email?: boolean } | null) => {
+        if (c?.telegram) setTg((s) => ({ ...s, linked: true }));
+        if (c?.email) setMail("confirmed");
+      }).catch(() => {});
+    const onVisible = () => { if (document.visibilityState === "visible") check(); };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", check);
+    const timer = waitTg ? setInterval(check, 4000) : null;
+    const stop = waitTg ? setTimeout(() => setWaitTg(false), 5 * 60_000) : null;
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", check);
+      if (timer) clearInterval(timer);
+      if (stop) clearTimeout(stop);
+    };
+  }, [tracked, reached, waitTg]);
   // A product still waiting for its first price has nothing to tear off: show the form at once, so the visitor
   // sees straight away that they can set a price and get the first one sent to them.
   const [open, setOpen] = useState(current === null);
@@ -127,23 +150,32 @@ export function TrackPanel({ productId, shortLink, current, initial, related }: 
         {tracked.price !== null ? t("yourTarget", { price: f(tracked.price) }) : t("yourDrop", { pct: tracked.pct ?? 0 })}
       </p>
       <p className="note">{tracked.price === null ? t("dropNote") : current === null ? t("firstPriceNote") : t("targetNote")}</p>
-      {tg.linked ? (
-        <p className="note">{t("telegramLinked")}</p>
-      ) : tg.url ? (
+      {reached ? (
         <>
-          <a className="btn btn-stamp" href={tg.url} target="_blank" rel="noopener" style={{ width: "100%" }}>{t("telegramConnect")}</a>
-          <p className="note">{t("telegramHint")}</p>
+          {tg.linked && <p className="channel-ok">✓ {t("telegramLinked")}</p>}
+          {!tg.linked && tg.url && (
+            <a className="link-btn channel-more" href={tg.url} target="_blank" rel="noopener" onClick={() => setWaitTg(true)}>{t("telegramAlso")}</a>
+          )}
+          {initial.emailReady && <EmailConnect initial={initial.email} onState={setMail} />}
         </>
-      ) : initial.botReady ? (
-        <p className="note">{t("telegramLinked")}</p>
-      ) : !initial.emailReady ? (
-        <p className="note">{t("telegramSoon")}</p>
-      ) : null}
-      {initial.emailReady && (
-        <>
-          {(tg.url || tg.linked || initial.botReady) && <p className="or-rule"><span>{t("or")}</span></p>}
-          <EmailConnect initial={initial.email} />
-        </>
+      ) : (
+        <motion.div className="channel-needed" role="alert"
+          initial={reduce ? false : { opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: just ? 0.55 : 0, duration: 0.3 }}>
+          <p className="channel-title">{t("channelTitle")}</p>
+          <p className="channel-text">{mail === "sent" ? t("channelConfirm") : t("channelText")}</p>
+          {tg.url ? (
+            <>
+              <a className="btn btn-stamp" href={tg.url} target="_blank" rel="noopener" style={{ width: "100%" }} onClick={() => setWaitTg(true)}>{t("telegramConnect")}</a>
+              <p className="note">{waitTg ? t("telegramWaiting") : t("telegramHint")}</p>
+            </>
+          ) : !initial.emailReady ? <p className="note">{t("telegramSoon")}</p> : null}
+          {initial.emailReady && (
+            <>
+              {tg.url && <p className="or-rule"><span>{t("or")}</span></p>}
+              <EmailConnect initial={initial.email} onState={setMail} />
+            </>
+          )}
+        </motion.div>
       )}
       <div className="track-actions">
         <button type="button" className="link-btn" onClick={() => setOpen(true)}>{t("change")}</button>

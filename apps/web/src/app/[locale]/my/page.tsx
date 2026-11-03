@@ -31,6 +31,12 @@ export default async function MyPage({ params }: Props) {
     <main className="wrap untracked">
       <h1 className="product-title" style={{ color: "var(--ink-on-counter, var(--ink))" }}>{t("title")}</h1>
       <article className="receipt">
+        {found && items.length > 0 && !found.watcher.telegramChatId && !found.watcher.emailConfirmed && (
+          <div className="channel-needed my-alert" role="alert">
+            <p className="channel-title">{t("noChannelTitle")}</p>
+            <p className="channel-text" style={{ margin: 0 }}>{t("noChannelText")}</p>
+          </div>
+        )}
         {items.length === 0 ? (
           <p className="untracked-status">{t("empty")}</p>
         ) : (

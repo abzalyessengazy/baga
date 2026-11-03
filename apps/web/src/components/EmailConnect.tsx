@@ -9,7 +9,7 @@ export interface EmailInitial { address: string | null; confirmed: boolean }
  * Email alerts next to Telegram (DECISIONS.md, 2026-11-02 "Email alerts with confirmation"): the visitor types an
  * address, we send a confirmation link, and alerts start once it is opened. `removable` adds "stop emails".
  */
-export function EmailConnect({ initial, removable = false }: { initial: EmailInitial; removable?: boolean }) {
+export function EmailConnect({ initial, removable = false, onState }: { initial: EmailInitial; removable?: boolean; onState?: (s: "form" | "sent" | "confirmed") => void }) {
   const t = useTranslations("emailAlerts");
   const te = useTranslations("errors");
   const locale = useLocale();
@@ -46,6 +46,7 @@ export function EmailConnect({ initial, removable = false }: { initial: EmailIni
     if (data?.code === "sent" || data?.code === "confirmed") {
       setAddress(data.email ?? address);
       setState(data.code);
+      onState?.(data.code);
     } else {
       const code = data?.code;
       setMsg(code === "invalid_email" ? t("invalid") : code === "too_soon" ? t("tooSoon") : code === "too_many" || code === "rate_limited"

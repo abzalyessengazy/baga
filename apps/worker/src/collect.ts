@@ -4,7 +4,7 @@
  * products; poll for new visitor requests until the window closes; evaluate alerts; send the first price and
  * target alerts to Telegram right after each check, queued emails at the end. Started by .github/workflows/collect.yml at 03:50 UTC; waits for 04:05.
  */
-import { createKaspiClient, buildSnapshot, KaspiHttpError, KaspiParseError, canonicalProductUrl, parseKaspiUrl, shortLinkUrl } from "@baga/kaspi";
+import { createKaspiClient, buildSnapshot, KaspiHttpError, KaspiParseError, canonicalProductUrl, parseKaspiUrl, queuedLinkUrl, variantLinkCode } from "@baga/kaspi";
 import { saveSnapshot, connectionOptions, requestProduct, attachShortLinkTrackings } from "@baga/db";
 import {
   evaluateAlert, priorityFor, INTERVAL_MINUTES, backoffMinutes, isSuspiciousJump, type TrackingAlertState,
@@ -46,6 +46,10 @@ async function main() {
   }
 
   const [run] = await sql<{ id: number }[]>`insert into collection_runs (runner) values (${env.runner()}) returning id`;
+  // A visitor's product that failed three times today gets three more tries tomorrow, for two weeks (3 Nov 2026:
+  // a MacBook used up its tries on a parser bug fixed the same day and was never asked for again).
+  await sql`update seed_queue set attempts = 0 where source = 'visitor' and status = 'pending' and attempts >= 3
+    and added_at > now() - interval '14 days'`;
   const runId = run!.id;
   let changed = 0;
   let seeded = 0;
@@ -104,15 +108,18 @@ async function main() {
 }
 
 /**
- * Short links the website could not resolve (Kaspi does not answer Vercel): one non-following GET of
- * https://l.kaspi.kz + the validated path each, then the product is queued as a visitor request.
+ * Short links the website could not resolve (Kaspi does not answer Vercel), and variant links (clothes, shoes):
+ * one non-following GET of https://l.kaspi.kz or https://kaspi.kz/shop/p/-<code>/ + the validated path each, then
+ * the product is queued as a visitor request. A short link that points to a variant link takes one more GET.
  */
 async function resolveShortLinks(): Promise<number> {
   const rows = await sql<{ code: string; path: string }[]>`
     select code, path from short_link_queue where status = 'pending' and attempts < 3 order by added_at limit 5`;
   for (const r of rows) {
     try {
-      const target = await kaspi.resolveShortLink(shortLinkUrl(r.path));
+      let target = await kaspi.resolveShortLink(queuedLinkUrl(r.path));
+      const variant = target ? variantLinkCode(target) : null;
+      if (variant) target = await kaspi.resolveShortLink(queuedLinkUrl(variant.path));
       const p = target ? parseKaspiUrl(target) : null;
       if (!p?.ok) {
         await sql`update short_link_queue set status = 'failed', attempts = attempts + 1, last_error = ${`points to ${target}`.slice(0, 500)} where code = ${r.code}`;

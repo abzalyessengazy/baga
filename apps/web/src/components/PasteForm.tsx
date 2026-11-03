@@ -10,7 +10,8 @@ const read = () => { try { return sessionStorage.getItem(DRAFT_KEY) ?? ""; } cat
 const write = (v: string) => { try { sessionStorage.setItem(DRAFT_KEY, v); } catch { /* storage unavailable */ } };
 
 type ErrorCode = "not_a_url" | "not_kaspi" | "not_a_product" | "short_link" | "check_failed" | "check_blocked" | "too_many" | "generic";
-const isShortLink = (v: string) => /l\.kaspi\.kz\//i.test(v);
+/** Links that need the bot check: short links, and variant links (id ending in letters) the collector resolves. */
+const isShortLink = (v: string) => /l\.kaspi\.kz\/|\/shop\/p\/[^\s?#]*\d{5,12}[a-z]{1,3}\/?(?:[?#\s]|$)/i.test(v);
 /** Links go to /api/resolve; anything else searches BAGA's own catalog. */
 const looksLikeLink = (v: string) => /https?:\/\/|www\.|kaspi\.kz|\.kz\//i.test(v);
 
