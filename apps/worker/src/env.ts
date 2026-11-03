@@ -8,7 +8,8 @@ export const env = {
   resendApiKey: () => process.env.RESEND_API_KEY ?? null,
   telegramBotToken: () => process.env.TELEGRAM_BOT_TOKEN?.trim() || null,
   emailFrom: () => process.env.EMAIL_FROM?.trim() || "BAGA <alerts@bagaapp.com>",
-  siteUrl: () => (process.env.SITE_URL?.trim() || "http://localhost:3000").replace(/\/+$/, ""),
+  // Links in emails and Telegram buttons. Never localhost by accident: Telegram rejects such buttons (3 Nov 2026).
+  siteUrl: () => (process.env.SITE_URL?.trim() || "https://bagaapp.com").replace(/\/+$/, ""),
   healthcheckUrl: () => process.env.HEALTHCHECK_URL ?? null,
   /** Products claimed per batch; the run keeps claiming batches until the visit window closes. */
   chunkSize: () => Number(process.env.COLLECT_CHUNK ?? 10),
