@@ -56,7 +56,7 @@ export function MarketReceipt() {
                 <dl className="mk-stats">
                   <div><dt>{t("checked")}</dt><dd>{count(m!.checked)}</dd></div>
                   <div className="is-down"><dt>↓ {t("down")}</dt><dd>{count(m!.down)}</dd></div>
-                  <div><dt>↑ {t("up")}</dt><dd>{count(m!.up)}</dd></div>
+                  <div className="is-up"><dt>↑ {t("up")}</dt><dd>{count(m!.up)}</dd></div>
                 </dl>
                 <p className="mk-note">{t("compared", { count: m!.compared })}</p>
                 {m!.newLows > 0 && <p className="mk-note is-ink">{t("newLows", { count: m!.newLows, days: 7 })}</p>}

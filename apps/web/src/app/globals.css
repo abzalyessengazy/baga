@@ -326,7 +326,7 @@ a { color: inherit; }
 .sale-check p { margin: 0 0 4px; }
 .sale-check p:last-child { margin-bottom: 0; }
 .sale-check .sale-title { font: 700 0.8125rem/1.3 var(--font-receipt); color: var(--stamp); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 8px; }
-.sale-strip { background: var(--stamp); color: #fff; font-size: 0.8125rem; line-height: 1.35; }
+.sale-strip { background: var(--stamp-red); color: #fff; font-size: 0.8125rem; line-height: 1.35; }
 .sale-strip-in { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; padding-block: 8px; }
 .sale-strip strong { font-weight: 700; white-space: nowrap; }
 .sale-strip-text { opacity: 0.88; }
@@ -356,6 +356,7 @@ a { color: inherit; }
 .z-slips .seller-row + .seller-row, .z-slips .slip-screen > div + div > .seller-row { border-top: 1px dashed color-mix(in srgb, var(--rule) 60%, transparent); }
 .z-slips .seller-row .p { font-family: var(--font-ui); font-weight: 800; }
 .z-moves .z-drop:not(.is-rise) .p, .z-slips .z-gap .p { color: var(--stamp); }
+.z-moves .z-drop.is-rise .p { color: var(--stamp-red); }
 .z-slips .seller-row.is-best .p { color: inherit; }
 .z-sub { display: block; color: var(--ink-soft); font-size: 0.75rem; font-weight: 400; white-space: normal; }
 .z-spread { padding-block: 5px; }
@@ -372,6 +373,7 @@ a { color: inherit; }
 .mk-stats dt { color: var(--ink-soft); font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; }
 .mk-stats dd { margin: 6px 0 0; font-family: var(--font-ui); font-size: 2.25rem; font-weight: 800; letter-spacing: -0.03em; line-height: 1; font-variant-numeric: tabular-nums; }
 .mk-stats .is-down dd { color: var(--stamp); }
+.mk-stats .is-up dd { color: var(--stamp-red); }
 .mk-note { margin: 14px 0 0; color: var(--ink-soft); font-family: var(--font-ui); font-size: 0.875rem; line-height: 1.45; }
 .mk-note.is-ink { color: var(--stamp); font-weight: 600; }
 .mk-label { margin: 0 0 10px; font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--stamp); }

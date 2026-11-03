@@ -32,4 +32,4 @@ Read `docs/IMPLEMENTATION_PLAN.md` first: work only on the current milestone.
 Tests, typecheck, i18n check and build pass; both locales checked at 390px and 1440px; acceptance criteria of the milestone met; checkboxes ticked in `docs/IMPLEMENTATION_PLAN.md`.
 
 ## Design language
-A thermal receipt on a steel counter. Receipt type: JetBrains Mono. UI type: Onest. One accent: stamp violet `#4b3fd1`; red only for "high price". Interactions: the tear-off coupon = "track this price". Tokens live in `apps/web/src/app/globals.css`.
+A thermal receipt on a steel counter. Receipt type: JetBrains Mono. UI type: Onest. One accent: stamp violet `#4b3fd1` (drops, links, stamps); stamp red `#c23b2c` only for "high price", price rises and the sale-days strip. Interactions: the tear-off coupon = "track this price". Tokens live in `apps/web/src/app/globals.css`.
