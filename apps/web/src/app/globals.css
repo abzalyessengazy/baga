@@ -250,7 +250,7 @@ a { color: inherit; }
 .z-drop.is-rise.is-best { background: var(--paper-shade); color: var(--ink); }
 .z-date { color: var(--ink-soft); margin-right: 8px; }
 .z-slips { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 28px; align-items: stretch; }
-.z-slips > .slip { grid-column: span 2; display: flex; flex-direction: column; }
+.z-slips > .slip { grid-column: span 2; display: flex; flex-direction: column; min-width: 0; }
 .z-slips > .slip .slip-caption { flex: 1; }
 .z-slips[data-n="4"] > .slip, .z-slips[data-n="5"] > .slip:nth-child(n + 4), .z-slips[data-n="2"] > .slip { grid-column: span 3; }
 .z-slips[data-n="1"] > .slip { grid-column: span 6; }
@@ -351,11 +351,11 @@ a { color: inherit; }
 
 /* ---------- responsive ---------- */
 @media (max-width: 900px) {
-  .hero, .product-grid { grid-template-columns: 1fr; }
+  .hero, .product-grid { grid-template-columns: minmax(0, 1fr); }
   .hero .printer { max-width: 440px; width: 100%; justify-self: center; }
   .highlights { grid-template-columns: 1fr; max-width: 440px; margin-inline: auto; }
-  .z-slips { grid-template-columns: 1fr; max-width: 440px; margin-inline: auto; }
-  .z-slips > .slip, .z-slips[data-n] > .slip { grid-column: auto; }
+  .z-slips { grid-template-columns: minmax(0, 1fr); max-width: 440px; margin-inline: auto; }
+  .z-slips[data-n] > .slip:nth-child(n) { grid-column: auto; } /* beats the desktop spans, e.g. the 4th and 5th of five */
   .highlights > :nth-child(n) { margin-top: 0; }
   .how, .trust { grid-template-columns: 1fr; }
   .how { max-width: 440px; margin-inline: auto; }
