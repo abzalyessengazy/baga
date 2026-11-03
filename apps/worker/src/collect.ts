@@ -13,8 +13,8 @@ import {
 import postgres from "postgres";
 import { env } from "./env";
 import { CircuitBreaker } from "./breaker";
-import { renderAlertEmail, sendViaResend } from "./email";
-import { renderTelegramAlert, sendTelegram } from "./telegram";
+import { renderAlertEmail, renderBoughtEmail, sendViaResend } from "./email";
+import { renderTelegramAlert, renderTelegramBoughtAsk, sendTelegram } from "./telegram";
 
 const sql = postgres(env.databaseUrl(), { max: 2, ...connectionOptions(env.databaseUrl()) });
 // Every request this run makes (page, offers, re-checks, alert confirmations) goes through this gate.
@@ -268,7 +268,7 @@ async function afterSave(productId: number, externalId: string, price: number | 
  * One notification row per connected channel. Telegram keeps the plain idempotency key (rows from before email
  * existed use it); email adds ":email". The unique key makes a duplicate impossible, even with overlapping runs.
  */
-async function queueNotification(t: { id: string; tg: boolean; mail: boolean }, type: "first_price" | "target_reached", price: number, key: string) {
+async function queueNotification(t: { id: string; tg: boolean; mail: boolean }, type: "first_price" | "target_reached" | "bought_ask", price: number, key: string) {
   if (t.tg) await sql`insert into notifications (tracking_id, type, channel, price, idempotency_key)
     values (${t.id}, ${type}, 'telegram', ${price}, ${key}) on conflict (idempotency_key) do nothing`;
   if (t.mail) await sql`insert into notifications (tracking_id, type, channel, price, idempotency_key)
@@ -309,9 +309,9 @@ async function evaluateTrackings(productId: number, externalId: string, price: n
 async function sendTelegramQueued() {
   const token = env.telegramBotToken();
   if (!token) return;
-  const queued = await sql<{ id: number; type: "first_price" | "target_reached"; price: number; target_price: number | null; chat_id: string; locale: "ru" | "kk"; title: string; external_id: string; current: number | null; offer_count: number }[]>`
+  const queued = await sql<{ id: number; type: "first_price" | "target_reached" | "bought_ask"; price: number; target_price: number | null; chat_id: string; locale: "ru" | "kk"; title: string; external_id: string; current: number | null; offer_count: number; bought_code: string | null }[]>`
     select n.id, n.type, n.price, t.target_price, w.telegram_chat_id::text as chat_id, w.locale, p.title, p.external_id,
-           s.current_min_price as current, coalesce(s.offer_count, 0) as offer_count
+           s.current_min_price as current, coalesce(s.offer_count, 0) as offer_count, t.bought_code
     from notifications n
     join trackings t on t.id = n.tracking_id
     join watchers w on w.id = t.watcher_id
@@ -322,7 +322,7 @@ async function sendTelegramQueued() {
     order by n.created_at limit 30`;
   for (const q of queued) {
     const site = env.siteUrl();
-    const msg = renderTelegramAlert({
+    const msg = q.type === "bought_ask" ? renderTelegramBoughtAsk({ locale: q.locale, title: q.title, code: q.bought_code ?? "" }) : renderTelegramAlert({
       type: q.type, locale: q.locale, title: q.title,
       price: q.type === "first_price" ? q.current : q.price, target: q.target_price, offerCount: q.offer_count,
       productUrl: `${site}/${q.locale}/p/${q.external_id}`, kaspiUrl: `${site}/go/${q.external_id}?n=${q.id}`,
@@ -338,8 +338,26 @@ async function sendTelegramQueued() {
 }
 
 async function sendQueued() {
+  await queueBoughtAsks();
   await sendTelegramQueued();
   await sendEmailQueued();
+}
+
+/**
+ * "Вы купили?" (migration 0011): asked once per tracking, 20 hours to 7 days after its target alert went out, unless
+ * the visitor already answered in "Мои товары". The ask gets the code its answer links carry. Also drops funnel
+ * events older than 180 days, as the privacy page says. Database only, no Kaspi request.
+ */
+async function queueBoughtAsks() {
+  const due = await sql<{ id: string; tg: boolean; mail: boolean }[]>`
+    update trackings t set bought_asked_at = now(), bought_code = replace(gen_random_uuid()::text, '-', '')
+    from watchers w
+    where w.id = t.watcher_id and t.bought is null and t.bought_asked_at is null and t.product_id is not null
+      and exists (select 1 from notifications n where n.tracking_id = t.id and n.type = 'target_reached' and n.status = 'sent'
+                  and n.sent_at between now() - interval '7 days' and now() - interval '20 hours')
+    returning t.id, w.telegram_chat_id is not null as tg, w.email_confirmed_at is not null as mail`;
+  for (const t of due) await queueNotification(t, "bought_ask", 0, `${t.id}:bought`);
+  await sql`delete from events where at < now() - interval '180 days'`;
 }
 
 /**
@@ -349,9 +367,9 @@ async function sendQueued() {
 async function sendEmailQueued() {
   const key = env.resendApiKey();
   if (!key) return;
-  const queued = await sql<{ id: number; type: "first_price" | "target_reached"; price: number; target_price: number | null; email: string; stop_code: string; locale: "ru" | "kk"; title: string; external_id: string; current: number | null; offer_count: number }[]>`
+  const queued = await sql<{ id: number; type: "first_price" | "target_reached" | "bought_ask"; price: number; target_price: number | null; email: string; stop_code: string; locale: "ru" | "kk"; title: string; external_id: string; current: number | null; offer_count: number; bought_code: string | null }[]>`
     select n.id, n.type, n.price, t.target_price, w.email, w.email_stop_code as stop_code, w.locale, p.title, p.external_id,
-           s.current_min_price as current, coalesce(s.offer_count, 0) as offer_count
+           s.current_min_price as current, coalesce(s.offer_count, 0) as offer_count, t.bought_code
     from notifications n
     join trackings t on t.id = n.tracking_id
     join watchers w on w.id = t.watcher_id
@@ -365,12 +383,16 @@ async function sendEmailQueued() {
     const [top] = q.type === "target_reached" ? await sql<{ name: string }[]>`
       select se.name from offers_current o join sellers se on se.id = o.seller_id
       join products p on p.id = o.product_id where p.external_id = ${q.external_id} order by o.price limit 1` : [];
-    const msg = renderAlertEmail({
+    const stopUrl = `${site}/${q.locale}/email?stop=${q.stop_code}`;
+    const msg = q.type === "bought_ask" ? renderBoughtEmail({
+      locale: q.locale, title: q.title, stopUrl,
+      answerUrl: (a) => `${site}/${q.locale}/bought/${q.bought_code}?a=${a}`,
+    }) : renderAlertEmail({
       type: q.type, locale: q.locale, title: q.title,
       price: q.type === "first_price" ? q.current : q.price, target: q.target_price,
       seller: top?.name ?? null, offerCount: q.offer_count,
       productUrl: `${site}/${q.locale}/p/${q.external_id}`, kaspiUrl: `${site}/go/${q.external_id}?n=${q.id}`,
-      stopUrl: `${site}/${q.locale}/email?stop=${q.stop_code}`,
+      stopUrl,
     });
     try {
       const r = await sendViaResend(key, env.emailFrom(), q.email, msg, `${site}/api/email/stop?c=${q.stop_code}`);

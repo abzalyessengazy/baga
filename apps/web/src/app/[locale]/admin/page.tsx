@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getTranslations, setRequestLocale } from "next-intl/server";
-import { getSql, getAdminHealth, recentFeedback, type AdminRun } from "@baga/db";
+import { getSql, getAdminHealth, getFunnel, recentFeedback, type AdminRun } from "@baga/db";
 import { isInVisitWindow } from "@baga/core";
 import { adminEnabled, isAdmin } from "@/lib/admin";
 
@@ -37,7 +37,7 @@ export default async function AdminPage({ params, searchParams }: Props) {
   }
   const sql = getSql();
   if (!sql) notFound();
-  const [h, feedback] = await Promise.all([getAdminHealth(sql), recentFeedback(sql)]);
+  const [h, feedback, funnel] = await Promise.all([getAdminHealth(sql), recentFeedback(sql), getFunnel(sql, 7).catch(() => null)]);
   const now = Date.now();
   const state = (r: AdminRun) =>
     r.aborted ? t("runAborted", { reason: r.aborted })
@@ -93,6 +93,41 @@ export default async function AdminPage({ params, searchParams }: Props) {
           {h.seedQueue.length + h.shortLinks.length ? kv([...h.seedQueue, ...h.shortLinks].map((q) => [q.label, q.n])) : <p className="admin-muted">{t("empty")}</p>}
         </section>
       </div>
+
+      {funnel && (
+        <section className="receipt admin-card">
+          <h2>{t("funnel", { days: funnel.days })}</h2>
+          <p className="admin-muted">{t("funnelNote")}</p>
+          <div className="admin-scroll">
+            <table className="admin-table">
+              <tbody>
+                {funnel.steps.map((s) => {
+                  const visits = funnel.steps[0]!.sessions;
+                  const label = { visit: "stepVisit", paste: "stepPaste", product_view: "stepProductView", track: "stepTrack", channel: "stepChannel" }[s.name];
+                  return (
+                    <tr key={s.name}>
+                      <td>{t(label as "stepVisit")}</td><td>{count(s.sessions)}</td>
+                      <td>{visits ? `${Math.round((s.sessions / visits) * 100)}%` : "—"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div className="admin-grid">
+            <div><h3>{t("byLocale")}</h3>{kv(funnel.byLocale.map((r) => [r.label, r.n]))}</div>
+            <div><h3>{t("byDevice")}</h3>{kv(funnel.byDevice.map((r) => [r.label, r.n]))}</div>
+            <div><h3>{t("sources")}</h3>{kv(funnel.sources.map((r) => [r.label, r.n]))}</div>
+            <div>
+              <h3>{t("boughtTitle")}</h3>
+              {kv([[t("boughtAsked"), funnel.asked],
+                ...(["yes", "later", "no"] as const).map((a): [string, number] =>
+                  [t(a === "yes" ? "boughtYes" : a === "later" ? "boughtLater" : "boughtNo"), funnel.bought.find((b) => b.answer === a)?.n ?? 0]),
+                [t("returned"), funnel.returned]])}
+            </div>
+          </div>
+        </section>
+      )}
 
       <section className="receipt admin-card">
         <h2>{t("runs")}</h2>

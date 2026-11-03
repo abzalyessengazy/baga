@@ -8,6 +8,7 @@ import type { Metadata } from "next";
 import { routing } from "@/i18n/routing";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
+import { Analytics } from "@/components/Analytics";
 import { siteUrl } from "@/lib/site";
 
 export function generateStaticParams() {
@@ -38,6 +39,7 @@ export default async function LocaleLayout({ children, params }: { children: Rea
           <SiteHeader />
           {children}
           <SiteFooter />
+          <Analytics />
         </NextIntlClientProvider>
       </body>
     </html>

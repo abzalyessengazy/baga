@@ -1,21 +1,43 @@
 import { NextResponse } from "next/server";
 import { getTranslations } from "next-intl/server";
-import { getSql, linkTelegram, getWatcherByChat, unlinkTelegram, listWatched, type Watcher } from "@baga/db";
+import { getSql, linkTelegram, getWatcherByChat, unlinkTelegram, listWatched, answerBought, type BoughtAnswer, type Watcher } from "@baga/db";
 import { formatTenge, slugName } from "@baga/core";
-import { sendTelegram, tgEscape } from "@/lib/telegram";
+import { sendTelegram, telegramCall, tgEscape } from "@/lib/telegram";
 import { siteUrl } from "@/lib/site";
 
 /**
  * Telegram bot webhook (DECISIONS.md, 2026-11-02). Telegram sends the secret header we registered with setWebhook;
  * anything else is refused. Commands: /start <code> links alerts, /list shows what is tracked, /stop unlinks.
- * Alerts themselves are sent by the collector.
+ * Alerts themselves are sent by the collector. Button taps on its "Вы купили?" message arrive as callback_query
+ * `b:<bought_code>:<answer>` (migration 0011).
  */
-type Update = { message?: { chat?: { id?: number; type?: string }; text?: string; from?: { language_code?: string } } };
+type Update = {
+  message?: { chat?: { id?: number; type?: string }; text?: string; from?: { language_code?: string } };
+  callback_query?: { id: string; data?: string; message?: { message_id?: number; chat?: { id?: number }; text?: string } };
+};
+
+async function onCallback(q: NonNullable<Update["callback_query"]>) {
+  const m = /^b:([A-Za-z0-9_-]{16,64}):(yes|later|no)$/.exec(q.data ?? "");
+  const sql = getSql();
+  const r = m && sql ? await answerBought(sql, { code: m[1]! }, m[2] as BoughtAnswer) : null;
+  if (!r) return telegramCall("answerCallbackQuery", { callback_query_id: q.id });
+  const t = await getTranslations({ locale: r.locale, namespace: "bought" });
+  const thanks = t(r.bought === "yes" ? "thanksYes" : r.bought === "later" ? "thanksLater" : "thanksNo");
+  await telegramCall("answerCallbackQuery", { callback_query_id: q.id, text: t("saved") });
+  if (q.message?.chat?.id && q.message.message_id) {
+    // The question stays, its buttons go, the answer is added under it.
+    await telegramCall("editMessageText", {
+      chat_id: q.message.chat.id, message_id: q.message.message_id, parse_mode: "HTML",
+      text: `${tgEscape(q.message.text ?? "")}\n\n<b>✓ ${tgEscape(thanks)}</b>`,
+    });
+  }
+}
 
 export async function POST(req: Request) {
   const secret = process.env.TELEGRAM_WEBHOOK_SECRET;
   if (!secret || req.headers.get("x-telegram-bot-api-secret-token") !== secret) return new NextResponse(null, { status: 401 });
   const u = (await req.json().catch(() => ({}))) as Update;
+  if (u.callback_query) { await onCallback(u.callback_query); return NextResponse.json({ ok: true }); }
   const chatId = u.message?.chat?.id;
   const text = (u.message?.text ?? "").trim();
   const sql = getSql();

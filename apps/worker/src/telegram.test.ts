@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { renderTelegramAlert } from "./telegram";
+import { renderTelegramAlert, renderTelegramBoughtAsk } from "./telegram";
 
 const base = { title: "Apple iPhone 18 Pro <256Gb>", target: 600_000, offerCount: 12, productUrl: "https://bagaapp.com/ru/p/1", kaspiUrl: "https://bagaapp.com/go/1?n=5" };
 
@@ -31,5 +31,21 @@ describe("renderTelegramAlert", () => {
     const m = renderTelegramAlert({ ...base, type: "first_price", locale: "ru", price: null, target: null, offerCount: 0 });
     expect(m.html).not.toContain("Ваша цена");
     expect(m.html).toContain("Напишем, когда цена опустится до вашей.");
+  });
+});
+
+describe("renderTelegramBoughtAsk", () => {
+  const code = "0123456789abcdef0123456789abcdef"; // 32 hex, as the collector makes it
+  it("asks with three answer buttons that fit Telegram's 64-byte callback limit", () => {
+    const m = renderTelegramBoughtAsk({ locale: "ru", title: "Apple iPhone 18 Pro <256Gb>", code });
+    expect(m.html).toContain("🛍 <b>Вы купили?</b>");
+    expect(m.html).toContain("<b>Apple iPhone 18 Pro &lt;256Gb&gt;</b>");
+    expect(m.buttons.map((b) => ("callback_data" in b ? b.callback_data : ""))).toEqual([`b:${code}:yes`, `b:${code}:later`, `b:${code}:no`]);
+    for (const b of m.buttons) expect(Buffer.byteLength("callback_data" in b ? b.callback_data : "")).toBeLessThanOrEqual(64);
+  });
+  it("speaks Kazakh", () => {
+    const m = renderTelegramBoughtAsk({ locale: "kk", title: "X", code });
+    expect(m.html).toContain("Сатып алдыңыз ба?");
+    expect(m.buttons[0]!.text).toBe("Иә, сатып алдым");
   });
 });

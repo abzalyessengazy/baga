@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState, forwardRef } from "react";
 import { useRouter } from "@/i18n/navigation";
 import { Turnstile } from "./Turnstile";
 import { CatalogList, type CatalogListItem } from "./CatalogList";
+import { track } from "@/lib/analytics";
 
 const DRAFT_KEY = "baga.pasteDraft";
 const read = () => { try { return sessionStorage.getItem(DRAFT_KEY) ?? ""; } catch { return ""; } };
@@ -113,6 +114,7 @@ export const PasteForm = forwardRef<HTMLInputElement>(function PasteForm(_, ref)
   async function check(q: string) {
     setBusy(true);
     setError(null);
+    track("paste");
     try {
       const short = isShortLink(q);
       const send = async () => {

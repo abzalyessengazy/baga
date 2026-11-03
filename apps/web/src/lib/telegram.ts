@@ -23,3 +23,13 @@ export async function sendTelegram(chatId: string | number, html: string, button
   });
   if (!res.ok) console.error(`[telegram] sendMessage ${res.status}`);
 }
+
+/** Any other Bot API method (answerCallbackQuery, editMessageText). Failures are logged, never thrown. */
+export async function telegramCall(method: string, body: Record<string, unknown>): Promise<void> {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token) return;
+  const res = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(8000),
+  }).catch(() => null);
+  if (!res?.ok) console.error(`[telegram] ${method} ${res?.status ?? "network"}`);
+}

@@ -46,8 +46,8 @@
 
 ## Phase 5 — hardening, beta prep
 - [x] Privacy policy + terms (ru/kk), feedback button, "Удалить мои данные" (3 Nov 2026)
-- [ ] "Вы купили?" prompt
+- [x] "Вы купили?" prompt: Telegram buttons, email answer page, "Мои товары" (3 Nov 2026)
 - [ ] Playwright journeys in both locales
-- [ ] PostHog funnel
+- [x] Funnel: in-house events instead of PostHog (DECISIONS 2026-11-03), on the admin page
 
 ## Phase 6 — private beta (50–100 testers, 6 weeks)

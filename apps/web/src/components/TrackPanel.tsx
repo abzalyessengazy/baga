@@ -7,6 +7,7 @@ import { Link } from "@/i18n/navigation";
 import { TearCoupon } from "./TearCoupon";
 import { ConsentNote } from "./ConsentNote";
 import { EmailConnect, type EmailInitial } from "./EmailConnect";
+import { track as trackStep } from "@/lib/analytics";
 
 export interface TrackInitial {
   /** dropPct: a percentage target waiting for the product's first price (migration 0010). */
@@ -46,6 +47,12 @@ export function TrackPanel({ productId, shortLink, current, initial, related }: 
   const [mail, setMail] = useState<"form" | "sent" | "confirmed">(initial.email.address ? (initial.email.confirmed ? "confirmed" : "sent") : "form");
   const [waitTg, setWaitTg] = useState(false); // the Telegram button was tapped: watch for the link
   const reached = tg.linked || mail === "confirmed";
+  // Funnel steps (lib/analytics.ts): this page, and a channel connected during this visit.
+  useEffect(() => { trackStep("product_view", { externalId: productId }); }, [productId]);
+  const [reachedAtStart] = useState(reached);
+  useEffect(() => {
+    if (reached && !reachedAtStart) trackStep("channel", { externalId: productId, detail: tg.linked ? "telegram" : "email" });
+  }, [reached, reachedAtStart, productId, tg.linked]);
   useEffect(() => {
     if (tracked === null || reached) return;
     const check = () => fetch("/api/my/channels").then((r) => (r.ok ? r.json() : null))
@@ -82,6 +89,7 @@ export function TrackPanel({ productId, shortLink, current, initial, related }: 
     const data = (await res?.json().catch(() => null)) as { code?: string; target?: number | null; dropPct?: number | null; linked?: boolean; telegramUrl?: string | null } | null;
     setBusy(null);
     if (data?.code === "tracking") {
+      trackStep("track", { externalId: productId, detail: "price" in want ? "price" : "drop" });
       setTracked({ price: data.target ?? null, pct: data.dropPct ?? null });
       setJust(true);
       setOpen(false);

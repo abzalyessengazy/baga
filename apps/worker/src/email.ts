@@ -19,6 +19,11 @@ const copy = {
     change: "Изменить цену",
     stop: "Не присылать письма",
     footer: "Вы получили это письмо, потому что следите за ценой в BAĞA и подтвердили этот адрес.",
+    askSubject: (title: string) => `Вы купили? ${title}`,
+    askLead: "Недавно цена дошла до вашей. Ответьте одним нажатием — так мы поймём, помогает ли BAĞA.",
+    askYes: "Да, купил(а)",
+    askLater: "Пока нет",
+    askNo: "Нет, передумал(а)",
   },
   kk: {
     firstSubject: (title: string) => `Баға алынды: ${title}`,
@@ -36,6 +41,11 @@ const copy = {
     change: "Бағаны өзгерту",
     stop: "Хат жібермеу",
     footer: "Бұл хат BAĞA-да бағаны бақылап, осы адресті растағаныңыз үшін келді.",
+    askSubject: (title: string) => `Сатып алдыңыз ба? ${title}`,
+    askLead: "Жақында баға сіздің бағаңызға жетті. Бір рет басып жауап беріңіз — BAĞA көмектесе ме, соны түсінеміз.",
+    askYes: "Иә, сатып алдым",
+    askLater: "Әзірге жоқ",
+    askNo: "Жоқ, ойымнан қайттым",
   },
 } as const;
 
@@ -75,6 +85,32 @@ ${note ? `<tr><td style="padding-top:12px;font-size:13px;color:#5d6168">${note}<
     "", `${c.buy}: ${p.kaspiUrl}`, `${c.change}: ${p.productUrl}`, `${c.stop}: ${p.stopUrl}`, "", c.footer,
   ].join("\n");
   return { subject: first ? c.firstSubject(p.title) : c.targetSubject(p.title), html, text };
+}
+
+/**
+ * "Вы купили?" a day after a target alert (migration 0011). Each answer links to the website's answer page, which
+ * records it only after a press there, so mail scanners that open links cannot answer for the reader.
+ */
+export function renderBoughtEmail(p: { locale: Locale; title: string; answerUrl: (a: "yes" | "later" | "no") => string; stopUrl: string }) {
+  const c = copy[p.locale];
+  const btn = (a: "yes" | "later" | "no", label: string, main: boolean) =>
+    `<a href="${escapeHtml(p.answerUrl(a))}" style="display:block;margin-top:8px;padding:12px 16px;text-decoration:none;border-radius:4px;${main
+      ? "background:#4b3fd1;color:#fff" : "background:#fff;color:#1d2025;border:1px solid #b9bcc2"}">${label}</a>`;
+  const html = `<!doctype html><html lang="${p.locale}"><body style="margin:0;background:#e4e6e9;font-family:Menlo,Consolas,monospace;color:#1d2025">
+<table role="presentation" width="100%" style="padding:24px 12px"><tr><td align="center">
+<table role="presentation" width="360" style="background:#fbfbf8;padding:24px;border-radius:4px">
+<tr><td style="font-size:20px;font-weight:700;letter-spacing:2px;text-align:center">BAĞA</td></tr>
+<tr><td style="padding:16px 0;border-bottom:1px dashed #b9bcc2"><strong>${escapeHtml(p.title)}</strong><br><br>${c.askLead}</td></tr>
+<tr><td style="padding-top:12px;text-align:center">${btn("yes", c.askYes, true)}${btn("later", c.askLater, false)}${btn("no", c.askNo, false)}</td></tr>
+<tr><td style="padding-top:16px;text-align:center;font-size:13px"><a href="${escapeHtml(p.stopUrl)}" style="color:#5d6168">${c.stop}</a></td></tr>
+<tr><td style="padding-top:20px;font-size:11px;color:#8a8e95;text-align:center">${c.footer}</td></tr>
+</table></td></tr></table></body></html>`;
+  const text = [
+    p.title, "", c.askLead, "",
+    `${c.askYes}: ${p.answerUrl("yes")}`, `${c.askLater}: ${p.answerUrl("later")}`, `${c.askNo}: ${p.answerUrl("no")}`,
+    "", `${c.stop}: ${p.stopUrl}`, "", c.footer,
+  ].join("\n");
+  return { subject: c.askSubject(p.title), html, text };
 }
 
 function escapeHtml(s: string) {

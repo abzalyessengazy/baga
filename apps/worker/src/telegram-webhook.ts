@@ -32,7 +32,7 @@ async function call(method: string, body: unknown) {
   if (!json.ok) process.exitCode = 1;
 }
 
-await call("setWebhook", { url: `${site}/api/telegram/webhook`, secret_token: secret, allowed_updates: ["message"], drop_pending_updates: true });
+await call("setWebhook", { url: `${site}/api/telegram/webhook`, secret_token: secret, allowed_updates: ["message", "callback_query"], drop_pending_updates: true });
 for (const [language_code, list, stop] of [["", "Мои товары", "Отключить уведомления"], ["kk", "Менің тауарларым", "Хабарламаларды өшіру"]] as const) {
   await call("setMyCommands", { commands: [{ command: "list", description: list }, { command: "stop", description: stop }], ...(language_code ? { language_code } : {}) });
 }

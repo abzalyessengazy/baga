@@ -15,6 +15,8 @@ export interface WatchedItem {
   trackingId: string; externalId: string | null; pagePath: string; title: string | null; slug: string | null; imageUrl: string | null;
   /** targetPrice is null while a percentage target waits for the product's first price (migration 0010). */
   targetPrice: number | null; targetDropPct: number | null; currentMinPrice: number | null; lastCheckedAt: Date | null; status: string; createdAt: Date;
+  /** A target alert was sent and "Вы купили?" has no answer yet (migration 0011). */
+  askBought: boolean;
 }
 
 const watcherCols = (sql: postgres.Sql) =>
@@ -73,7 +75,9 @@ export async function listWatched(sql: postgres.Sql, watcherId: string): Promise
            p.title, coalesce(p.slug, q.slug) as slug,
            p.image_url as "imageUrl", t.target_price as "targetPrice",
            t.target_drop_pct as "targetDropPct", s.current_min_price as "currentMinPrice",
-           s.last_checked_at as "lastCheckedAt", t.status, t.created_at as "createdAt"
+           s.last_checked_at as "lastCheckedAt", t.status, t.created_at as "createdAt",
+           t.bought is null and exists (select 1 from notifications n where n.tracking_id = t.id and n.type = 'target_reached'
+             and n.status = 'sent') as "askBought"
     from trackings t
     left join products p on p.id = t.product_id
     left join product_state s on s.product_id = t.product_id
@@ -107,7 +111,9 @@ export async function upsertWatcherTracking(sql: postgres.Sql, watcherId: string
     insert into trackings (watcher_id, external_id, product_id, target_price, target_drop_pct, status, first_price_sent_at)
     values (${watcherId}, ${externalId}, ${prod.id}, ${targetCols(target).price}, ${targetCols(target).pct}, 'active', ${prod.id ? new Date() : null})
     on conflict (watcher_id, external_id) where watcher_id is not null do update
-      set target_price = excluded.target_price, target_drop_pct = excluded.target_drop_pct, status = 'active', alert_state = 'armed', above_since = null
+      set target_price = excluded.target_price, target_drop_pct = excluded.target_drop_pct, status = 'active', alert_state = 'armed', above_since = null,
+          -- A new target (or tracking again after "bought") may be asked "Вы купили?" again (migration 0011).
+          bought = null, bought_at = null, bought_asked_at = null, bought_code = null
     returning id`;
   return { ok: true, trackingId: t!.id };
 }

@@ -8,6 +8,7 @@ import { MyList } from "@/components/MyList";
 import { EmailConnect } from "@/components/EmailConnect";
 import { ConsentNote } from "@/components/ConsentNote";
 import { ForgetMe } from "@/components/ForgetMe";
+import { BoughtPrompt } from "@/components/BoughtPrompt";
 
 type Props = { params: Promise<{ locale: string }> };
 // Per visitor (cookie): never prerendered.
@@ -39,6 +40,10 @@ export default async function MyPage({ params }: Props) {
             <p className="channel-text" style={{ margin: 0 }}>{t("noChannelText")}</p>
           </div>
         )}
+        {items.filter((i) => i.askBought).map((i) => (
+          <BoughtPrompt key={i.trackingId} by={{ trackingId: i.trackingId }} href={i.pagePath}
+            title={i.title ?? (i.slug ? slugName(i.slug) : i.externalId ? `№ ${i.externalId}` : t("shortLinkItem"))} />
+        ))}
         {items.length === 0 ? (
           <p className="untracked-status">{t("empty")}</p>
         ) : (
