@@ -5,6 +5,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { DROP_PRESETS, formatTenge, targetForDrop } from "@baga/core";
 import { Link } from "@/i18n/navigation";
 import { TearCoupon } from "./TearCoupon";
+import { ConsentNote } from "./ConsentNote";
 import { EmailConnect, type EmailInitial } from "./EmailConnect";
 
 export interface TrackInitial {
@@ -175,6 +176,7 @@ export function TrackPanel({ productId, shortLink, current, initial, related }: 
               <EmailConnect initial={initial.email} onState={setMail} />
             </>
           )}
+          {(tg.url || initial.emailReady) && <ConsentNote />}
         </motion.div>
       )}
       <div className="track-actions">

@@ -45,7 +45,8 @@
 - [x] Alert state machine + email template + sender (worker)
 
 ## Phase 5 — hardening, beta prep
-- [ ] Privacy policy + terms (ru/kk), feedback button, "Вы купили?" prompt
+- [x] Privacy policy + terms (ru/kk), feedback button, "Удалить мои данные" (3 Nov 2026)
+- [ ] "Вы купили?" prompt
 - [ ] Playwright journeys in both locales
 - [ ] PostHog funnel
 

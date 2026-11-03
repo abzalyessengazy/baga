@@ -7,7 +7,10 @@ export const dynamic = "force-dynamic";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const base = siteUrl();
-  const pages: MetadataRoute.Sitemap = ["ru", "kk"].map((l) => ({ url: `${base}/${l}`, changeFrequency: "weekly" }));
+  const pages: MetadataRoute.Sitemap = ["ru", "kk"].flatMap((l) => [
+    { url: `${base}/${l}`, changeFrequency: "weekly" as const },
+    ...["privacy", "terms"].map((doc) => ({ url: `${base}/${l}/${doc}`, changeFrequency: "yearly" as const })),
+  ]);
   const sql = getSql();
   if (sql) {
     const rows = await sql<{ external_id: string }[]>`select external_id from products where status = 'active' order by last_viewed_at desc nulls last limit 5000`;

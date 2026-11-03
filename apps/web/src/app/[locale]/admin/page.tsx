@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getTranslations, setRequestLocale } from "next-intl/server";
-import { getSql, getAdminHealth, type AdminRun } from "@baga/db";
+import { getSql, getAdminHealth, recentFeedback, type AdminRun } from "@baga/db";
 import { isInVisitWindow } from "@baga/core";
 import { adminEnabled, isAdmin } from "@/lib/admin";
 
@@ -37,7 +37,7 @@ export default async function AdminPage({ params, searchParams }: Props) {
   }
   const sql = getSql();
   if (!sql) notFound();
-  const h = await getAdminHealth(sql);
+  const [h, feedback] = await Promise.all([getAdminHealth(sql), recentFeedback(sql)]);
   const now = Date.now();
   const state = (r: AdminRun) =>
     r.aborted ? t("runAborted", { reason: r.aborted })
@@ -123,6 +123,21 @@ export default async function AdminPage({ params, searchParams }: Props) {
               </tbody>
             </table>
           </div>
+        )}
+      </section>
+
+      <section className="receipt admin-card">
+        <h2>{t("feedback")}</h2>
+        {feedback.length === 0 ? <p className="admin-muted">{t("empty")}</p> : (
+          <ul className="admin-list">
+            {feedback.map((f) => (
+              <li key={f.id}>
+                <strong>{at(f.createdAt)}</strong>
+                {f.externalId && <> · <a href={`/${locale}/p/${f.externalId}`}>{f.title ?? f.externalId}</a></>}
+                <br /><span style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{f.text}</span>
+              </li>
+            ))}
+          </ul>
         )}
       </section>
 

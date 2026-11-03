@@ -6,6 +6,8 @@ import { currentWatcher, telegramConnectUrl, botUsername, emailReady } from "@/l
 import { siteUrl } from "@/lib/site";
 import { MyList } from "@/components/MyList";
 import { EmailConnect } from "@/components/EmailConnect";
+import { ConsentNote } from "@/components/ConsentNote";
+import { ForgetMe } from "@/components/ForgetMe";
 
 type Props = { params: Promise<{ locale: string }> };
 // Per visitor (cookie): never prerendered.
@@ -66,9 +68,12 @@ export default async function MyPage({ params }: Props) {
                 <EmailConnect initial={{ address: found.watcher.email, confirmed: found.watcher.emailConfirmed }} removable />
               </>
             )}
+            {!found.watcher.telegramChatId && !found.watcher.emailConfirmed && (tgUrl || emailReady()) && <ConsentNote />}
             <hr className="rule" />
             <p className="note">{t("shareNote")}</p>
             <p className="my-share">{shareUrl}</p>
+            <hr className="rule" />
+            <ForgetMe />
           </>
         )}
       </article>

@@ -304,6 +304,27 @@ a { color: inherit; }
 .site-footer a { color: inherit; text-decoration: underline; text-underline-offset: 3px; overflow-wrap: anywhere; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .site-footer { color: #a9adb4; } }
 
+/* feedback form (footer) */
+.feedback { max-width: 520px; margin: 0 auto 20px; text-align: left; padding: 20px; }
+.feedback textarea { font: 1rem/1.4 var(--font-ui); padding: 12px; border: 1.5px solid var(--rule); border-radius: 6px; background: #fff; color: var(--ink); width: 100%; resize: vertical; min-height: 96px; }
+.feedback textarea:focus { outline: 2px solid var(--focus); outline-offset: 1px; border-color: transparent; }
+.feedback-actions { display: flex; align-items: center; gap: 16px; margin-top: 12px; }
+.feedback-thanks { margin: 0 0 10px; font-weight: 600; }
+.feedback .link-btn { color: var(--stamp); }
+.hp { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
+
+/* privacy policy and terms */
+.legal { font-family: var(--font-ui); font-size: var(--step-0); line-height: 1.6; }
+.legal h2 { font: 700 var(--step-0)/1.3 var(--font-receipt); margin: 22px 0 8px; }
+.legal ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+.legal p { margin: 0 0 10px; }
+.legal a { color: var(--stamp); overflow-wrap: anywhere; }
+.legal-updated { color: var(--ink-faint); font: 0.75rem/1.4 var(--font-receipt); }
+
+/* "Удалить мои данные" */
+.forget-btn { color: var(--ink-soft) !important; font-size: var(--step--1); }
+.forget .channel-text { margin: 0 0 4px; }
+
 /* ---------- product page ---------- */
 .product-grid { max-width: calc(720px + 2 * var(--gutter)); padding-block: 24px 200px; }
 .product-receipt { max-width: 720px; }

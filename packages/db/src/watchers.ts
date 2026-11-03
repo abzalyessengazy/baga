@@ -213,3 +213,9 @@ export async function attachShortLinkTrackings(sql: postgres.Sql, code: string, 
     return r.count;
   });
 }
+
+/** "Удалить мои данные": the watcher with its email, Telegram link, trackings and their alert log (cascade). */
+export async function deleteWatcher(sql: postgres.Sql, watcherId: string): Promise<boolean> {
+  const r = await sql`delete from watchers where id = ${watcherId}`;
+  return r.count > 0;
+}

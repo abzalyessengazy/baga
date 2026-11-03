@@ -58,6 +58,16 @@ jobs:
         if: steps.cfg.outputs.skip != '1'
         run: aws s3 cp "$DUMP" "s3://$R2_BUCKET/daily/$DUMP" --endpoint-url "$R2_ENDPOINT" --only-show-errors
 
+      # The privacy page promises deleted data leaves backups within 30 days.
+      - name: Delete backups older than 30 days
+        if: steps.cfg.outputs.skip != '1'
+        run: |
+          cutoff="baga-$(date -u -d '30 days ago' +%F).dump"
+          aws s3 ls "s3://$R2_BUCKET/daily/" --endpoint-url "$R2_ENDPOINT" | awk '{print $4}' | grep -E '^baga-[0-9-]{10}\.dump$' |
+            while read -r f; do
+              if [[ "$f" < "$cutoff" ]]; then aws s3 rm "s3://$R2_BUCKET/daily/$f" --endpoint-url "$R2_ENDPOINT" --only-show-errors && echo "deleted $f"; fi
+            done
+
       - name: Restore drill (scratch Postgres, compare row counts)
         if: steps.cfg.outputs.skip != '1'
         run: |
