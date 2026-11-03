@@ -28,13 +28,14 @@ export interface PlatformStats {
 
 /**
  * Platform numbers for the home page Z-report (DECISIONS.md, 2026-11-02 "Real numbers on the home page"). All of
- * them are counted from what the collector observed; a change or drop needs two observations of a product.
+ * them are counted from what the collector observed (one price_observations row per successful check); a change or
+ * drop needs two observations of a product.
  */
 export async function getPlatformStats(sql: postgres.Sql, dayCount = 14, listCount = 6): Promise<PlatformStats> {
   const [totals] = await sql<{ products: number; sellers: number; checks: number; alerts: number; watchers: number }[]>`
     select (select count(*)::int from products where status = 'active') as products,
            (select count(*)::int from sellers) as sellers,
-           (select coalesce(sum(checked), 0)::int from collection_runs) as checks,
+           (select count(*)::int from price_observations) as checks,
            (select count(*)::int from notifications where status = 'sent') as alerts,
            (select count(distinct watcher_id)::int from trackings where watcher_id is not null) as watchers`;
   const [moves] = await sql<{ changes: number; drops: number }[]>`
@@ -44,13 +45,16 @@ export async function getPlatformStats(sql: postgres.Sql, dayCount = 14, listCou
     select count(*) filter (where min_price is not null and prev is not null and min_price <> prev)::int as changes,
            count(*) filter (where min_price < prev)::int as drops
     from o`;
+  // The run of the latest observation, from its start to its latest check so far: the numbers move while a run
+  // is still going, and a cancelled run counts too (collection_runs.checked is only written when a run ends).
   const [last] = await sql<{ started_at: Date; finished_at: Date }[]>`
-    select started_at, finished_at from collection_runs
-    where finished_at is not null and checked > 0 order by finished_at desc limit 1`;
+    select r.started_at, max(o.observed_at) as finished_at
+    from price_observations o join collection_runs r on r.id = o.run_id
+    group by r.id order by max(o.observed_at) desc limit 1`;
   const days = await sql<{ day: string; checks: number; drops: number }[]>`
     with r as (
-      select ((started_at at time zone 'Asia/Almaty')::date) as day, sum(checked)::int as checks
-      from collection_runs where checked > 0 group by 1),
+      select ((observed_at at time zone 'Asia/Almaty')::date) as day, count(*)::int as checks
+      from price_observations group by 1),
     o as (
       select observed_at, min_price, lag(min_price) over (partition by product_id order by observed_at) as prev
       from price_observations),
