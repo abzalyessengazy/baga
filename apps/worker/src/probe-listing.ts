@@ -1,51 +1,80 @@
 /**
- * One-off research probe (DECISIONS.md, 2026-11-03 "More products in the same Kaspi budget", stage B): does one
- * Kaspi category page carry the prices of many products? Two requests at most, 10 s apart, inside robots.txt's
- * Visit-time and after the collector's last request (08:30 UTC): the Almaty category sitemap on Kaspi's CDN,
- * then one category page on kaspi.kz. No database; the page is saved for review, nothing is stored as a price.
+ * One-off research probe (DECISIONS.md, 2026-11-03 "More products in the same Kaspi budget", stage B): does a Kaspi
+ * category page carry the cheapest price of many products in its raw HTML (no scripts run)? Three requests, 10 s apart,
+ * inside robots.txt's Visit-time and after the collector's last request (08:30 UTC): page 1, page 2, and a
+ * price-filtered page of «Бытовая техника» (addresses as the user's browser showed them; /shop/c/ is allowed by robots.txt,
+ * only /search/ is not). Pages are saved for review; nothing is stored as a price. With DATABASE_URL, listing prices are
+ * compared read-only with the prices the collector took today for the same products.
  */
-import { readFileSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { KASPI_CRAWL_DELAY_MS } from "@baga/core";
+import { getSql } from "@baga/db";
 
 const now = new Date();
 const minutes = now.getUTCHours() * 60 + now.getUTCMinutes();
-// After the collector stops (08:30) and before Kaspi's Visit-time ends (08:45).
+// After the collector stops (08:30) and before Kaspi's Visit-time ends (08:45); 3 requests take ~30 s.
 if ((minutes < 8 * 60 + 31 || minutes > 8 * 60 + 43) && !process.argv.includes("--in-window")) {
   console.log("Run between 08:31 and 08:43 UTC (13:31-13:43 Almaty), after the collector's last request and inside Kaspi's Visit-time.");
   process.exit(0);
 }
 
+const PAGES: Array<[string, string]> = [
+  ["page1", "https://kaspi.kz/shop/c/home%20equipment/"],
+  ["page2", "https://kaspi.kz/shop/c/home%20equipment/?page=2"],
+  [
+    "price100k",
+    "https://kaspi.kz/shop/atyrau/c/home%20equipment/?q=%3AavailableInZones%3A231010000%3Acategory%3AHome%20equipment%3Aprice%3A100%20000%20-%20149%20999%20%D1%82&sort=relevance&sc=",
+  ],
+];
+
 const ua = process.env.KASPI_USER_AGENT ?? "BAGA price history bot (+contact: hello@baga.app)";
-const get = async (url: string, accept: string) => {
+const get = async (url: string) => {
   const t0 = Date.now();
-  const res = await fetch(url, { headers: { "User-Agent": ua, Accept: accept }, redirect: "manual", signal: AbortSignal.timeout(30_000) });
+  const res = await fetch(url, { headers: { "User-Agent": ua, Accept: "text/html" }, redirect: "manual", signal: AbortSignal.timeout(30_000) });
   const body = await res.text();
   console.log(`${res.status} ${Date.now() - t0} ms ${body.length} bytes  ${url}`);
-  return { status: res.status, body };
+  return { status: res.status, body, location: res.headers.get("location") };
 };
 
-// The Almaty category sitemap, at the address the sitemap index fixture lists (Kaspi's CDN, not kaspi.kz).
-const index = readFileSync(join(import.meta.dirname, "../../../packages/kaspi/fixtures/sitemap-index.xml"), "utf8");
-const catMap = [...index.matchAll(/<loc>([^<]*Category-ru-KZT-almaty\.xml)<\/loc>/g)][0]?.[1];
-let category = process.argv.slice(2).find((a) => a.startsWith("https://kaspi.kz/shop/c/"));
-if (!category && catMap) {
-  const m = await get(catMap, "application/xml");
-  const locs = [...m.body.matchAll(/<loc>(https:\/\/kaspi\.kz\/shop\/c\/[^<]+)<\/loc>/g)].map((x) => x[1]!);
-  category = locs.find((u) => /\/smartphones\/?(\?|$)/.test(u)) ?? locs.find((u) => /smartfon|smartphone/.test(u));
-  console.log(`category sitemap: ${locs.length} category links; picked ${category ?? "none"}`);
-  await new Promise((r) => setTimeout(r, KASPI_CRAWL_DELAY_MS));
+/** Product id -> price, from card objects embedded in the HTML (id before or after the price field). */
+function listingPrices(html: string): Map<string, number> {
+  const out = new Map<string, number>();
+  const price = String.raw`"(?:unitSalePrice|unitPrice|price)"\s*:\s*"?(\d[\d\s]*)`;
+  const id = String.raw`"id"\s*:\s*"?(\d{6,12})"?`;
+  for (const m of html.matchAll(new RegExp(`${id}[^{}]{0,600}?${price}`, "g"))) out.set(m[1]!, Number(m[2]!.replace(/\s/g, "")));
+  for (const m of html.matchAll(new RegExp(`${price}[^{}]{0,600}?${id}`, "g"))) if (!out.has(m[2]!)) out.set(m[2]!, Number(m[1]!.replace(/\s/g, "")));
+  return out;
 }
-category ??= "https://kaspi.kz/shop/c/smartphones/";
 
-const page = await get(category, "text/html");
-const saved = join(tmpdir(), "kaspi-probe-listing.html");
-writeFileSync(saved, page.body);
+const all = new Map<string, number>();
+for (const [i, [name, url]] of PAGES.entries()) {
+  if (i > 0) await new Promise((r) => setTimeout(r, KASPI_CRAWL_DELAY_MS));
+  const page = await get(url);
+  if (page.status === 403 || page.status === 429) {
+    console.log(`Stopped: Kaspi answered ${page.status}.`);
+    break;
+  }
+  const saved = join(tmpdir(), `kaspi-probe-${name}.html`);
+  writeFileSync(saved, page.body);
+  const links = new Set([...page.body.matchAll(/\/shop\/p\/[^"'\s]*?-(\d{6,12})\/?/g)].map((x) => x[1]));
+  const prices = listingPrices(page.body);
+  for (const [k, v] of prices) all.set(k, v);
+  const markers = ["BACKEND.components", "catalog", "cards", "unitPrice", "unitSalePrice", "__NEXT_DATA__", "window.digitalData"].filter((m) =>
+    page.body.includes(m),
+  );
+  console.log(JSON.stringify({ name, status: page.status, location: page.location, productLinks: links.size, priced: prices.size, markers, saved, sample: [...prices].slice(0, 5) }));
+}
 
-// What a listing pass could use: product links, and prices next to them in embedded data.
-const ids = new Set([...page.body.matchAll(/\/shop\/p\/[^"'\s]*?-(\d{6,12})\/?/g)].map((x) => x[1]));
-const priced = [...page.body.matchAll(/"(?:unitPrice|price|priceFormatted|unitSalePrice)"\s*:\s*"?([\d\s]+)/g)].length;
-const markers = ["BACKEND.components", "catalog", "products", "unitPrice", "cardsGrid", "__NEXT_DATA__", "window.digitalData"]
-  .filter((m) => page.body.includes(m));
-console.log(JSON.stringify({ status: page.status, productLinks: ids.size, priceFields: priced, markers, saved }, null, 2));
+// Read-only check: listing price vs the cheapest offer the collector saw today for the same product.
+const sql = getSql();
+if (sql && all.size) {
+  const rows = await sql<{ external_id: string; current_min_price: number | null; last_checked_at: Date }[]>`
+    select p.external_id, s.current_min_price, s.last_checked_at
+    from products p join product_state s on s.product_id = p.id
+    where p.external_id = any(${[...all.keys()]}) and s.last_checked_at > now() - interval '12 hours'`;
+  const diff = rows.filter((r) => r.current_min_price !== all.get(r.external_id));
+  console.log(JSON.stringify({ comparedToday: rows.length, same: rows.length - diff.length, different: diff.map((r) => [r.external_id, r.current_min_price, all.get(r.external_id)]) }));
+  await sql.end();
+} else console.log(sql ? "No listing prices parsed: nothing to compare." : "No DATABASE_URL: skipped the comparison with today's prices.");
