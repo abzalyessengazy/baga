@@ -16,6 +16,16 @@ export async function addEvent(sql: postgres.Sql, e: FunnelEvent): Promise<void>
     values (${e.name}, ${e.sid}, ${e.locale}, ${e.device}, ${e.source}, ${e.externalId}, ${e.detail})`;
 }
 
+/**
+ * A real product view (DECISIONS.md, 2026-11-04 "Tracked first, real views, spread page refreshes"): only the
+ * browser's product_view beacon marks a product viewed, which keeps it checked daily for 14 days. Server renders
+ * (crawlers, link previews, prefetches) no longer count. Written at most once an hour per product.
+ */
+export async function markViewed(sql: postgres.Sql, externalId: string): Promise<void> {
+  await sql`update products set last_viewed_at = now()
+    where external_id = ${externalId} and (last_viewed_at is null or last_viewed_at < now() - interval '1 hour')`;
+}
+
 export const BOUGHT_ANSWERS = ["yes", "later", "no"] as const;
 export type BoughtAnswer = (typeof BOUGHT_ANSWERS)[number];
 export interface BoughtTarget { trackingId: string; title: string | null; externalId: string | null; locale: "ru" | "kk"; bought: BoughtAnswer | null }

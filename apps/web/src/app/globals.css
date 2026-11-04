@@ -428,6 +428,10 @@ a { color: inherit; }
 .chart-tabs button { font: 600 0.75rem/1 var(--font-receipt); border: 1.5px solid var(--rule); background: transparent; color: var(--ink-soft); padding: 6px 10px; border-radius: 999px; cursor: pointer; }
 .chart-tabs button[aria-pressed="true"] { border-color: var(--ink); color: var(--ink); }
 .chart svg { display: block; width: 100%; height: auto; }
+.chart svg:focus-visible { outline: 2px solid var(--stamp); outline-offset: 2px; }
+.chart svg rect { cursor: pointer; }
+.chart-readout { margin: 0 0 6px; font-family: var(--font-receipt); font-variant-numeric: tabular-nums; color: var(--ink-soft); font-size: 0.8125rem; }
+.chart-readout b { color: var(--ink); font-size: 1.125rem; margin: 0 4px; }
 .empty-history { padding: 18px; border: 1.5px dashed var(--rule); color: var(--ink-soft); font-family: var(--font-ui); text-align: center; }
 .offers { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
 .offers th { text-align: left; font-weight: 500; color: var(--ink-soft); padding: 4px 0; font-size: 0.75rem; }

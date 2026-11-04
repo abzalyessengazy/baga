@@ -8,7 +8,7 @@ import { createKaspiClient, buildSnapshot, KaspiHttpError, KaspiParseError, cano
 import { saveSnapshot, connectionOptions, requestProduct, attachShortLinkTrackings, weekMovers } from "@baga/db";
 import {
   evaluateAlert, priorityFor, INTERVAL_MINUTES, PRIORITY_ORDER, CATALOG, SEED_MIN_PRICE, backoffMinutes, isSuspiciousJump, type TrackingAlertState,
-  KASPI_CRAWL_DELAY_MS, isInVisitWindow, msUntilVisitWindow, targetForDrop, almatyDay, runningSale, type Priority,
+  KASPI_CRAWL_DELAY_MS, isInVisitWindow, needsPageRefresh, msUntilVisitWindow, targetForDrop, almatyDay, runningSale, type Priority,
 } from "@baga/core";
 import postgres from "postgres";
 import { env } from "./env";
@@ -55,13 +55,14 @@ async function main() {
   let seeded = 0;
   const tried = new Set<string>(); // each queued product gets at most one attempt per run
 
-  // Order on every turn: visitor requests (someone is waiting), then due products, then seed rows.
-  // When there is nothing to do, poll for new visitor requests until the window closes.
-  // Someone is looking at a "Получаем цену…" page: called before every product, so a visitor waits for at
-  // most one product in progress, not a whole chunk.
+  // Order on every turn (DECISIONS.md, 2026-11-04 "Tracked first, real views, spread page refreshes"): new products
+  // someone tracks, then due hot and tracked products, then other visitor requests, then the rest of the due
+  // products, then seed rows. When there is nothing to do, poll for new visitor requests until the window closes.
+  // Called before every product, so a visitor waits for at most one product in progress, not a whole chunk.
   async function serveVisitors(): Promise<boolean> {
     const links = await resolveShortLinks();
-    const visitors = await nextQueued("visitor", tried);
+    let visitors = await nextQueued("visitor", tried, true);
+    if (!visitors.length && !(await watchedDue())) visitors = await nextQueued("visitor", tried, false);
     for (const q of visitors) {
       if (breaker.openReason || !inWindow()) break;
       tried.add(q.external_id);
@@ -159,15 +160,26 @@ function claimDue(limit: number) {
               p.title, p.image_url, p.category_path, p.page_checked_at, cs.priority`;
 }
 
+/** Due hot or tracked products not yet claimed: while there are any, a request nobody tracks waits. */
+async function watchedDue(): Promise<boolean> {
+  const rows = await sql`select 1 from collection_schedule where priority in ('hot', 'tracked') and next_check_at <= now()
+    and fail_count < 10 and (locked_until is null or locked_until < now()) limit 1`;
+  return rows.length > 0;
+}
+
 function release(productId: number) {
   return sql`update collection_schedule set locked_until = null where product_id = ${productId}`;
 }
 
-/** Routine check: offers only (1 request); the product page too when it is older than its tier allows (7 or 30 days). */
+/**
+ * Routine check: offers only (1 request); the product page too when it is older than its tier allows (7 or 30
+ * days), for unwatched products at most CATALOG.pageRefreshPerRun per run.
+ */
+let pagesRefreshed = 0;
 async function checkProduct(row: DueRow, runId: number): Promise<boolean> {
   try {
-    const refreshMs = (CATALOG.pageRefreshDays[row.priority] ?? 7) * 86_400_000;
-    const needPage = !row.page_checked_at || Date.now() - row.page_checked_at.getTime() > refreshMs;
+    const needPage = needsPageRefresh({ pageCheckedAt: row.page_checked_at, priority: row.priority, refreshedThisRun: pagesRefreshed, now: new Date() });
+    if (needPage) pagesRefreshed++;
     const page = needPage
       ? await kaspi.fetchProductPage(row.external_id)
       : { id: row.external_id, title: row.title, imageUrl: row.image_url, categoryPath: row.category_path };
@@ -199,11 +211,14 @@ async function checkProduct(row: DueRow, runId: number): Promise<boolean> {
 
 type Queued = { external_id: string; slug: string | null; source: "seed" | "visitor"; min_price: number | null };
 
-function nextQueued(source: "seed" | "visitor", tried: Set<string>) {
+/** Queued rows, oldest first; `tracked` true = only products someone already tracks, false = only the others. */
+function nextQueued(source: "seed" | "visitor", tried: Set<string>, tracked?: boolean) {
+  const has = sql`exists (select 1 from trackings t where t.external_id = q.external_id and t.status = 'active')`;
   return sql<Queued[]>`
-    select external_id, slug, source, min_price from seed_queue
-    where source = ${source} and status = 'pending' and attempts < 3 and external_id <> all(${sql.array([...tried])})
-    order by added_at limit ${env.chunkSize()}`;
+    select q.external_id, q.slug, q.source, q.min_price from seed_queue q
+    where q.source = ${source} and q.status = 'pending' and q.attempts < 3 and q.external_id <> all(${sql.array([...tried])})
+      ${tracked === undefined ? sql`` : tracked ? sql`and ${has}` : sql`and not ${has}`}
+    order by q.added_at limit ${env.chunkSize()}`;
 }
 
 /**

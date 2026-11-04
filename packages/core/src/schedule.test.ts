@@ -1,9 +1,22 @@
 import { describe, expect, it } from "vitest";
-import { priorityFor, backoffMinutes, isSuspiciousJump, INTERVAL_MINUTES, CATALOG } from "./schedule";
+import { priorityFor, backoffMinutes, isSuspiciousJump, needsPageRefresh, INTERVAL_MINUTES, CATALOG } from "./schedule";
 import { VISIT_WINDOW_MINUTES } from "./window";
 import { formatTenge, toTenge } from "./money";
 
 describe("schedule", () => {
+  it("refreshes overdue product pages for unwatched products only while the run's budget lasts", () => {
+    const now = new Date("2026-11-10T05:00:00Z");
+    const old = new Date("2026-11-03T04:00:00Z"); // 7 days and 1 hour ago
+    const fresh = new Date("2026-11-08T04:00:00Z");
+    const base = { now, refreshedThisRun: 0 };
+    expect(needsPageRefresh({ ...base, pageCheckedAt: null, priority: "seed", refreshedThisRun: 10_000 })).toBe(true);
+    expect(needsPageRefresh({ ...base, pageCheckedAt: fresh, priority: "seed" })).toBe(false);
+    expect(needsPageRefresh({ ...base, pageCheckedAt: old, priority: "seed" })).toBe(true);
+    expect(needsPageRefresh({ ...base, pageCheckedAt: old, priority: "seed", refreshedThisRun: CATALOG.pageRefreshPerRun })).toBe(false);
+    expect(needsPageRefresh({ ...base, pageCheckedAt: old, priority: "tracked", refreshedThisRun: CATALOG.pageRefreshPerRun })).toBe(true);
+    expect(needsPageRefresh({ ...base, pageCheckedAt: old, priority: "hot", refreshedThisRun: CATALOG.pageRefreshPerRun })).toBe(true);
+    expect(needsPageRefresh({ ...base, pageCheckedAt: old, priority: "catalog" })).toBe(false); // 30 days for catalog
+  });
   it("checks seed products exactly once per daily visit window", () => {
     // Longer than the window: no second check the same day. Short enough that a product checked as the
     // window closes is due again before the next window opens, so every day gets a point.

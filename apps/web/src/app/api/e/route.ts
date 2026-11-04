@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { addEvent, EVENT_NAMES, getSql, type EventName } from "@baga/db";
+import { addEvent, markViewed, EVENT_NAMES, getSql, type EventName } from "@baga/db";
 import { allow } from "@/lib/rateLimit";
 import { clientIp } from "@/lib/turnstile";
 
@@ -20,12 +20,14 @@ export async function POST(req: Request) {
   const sid = str(b.sid, /^[A-Za-z0-9_-]{16,32}$/);
   const sql = getSql();
   if (!sid || !sql) return done;
+  const externalId = str(b.externalId, /^\d{5,12}$/);
+  if (b.name === "product_view" && externalId) await markViewed(sql, externalId).catch(() => {});
   await addEvent(sql, {
     name: b.name as EventName, sid,
     locale: b.locale === "kk" ? "kk" : b.locale === "ru" ? "ru" : null,
     device: b.device === "mobile" || b.device === "desktop" ? b.device : null,
     source: str(b.source, /^[a-z0-9.\-_]{1,64}$/i)?.toLowerCase() ?? null,
-    externalId: str(b.externalId, /^\d{5,12}$/),
+    externalId,
     detail: str(b.detail, /^[a-z_]{1,32}$/),
   }).catch(() => {}); // before migration 0011, or a blip: the funnel misses one step
   return done;

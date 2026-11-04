@@ -25,7 +25,25 @@ export const PRIORITY_ORDER: Priority[] = ["hot", "tracked", "seed", "catalog", 
 export const CATALOG = {
   dailyTop: 400,
   pageRefreshDays: { hot: 7, tracked: 7, seed: 7, catalog: 30, cold: 30 } satisfies Record<Priority, number>,
+  /**
+   * Overdue product pages refreshed per run for products nobody tracks (DECISIONS.md, 2026-11-04 "Tracked first,
+   * real views, spread page refreshes"). Steady state needs ~70 a day; the cap spreads a batch first fetched on one
+   * day (584 on 3 Nov 2026) over several days instead of spending ~600 requests at once a week later.
+   */
+  pageRefreshPerRun: 120,
 } as const;
+
+/**
+ * Whether a check also fetches the product page (title, image, Kaspi reviews). A product never fetched always
+ * does; a watched one (hot, tracked) as soon as its page is older than its tier allows; others only while this
+ * run's refresh budget lasts, so an overdue page waits a day rather than crowding out price checks.
+ */
+export function needsPageRefresh(p: { pageCheckedAt: Date | null; priority: Priority; refreshedThisRun: number; now: Date }): boolean {
+  if (!p.pageCheckedAt) return true;
+  const overdue = p.now.getTime() - p.pageCheckedAt.getTime() > CATALOG.pageRefreshDays[p.priority] * 86_400_000;
+  if (!overdue) return false;
+  return p.priority === "hot" || p.priority === "tracked" || p.refreshedThisRun < CATALOG.pageRefreshPerRun;
+}
 
 export function priorityFor(p: {
   activeTrackings: number;

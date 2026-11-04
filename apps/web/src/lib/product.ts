@@ -101,7 +101,8 @@ export const getProductView = cache(async function getProductView(externalId: st
       const q = await getQueuedRequest(sql, externalId);
       return { ok: false, reason: !q ? "unknown" : q.status === "not_found" ? "not_found" : "queued" };
     }
-    await sql`update products set last_viewed_at = now() where id = ${row.id}`;
+    // A view is marked by the browser's product_view beacon (/api/e), not by this render: crawlers and prefetches
+    // would otherwise keep products on daily checks (DECISIONS.md, 2026-11-04).
     const [history, offers] = await Promise.all([getDailyLows(sql, row.id), getOffers(sql, row.id)]);
     return {
       ok: true,
