@@ -6,7 +6,7 @@
  * only /search/ is not). Pages are saved for review; nothing is stored as a price. With DATABASE_URL, listing prices are
  * compared read-only with the prices the collector took today for the same products.
  */
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { KASPI_CRAWL_DELAY_MS } from "@baga/core";
@@ -15,7 +15,7 @@ import { getSql } from "@baga/db";
 const now = new Date();
 const minutes = now.getUTCHours() * 60 + now.getUTCMinutes();
 // After the collector stops (08:30) and before Kaspi's Visit-time ends (08:45); 3 requests take ~30 s.
-if ((minutes < 8 * 60 + 31 || minutes > 8 * 60 + 43) && !process.argv.includes("--in-window")) {
+if ((minutes < 8 * 60 + 31 || minutes > 8 * 60 + 43) && !process.argv.includes("--in-window") && !process.argv.includes("--file")) {
   console.log("Run between 08:31 and 08:43 UTC (13:31-13:43 Almaty), after the collector's last request and inside Kaspi's Visit-time.");
   process.exit(0);
 }
@@ -38,14 +38,42 @@ const get = async (url: string) => {
   return { status: res.status, body, location: res.headers.get("location") };
 };
 
-/** Product id -> price, from card objects embedded in the HTML (id before or after the price field). */
+const tenge = (s: string) => Number(s.replace(/[^\d]/g, ""));
+
+/** Rendered cards: `data-product-id`, then «Цена» and the 12-month instalment (price ≈ instalment × 12, a sanity check). */
+function cardPrices(html: string) {
+  return html
+    .split('data-product-id="')
+    .slice(1)
+    .map((card) => {
+      const prices = [...card.matchAll(/item-card__prices-price">([^<]*)</g)].map((m) => tenge(m[1]!));
+      const months = Number(card.match(/item-card__add-info">x(\d+)/)?.[1] ?? 0);
+      const price = prices[0] ?? 0;
+      const instalment = prices[1] ?? 0;
+      const consistent = months > 0 && instalment > 0 ? Math.abs(Math.ceil(price / months) - instalment) <= 1 : null;
+      return { id: card.match(/^(\d+)/)?.[1] ?? "", price, instalment, months, consistent };
+    });
+}
+
+/** Product id -> price, from rendered cards or from card objects embedded in the HTML (id before or after the price). */
 function listingPrices(html: string): Map<string, number> {
   const out = new Map<string, number>();
+  for (const c of cardPrices(html)) if (c.id && c.price && c.consistent !== false) out.set(c.id, c.price);
+  const odd = cardPrices(html).filter((c) => c.consistent === false);
+  if (odd.length) console.log(`cards whose price doesn't match instalment × months (skipped): ${JSON.stringify(odd)}`);
   const price = String.raw`"(?:unitSalePrice|unitPrice|price)"\s*:\s*"?(\d[\d\s]*)`;
   const id = String.raw`"id"\s*:\s*"?(\d{6,12})"?`;
-  for (const m of html.matchAll(new RegExp(`${id}[^{}]{0,600}?${price}`, "g"))) out.set(m[1]!, Number(m[2]!.replace(/\s/g, "")));
+  for (const m of html.matchAll(new RegExp(`${id}[^{}]{0,600}?${price}`, "g"))) if (!out.has(m[1]!)) out.set(m[1]!, Number(m[2]!.replace(/\s/g, "")));
   for (const m of html.matchAll(new RegExp(`${price}[^{}]{0,600}?${id}`, "g"))) if (!out.has(m[2]!)) out.set(m[2]!, Number(m[1]!.replace(/\s/g, "")));
   return out;
+}
+
+// Offline: parse a saved page (e.g. one copied from the browser) and exit, no requests.
+const file = process.argv[process.argv.indexOf("--file") + 1];
+if (process.argv.includes("--file") && file) {
+  const prices = listingPrices(readFileSync(file, "utf8"));
+  console.log(JSON.stringify({ file, priced: prices.size, prices: [...prices] }));
+  process.exit(0);
 }
 
 const all = new Map<string, number>();
