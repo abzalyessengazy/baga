@@ -7,13 +7,13 @@
  * so picking rules can be tuned without asking Kaspi again.
  *
  *   pnpm --filter @baga/worker discover [--per-category 70] [--max-requests 41]
- *   pnpm --filter @baga/worker discover --from-file [--per-category 70] [--rare 5] [--exclude data/seed-discovered.txt] [--out data/seed-2.txt]
+ *   pnpm --filter @baga/worker discover --from-file [--per-category 70] [--rare 5] [--exclude data/seed-discovered.txt,data/seed-2.txt] [--out data/seed-2.txt]
  *
  * --more reads product sitemaps the first run did not (it read 40 spread evenly over the list) and adds their
  * links to data/sitemap-links.txt. --index-from-fixture takes the sitemap index saved by the last run instead of
  * asking kaspi.kz, so only Kaspi's CDN is asked (stops at the first failure if those addresses have expired).
  *
- * --exclude skips products already listed in an earlier seed file. Rare categories go last, under a
+ * --exclude skips products already listed in earlier seed files (comma-separated: a.txt,b.txt). Rare categories go last, under a
  * "# min-price 50000" line: the seed command stores it, and the collector keeps such a product in the catalog only
  * if its first price reaches it (DECISIONS.md, 2026-11-03 "Seed priorities").
  */
@@ -32,8 +32,9 @@ const perCategory = arg("per-category", 70);
 const perRare = arg("rare", 5);
 const maxRequests = arg("max-requests", 41); // the index + 40 of ~350 product sitemaps (those are on Kaspi's CDN)
 const out = text("out") ?? fileURLToPath(new URL("../data/seed-discovered.txt", import.meta.url));
-const excludeFile = text("exclude");
-const excluded = new Set(excludeFile ? [...readFileSync(excludeFile, "utf8").matchAll(/-(\d{6,12})\/?\s*$/gm)].map((m) => m[1]) : []);
+// --exclude a.txt,b.txt: several earlier seed files, comma-separated.
+const excludeFiles = (text("exclude") ?? "").split(",").map((f) => f.trim()).filter(Boolean);
+const excluded = new Set(excludeFiles.flatMap((f) => [...readFileSync(f, "utf8").matchAll(/-(\d{6,12})\/?\s*$/gm)].map((m) => m[1])));
 const fixtures = fileURLToPath(new URL("../../../packages/kaspi/fixtures/", import.meta.url));
 const linksFile = fileURLToPath(new URL("../data/sitemap-links.txt", import.meta.url));
 const fromFile = process.argv.includes("--from-file");
