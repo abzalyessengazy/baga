@@ -9,6 +9,7 @@
  *   pnpm --filter @baga/worker probe:scale            run all experiments (in the window)
  *   pnpm --filter @baga/worker probe:scale --list     print the experiments, no requests
  *   pnpm --filter @baga/worker probe:scale --only E2,E4
+ *   pnpm --filter @baga/worker probe:scale --set L    the follow-up on the JSON list (6 Nov): L1–L7
  */
 import { writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -87,12 +88,22 @@ const offersFound = (body: string): Found => {
   const skus = new Set((v?.offers ?? []).map((o) => o.masterSku));
   return { prices: jsonPrices(v), note: v ? `${v.offers?.length ?? 0} offers, products: ${[...skus].join(", ")}` : "not JSON" };
 };
-const listingJson = (q: string) =>
-  `https://kaspi.kz/yml/product-view/pl/results?page=0&q=${encodeURIComponent(q)}&text&sort=relevance&qs&c=${CITY}`;
+const listingJson = (q: string, page = 0, extra = "") =>
+  `https://kaspi.kz/yml/product-view/pl/results?page=${page}&q=${encodeURIComponent(q)}&text&sort=relevance&qs&c=${CITY}${extra}`;
 const listingFound = (body: string): Found => {
   const v = json(body);
-  return v ? { prices: jsonPrices(v), note: `JSON, top-level keys: ${Object.keys(v as object).join(", ")}` } : htmlFound(body);
+  if (!v) return htmlFound(body);
+  const items = (v as { data?: Array<{ id?: string; stock?: number; categoryCodes?: string[] }> }).data;
+  const extra = Array.isArray(items)
+    ? `; ${items.length} items, out of stock: ${items.filter((i) => !i.stock).length}, categories: ${[...new Set(items.map((i) => i.categoryCodes?.[0]))].join(" | ")}`
+    : "";
+  const keys = Object.entries(v as object).filter(([, x]) => !Array.isArray(x)).map(([k, x]) => `${k}=${JSON.stringify(x).slice(0, 60)}`);
+  return { prices: jsonPrices(v), note: `JSON, top-level keys: ${Object.keys(v as object).join(", ")}${extra}${keys.length ? `; other fields: ${keys.join(", ")}` : ""}` };
 };
+const listReq = (code: string, page = 0, extra = "") => () => ({
+  url: listingJson(`:category:${code}`, page, extra),
+  init: { headers: { Accept: "application/json, text/*", Referer: `https://kaspi.kz/shop/c/${encodeURIComponent(code.toLowerCase())}/` } },
+});
 
 const EXPERIMENTS: Experiment[] = [
   {
@@ -162,6 +173,19 @@ const EXPERIMENTS: Experiment[] = [
   },
 ];
 
+// Follow-up on E2 (6 Nov): does the list price equal the cheapest seller for products we checked today (the categories
+// where we hold the most), can a page hold more than 12, and how deep do pages go. The codes are Kaspi's English
+// category codes, as in the list items' categoryCodes ("Vacuum cleaners" was seen on 5 Nov; the others are likely).
+EXPERIMENTS.push(
+  { id: "L1", question: "List: smartphones page 1. Prices vs our checks today.", request: listReq("Smartphones"), read: listingFound },
+  { id: "L2", question: "List: monitors page 1. Prices vs our checks today.", request: listReq("Monitors"), read: listingFound },
+  { id: "L3", question: "List: vacuum cleaners page 1 (a code seen in 5 Nov's answer).", request: listReq("Vacuum cleaners"), read: listingFound },
+  { id: "L4", question: "List: smartphones page 2 — a different 12?", request: listReq("Smartphones", 1), read: listingFound },
+  { id: "L5", question: "Page size: smartphones page 1 with limit=48 — more than 12 items?", request: listReq("Smartphones", 0, "&limit=48"), read: listingFound },
+  { id: "L6", question: "Page size: smartphones page 1 with size=48 — more than 12 items?", request: listReq("Smartphones", 0, "&size=48"), read: listingFound },
+  { id: "L7", question: "Depth: smartphones page 60 (items 721–732) — does it still answer?", request: listReq("Smartphones", 60), read: listingFound },
+);
+
 if (process.argv.includes("--list")) {
   for (const e of EXPERIMENTS) console.log(`${e.id}  ${e.question}\n    ${e.request().url}`);
   process.exit(0);
@@ -175,7 +199,8 @@ if ((minutes < 8 * 60 + 31 || minutes > 8 * 60 + 43) && !process.argv.includes("
 }
 
 const only = process.argv[process.argv.indexOf("--only") + 1]?.split(",");
-const run = process.argv.includes("--only") && only ? EXPERIMENTS.filter((e) => only.includes(e.id)) : EXPERIMENTS;
+const set = process.argv.includes("--set") ? process.argv[process.argv.indexOf("--set") + 1] ?? "E" : "E";
+const run = process.argv.includes("--only") && only ? EXPERIMENTS.filter((e) => only.includes(e.id)) : EXPERIMENTS.filter((e) => e.id.startsWith(set));
 const results = new Map<string, Result>();
 const all = new Map<string, number>();
 let last = 0;
@@ -210,7 +235,7 @@ for (const e of run) {
     break;
   }
 }
-console.log(`\nResponses saved as ${join(tmpdir(), "kaspi-E*.txt")}`);
+console.log(`\nResponses saved as ${join(tmpdir(), `kaspi-${set}*.txt`)}`);
 
 const e6 = results.get("E6")?.found.prices.get(B);
 const e7 = results.get("E7")?.found.prices.get(B);
@@ -218,11 +243,13 @@ if (e6 !== undefined && e7 !== undefined) console.log(`Page price vs cheapest se
 
 const sql = getSql();
 if (sql && all.size) {
-  const rows = await sql<{ external_id: string; current_min_price: number | null }[]>`
-    select p.external_id, s.current_min_price
+  const rows = await sql<{ external_id: string; current_min_price: number | null; offer_count: number; in_stock: boolean; last_checked_at: Date }[]>`
+    select p.external_id, s.current_min_price, s.offer_count, s.in_stock, s.last_checked_at
     from products p join product_state s on s.product_id = p.id
     where p.external_id = any(${[...all.keys()]}) and s.last_checked_at > now() - interval '12 hours'`;
   const diff = rows.filter((r) => r.current_min_price !== all.get(r.external_id));
-  console.log(JSON.stringify({ comparedWithToday: rows.length, same: rows.length - diff.length, different: diff.map((r) => [r.external_id, r.current_min_price, all.get(r.external_id)]) }));
+  console.log(JSON.stringify({ found: all.size, comparedWithToday: rows.length, same: rows.length - diff.length,
+    different: diff.map((r) => ({ id: r.external_id, ours: r.current_min_price, list: all.get(r.external_id), sellers: r.offer_count, inStock: r.in_stock,
+      checkedMinAgo: Math.round((Date.now() - r.last_checked_at.getTime()) / 60_000) })) }, null, 1));
   await sql.end();
 }
