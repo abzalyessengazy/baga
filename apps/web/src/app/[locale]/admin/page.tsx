@@ -46,7 +46,7 @@ export default async function AdminPage({ params, searchParams }: Props) {
     : r.lastCheckAt && now - r.lastCheckAt.getTime() < LIVE_MS ? t("runLive")
     : t("runStopped");
   const lastCheck = h.runs.find((r) => r.lastCheckAt)?.lastCheckAt ?? null;
-  const failedAlerts = h.notifications.filter((n) => n.status !== "sent").reduce((s, n) => s + n.n, 0);
+  const failedAlerts = h.notifications.filter((n) => n.status === "failed").reduce((s, n) => s + n.n, 0);
   const warnings = [
     ...(isInVisitWindow(new Date(), 15 * 60_000) && (!lastCheck || now - lastCheck.getTime() > LIVE_MS) ? [t("warnNoRun")] : []),
     ...(h.schedule.due > 50 ? [t("warnDue", { n: h.schedule.due })] : []),

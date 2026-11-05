@@ -1,4 +1,5 @@
-import { formatTenge } from "@baga/core";
+import { formatTenge, isPermanentHttpStatus } from "@baga/core";
+import { DeliveryError } from "./telegram";
 
 /** Email alert texts (like telegram.ts, the worker's copy lives next to its sender). */
 type Locale = "ru" | "kk";
@@ -119,18 +120,19 @@ function escapeHtml(s: string) {
 
 /**
  * Resend API. `oneClickUrl` takes the RFC 8058 one-click POST (List-Unsubscribe-Post), which Gmail and Yahoo
- * expect from bulk senders. Throws on failure so the notification is marked failed.
+ * expect from bulk senders. `idempotencyKey` (the notification's own key) makes Resend drop a repeat of the same
+ * email for 24 hours, so a retry after a crash cannot send it twice. Throws a DeliveryError on failure.
  */
-export async function sendViaResend(apiKey: string, from: string, to: string, msg: { subject: string; html: string; text: string }, oneClickUrl: string) {
+export async function sendViaResend(apiKey: string, from: string, to: string, msg: { subject: string; html: string; text: string }, oneClickUrl: string, idempotencyKey: string) {
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json", "Idempotency-Key": idempotencyKey.slice(0, 256) },
     body: JSON.stringify({
       from, to, subject: msg.subject, html: msg.html, text: msg.text,
       headers: { "List-Unsubscribe": `<${oneClickUrl}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" },
     }),
     signal: AbortSignal.timeout(15_000),
   });
-  if (!res.ok) throw new Error(`Resend ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  if (!res.ok) throw new DeliveryError(`Resend ${res.status}: ${(await res.text()).slice(0, 200)}`, isPermanentHttpStatus(res.status));
   return (await res.json()) as { id: string };
 }

@@ -10,3 +10,4 @@ export * from "./title";
 export * from "./target";
 export * from "./sales";
 export * from "./moves";
+export * from "./delivery";

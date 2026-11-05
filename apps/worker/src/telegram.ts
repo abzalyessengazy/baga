@@ -1,4 +1,4 @@
-import { formatTenge } from "@baga/core";
+import { formatTenge, isPermanentHttpStatus } from "@baga/core";
 
 /** Telegram alert texts (like email.ts, the worker's copy lives next to its sender). Sent as Telegram HTML. */
 type Locale = "ru" | "kk";
@@ -86,6 +86,14 @@ export function renderTelegramBoughtAsk(p: { locale: Locale; title: string; code
 }
 
 /** Telegram Bot API (not Kaspi). Throws on failure so the notification is marked failed. */
+/** A failed send; `permanent` = retrying cannot help (blocked bot, unknown chat, bad request). */
+export class DeliveryError extends Error {
+  constructor(message: string, readonly permanent: boolean) {
+    super(message);
+    this.name = "DeliveryError";
+  }
+}
+
 export async function sendTelegram(token: string, chatId: string, msg: { html: string; buttons: TelegramButton[] }): Promise<number> {
   const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
     method: "POST",
@@ -97,6 +105,8 @@ export async function sendTelegram(token: string, chatId: string, msg: { html: s
     signal: AbortSignal.timeout(10_000),
   });
   const body = (await res.json().catch(() => ({}))) as { ok?: boolean; result?: { message_id?: number }; description?: string };
-  if (!res.ok || !body.ok) throw new Error(`telegram ${res.status}: ${body.description ?? ""}`.slice(0, 300));
+  if (!res.ok || !body.ok) {
+    throw new DeliveryError(`telegram ${res.status}: ${body.description ?? ""}`.slice(0, 300), isPermanentHttpStatus(res.status));
+  }
   return body.result?.message_id ?? 0;
 }

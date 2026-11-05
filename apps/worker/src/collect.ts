@@ -8,13 +8,13 @@ import { createKaspiClient, buildSnapshot, KaspiHttpError, KaspiParseError, Kasp
 import { saveSnapshot, connectionOptions, requestProduct, attachShortLinkTrackings, weekMovers } from "@baga/db";
 import {
   evaluateAlert, priorityFor, INTERVAL_MINUTES, PRIORITY_ORDER, USER_INTEREST, CATALOG, SEED_MIN_PRICE, backoffMinutes, isSuspiciousJump, type TrackingAlertState,
-  KASPI_CRAWL_DELAY_MS, isInVisitWindow, needsPageRefresh, msUntilVisitWindow, targetForDrop, almatyDay, runningSale, type Priority,
+  DELIVERY, afterFailedDelivery, KASPI_CRAWL_DELAY_MS, isInVisitWindow, needsPageRefresh, msUntilVisitWindow, targetForDrop, almatyDay, runningSale, type Priority,
 } from "@baga/core";
 import postgres from "postgres";
 import { env } from "./env";
 import { CircuitBreaker } from "./breaker";
 import { renderAlertEmail, renderBoughtEmail, sendViaResend } from "./email";
-import { renderTelegramAlert, renderTelegramBoughtAsk, sendTelegram } from "./telegram";
+import { renderTelegramAlert, renderTelegramBoughtAsk, sendTelegram, DeliveryError } from "./telegram";
 import { renderChannelPost } from "./channel";
 
 const sql = postgres(env.databaseUrl(), { max: 2, ...connectionOptions(env.databaseUrl()) });
@@ -407,9 +407,7 @@ async function sendTelegramQueued() {
     join watchers w on w.id = t.watcher_id
     join products p on p.id = t.product_id
     left join product_state s on s.product_id = p.id
-    where n.status = 'queued' and n.channel = 'telegram' and w.telegram_chat_id is not null
-      and n.created_at > now() - interval '2 days'
-    order by n.created_at limit 30`;
+    where n.id in (select id from ${claim("telegram")})`;
   for (const q of queued) {
     const site = env.siteUrl();
     const msg = q.type === "bought_ask" ? renderTelegramBoughtAsk({ locale: q.locale, title: q.title, code: q.bought_code ?? "" }) : renderTelegramAlert({
@@ -418,16 +416,68 @@ async function sendTelegramQueued() {
       productUrl: `${site}/${q.locale}/p/${q.external_id}`, kaspiUrl: `${site}/go/${q.external_id}?n=${q.id}`,
     });
     try {
+      await startSend(q.id);
       const messageId = await sendTelegram(token, q.chat_id, msg);
-      await sql`update notifications set status = 'sent', sent_at = now(), provider_message_id = ${String(messageId)} where id = ${q.id}`;
+      await sql`update notifications set status = 'sent', sent_at = now(), provider_message_id = ${String(messageId)}, last_error = null where id = ${q.id}`;
     } catch (e) {
-      await sql`update notifications set status = 'failed' where id = ${q.id}`;
-      console.error(`notification ${q.id}: ${e}`);
+      await deliveryFailed(q.id, e);
     }
   }
 }
 
+/**
+ * Claims up to 30 due messages of one channel for this run (DELIVERY in packages/core/src/delivery.ts): status
+ * 'sending', so an overlapping run skips them (skip locked). Only messages whose watcher can still receive them.
+ */
+function claim(channel: "telegram" | "email") {
+  const reachable = channel === "telegram"
+    ? sql`w.telegram_chat_id is not null`
+    : sql`w.email_confirmed_at is not null and w.email_stop_code is not null`;
+  return sql`(
+    update notifications set status = 'sending', claimed_at = now(), send_started_at = null
+    where id in (
+      select n.id from notifications n join trackings t on t.id = n.tracking_id join watchers w on w.id = t.watcher_id
+      where n.status = 'queued' and n.channel = ${channel} and n.next_attempt_at <= now() and ${reachable}
+        and n.created_at > now() - make_interval(hours => ${DELIVERY.maxAgeHours})
+      order by n.created_at limit 30 for update of n skip locked)
+    returning id)`;
+}
+
+/** Marks the moment the provider is called; counts the attempt. */
+function startSend(id: number) {
+  return sql`update notifications set send_started_at = now(), attempts = attempts + 1 where id = ${id}`;
+}
+
+/** A failed send: tried again later, or failed for good (afterFailedDelivery). */
+async function deliveryFailed(id: number, e: unknown) {
+  const permanent = e instanceof DeliveryError && e.permanent;
+  const [n] = await sql<{ attempts: number }[]>`select attempts from notifications where id = ${id}`;
+  const next = afterFailedDelivery(n?.attempts ?? DELIVERY.maxAttempts, permanent);
+  await sql`update notifications set status = ${next.status}, claimed_at = null, send_started_at = null, last_error = ${String(e).slice(0, 500)},
+    next_attempt_at = now() + make_interval(mins => ${next.status === "queued" ? next.retryInMinutes : 0})
+    where id = ${id}`;
+  console.error(`notification ${id}: ${e} → ${next.status === "queued" ? `retry in ${next.retryInMinutes} min` : "failed"}`);
+}
+
+/**
+ * Before sending: claims a crash left behind (DELIVERY.staleClaimMinutes) go back to the queue, except a Telegram
+ * message whose send had started: Telegram has no idempotency key, so it is given up rather than risk sending it
+ * twice (an email is retried; Resend's Idempotency-Key drops a duplicate). Messages older than
+ * DELIVERY.maxAgeHours are given up.
+ */
+async function tidyDeliveries() {
+  await sql`update notifications set
+      status = case when channel = 'telegram' and send_started_at is not null then 'failed' else 'queued' end,
+      last_error = case when channel = 'telegram' and send_started_at is not null
+        then 'interrupted while sending: may or may not have arrived' else 'claim interrupted, retrying' end,
+      claimed_at = null, send_started_at = null
+    where status = 'sending' and claimed_at < now() - make_interval(mins => ${DELIVERY.staleClaimMinutes})`;
+  await sql`update notifications set status = 'failed', last_error = coalesce(last_error, 'expired')
+    where status = 'queued' and created_at <= now() - make_interval(hours => ${DELIVERY.maxAgeHours})`;
+}
+
 async function sendQueued() {
+  await tidyDeliveries();
   await queueBoughtAsks();
   await sendTelegramQueued();
   await sendEmailQueued();
@@ -480,17 +530,15 @@ async function queueBoughtAsks() {
 async function sendEmailQueued() {
   const key = env.resendApiKey();
   if (!key) return;
-  const queued = await sql<{ id: number; type: "first_price" | "target_reached" | "bought_ask"; price: number; target_price: number | null; email: string; stop_code: string; locale: "ru" | "kk"; title: string; external_id: string; current: number | null; offer_count: number; bought_code: string | null }[]>`
-    select n.id, n.type, n.price, t.target_price, w.email, w.email_stop_code as stop_code, w.locale, p.title, p.external_id,
+  const queued = await sql<{ id: number; key: string; type: "first_price" | "target_reached" | "bought_ask"; price: number; target_price: number | null; email: string; stop_code: string; locale: "ru" | "kk"; title: string; external_id: string; current: number | null; offer_count: number; bought_code: string | null }[]>`
+    select n.id, n.idempotency_key as key, n.type, n.price, t.target_price, w.email, w.email_stop_code as stop_code, w.locale, p.title, p.external_id,
            s.current_min_price as current, coalesce(s.offer_count, 0) as offer_count, t.bought_code
     from notifications n
     join trackings t on t.id = n.tracking_id
     join watchers w on w.id = t.watcher_id
     join products p on p.id = t.product_id
     left join product_state s on s.product_id = p.id
-    where n.status = 'queued' and n.channel = 'email' and w.email_confirmed_at is not null and w.email_stop_code is not null
-      and n.created_at > now() - interval '2 days'
-    order by n.created_at limit 30`;
+    where n.id in (select id from ${claim("email")})`;
   for (const q of queued) {
     const site = env.siteUrl();
     const [top] = q.type === "target_reached" ? await sql<{ name: string }[]>`
@@ -508,11 +556,11 @@ async function sendEmailQueued() {
       stopUrl,
     });
     try {
-      const r = await sendViaResend(key, env.emailFrom(), q.email, msg, `${site}/api/email/stop?c=${q.stop_code}`);
-      await sql`update notifications set status = 'sent', sent_at = now(), provider_message_id = ${r.id} where id = ${q.id}`;
+      await startSend(q.id);
+      const r = await sendViaResend(key, env.emailFrom(), q.email, msg, `${site}/api/email/stop?c=${q.stop_code}`, q.key);
+      await sql`update notifications set status = 'sent', sent_at = now(), provider_message_id = ${r.id}, last_error = null where id = ${q.id}`;
     } catch (e) {
-      await sql`update notifications set status = 'failed' where id = ${q.id}`;
-      console.error(`notification ${q.id}: ${e}`);
+      await deliveryFailed(q.id, e);
     }
     await new Promise((r) => setTimeout(r, 600));
   }
