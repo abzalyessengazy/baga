@@ -4,12 +4,12 @@ import { useRef } from "react";
 type Opt = { value: string; label: string };
 
 /**
- * Search, category and sort for /explore. A plain GET form, so it works without scripts; choosing a category
- * or a sort applies it at once.
+ * Search, category and sort for /explore (and search and sort for /shops, without categories). A plain GET form,
+ * so it works without scripts; choosing a category or a sort applies it at once.
  */
 export function ExploreFilters({ list, q, cat, sort, sorts, categories, labels }: {
-  list: string; q: string; cat: string; sort: string; sorts: Opt[]; categories: Opt[];
-  labels: { search: string; category: string; allCategories: string; sort: string; apply: string };
+  list: string; q: string; cat?: string; sort: string; sorts: Opt[]; categories?: Opt[];
+  labels: { search: string; category?: string; allCategories?: string; sort: string; apply: string };
 }) {
   const form = useRef<HTMLFormElement>(null);
   const submit = () => form.current?.requestSubmit();
@@ -20,14 +20,14 @@ export function ExploreFilters({ list, q, cat, sort, sorts, categories, labels }
         <span className="sr-only">{labels.search}</span>
         <input type="search" name="q" defaultValue={q} placeholder={labels.search} maxLength={80} autoComplete="off" />
       </label>
-      <label>
+      {categories && <label>
         <span className="sr-only">{labels.category}</span>
         <select name="cat" defaultValue={cat} onChange={submit}>
           <option value="">{labels.allCategories}</option>
           {cat && !categories.some((c) => c.value === cat) && <option value={cat}>{cat}</option>}
           {categories.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
         </select>
-      </label>
+      </label>}
       <label>
         <span className="sr-only">{labels.sort}</span>
         <select name="sort" defaultValue={sort} onChange={submit}>

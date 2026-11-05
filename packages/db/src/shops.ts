@@ -1,5 +1,5 @@
 import type postgres from "postgres";
-import { SHOP_FEEDBACK, type ShopFeedbackOutcome } from "@baga/core";
+import { SHOP_FEEDBACK, adjustedRating, isEstablished, priceNotes, sellerLabel, type ShopFeedbackOutcome } from "@baga/core";
 
 /**
  * Shop evidence (DECISIONS.md, 2026-11-05 "Shop evidence, not verdicts"; migration 0016): Kaspi's own rating and
@@ -82,4 +82,64 @@ export async function saveShopFeedback(
   await sql`insert into seller_feedback (tracking_id, seller_id, outcome) values (${t.id}, ${sellerId}, ${outcome})
     on conflict (tracking_id) do update set seller_id = excluded.seller_id, outcome = excluded.outcome, created_at = now()`;
   return true;
+}
+
+/**
+ * The shop catalogue (/shops): every shop with a current offer on a product we check, by the chip it earns
+ * (packages/core/src/sellers.ts), with how many of its offers are far below the other sellers ("check" / "fact").
+ * Labels are worked out here with the same rules as the seller table, so the counts always agree.
+ */
+export type ShopTab = "all" | "established" | "high" | "mixed" | "unknown";
+export type ShopSort = "reviews" | "rating" | "products";
+export const SHOP_TABS: ShopTab[] = ["all", "established", "high", "mixed", "unknown"];
+export const SHOP_SORTS: ShopSort[] = ["reviews", "rating", "products"];
+export const SHOP_LIST = { perPage: 40 } as const;
+export interface ShopListItem {
+  externalId: string; name: string; rating: number | null; reviews: number | null; products: number;
+  /** Offers far below the other sellers: with "check the seller", and the plain fact (established shops). */
+  checks: number; facts: number;
+}
+export interface ShopList { items: ShopListItem[]; total: number; page: number; pages: number; counts: Record<ShopTab, number> }
+
+export function shopTab(rating: number | null, reviews: number | null): Exclude<ShopTab, "all"> {
+  if (isEstablished(rating, reviews)) return "established";
+  const l = sellerLabel(rating, reviews);
+  return l === "high" ? "high" : l === "mixed" || l === "low" ? "mixed" : "unknown";
+}
+
+export async function listShops(sql: postgres.Sql, x: { tab?: ShopTab; q?: string; sort?: ShopSort; page?: number }): Promise<ShopList> {
+  const rows = await sql<{ id: number; externalId: string; name: string; rating: number | null; reviews: number | null; products: number }[]>`
+    select se.id, se.external_id as "externalId", se.name, se.rating, se.reviews, count(*)::int as products
+    from sellers se join offers_current o on o.seller_id = se.id join products p on p.id = o.product_id
+    where p.status = 'active' group by se.id`;
+  const byId = new Map(rows.map((r) => [r.id, { ...r, checks: 0, facts: 0 }]));
+  // Each product's offers, cheapest first, checked against the others (priceNotes), the same as the seller table.
+  const offers = await sql<{ sellers: number[]; prices: number[] }[]>`
+    select array_agg(o.seller_id order by o.price, o.seller_id) as sellers, array_agg(o.price order by o.price, o.seller_id) as prices
+    from offers_current o join products p on p.id = o.product_id
+    where p.status = 'active' group by o.product_id having count(*) >= 4`;
+  for (const o of offers) {
+    const list = o.sellers.map((id, i) => ({ id: Number(id), price: o.prices[i]!, sellerRating: byId.get(Number(id))?.rating ?? null, sellerReviews: byId.get(Number(id))?.reviews ?? null }));
+    priceNotes(list).forEach((n, i) => {
+      const shop = n && byId.get(list[i]!.id);
+      if (shop) shop[n.kind === "check" ? "checks" : "facts"]++;
+    });
+  }
+  const all = [...byId.values()];
+  const counts = { all: all.length, established: 0, high: 0, mixed: 0, unknown: 0 } as Record<ShopTab, number>;
+  for (const r of all) counts[shopTab(r.rating, r.reviews)]++;
+  const tab = x.tab ?? "all";
+  const words = (x.q ?? "").trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const sort = x.sort ?? "reviews";
+  const picked = all
+    .filter((r) => tab === "all" || shopTab(r.rating, r.reviews) === tab)
+    .filter((r) => words.every((w) => r.name.toLowerCase().includes(w)))
+    .sort((a, b) =>
+      sort === "products" ? b.products - a.products
+      : sort === "rating" ? (adjustedRating(b.rating, b.reviews) ?? -1) - (adjustedRating(a.rating, a.reviews) ?? -1)
+      : (b.reviews ?? 0) - (a.reviews ?? 0))
+    .map(({ id: _, ...r }) => r);
+  const pages = Math.max(1, Math.ceil(picked.length / SHOP_LIST.perPage));
+  const page = Math.min(pages, Math.max(1, Math.floor(x.page ?? 1)));
+  return { items: picked.slice((page - 1) * SHOP_LIST.perPage, page * SHOP_LIST.perPage), total: picked.length, page, pages, counts };
 }

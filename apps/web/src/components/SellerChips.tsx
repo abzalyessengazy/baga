@@ -46,6 +46,11 @@ export function SellerChip({ rating, reviews }: { rating: number | null; reviews
   );
 }
 
+/** A count of shops of one kind (the home page): icon and number; the words are the accessible name. */
+export function CountChip({ kind, n, label }: { kind: ChipKind; n: number; label: string }) {
+  return <span className={`chip is-${kind}`} title={`${num(n)} ${label}`} aria-label={`${num(n)} ${label}`}><Icon d={ICONS[kind]} />{num(n)}</span>;
+}
+
 /** The label in words, with its icon and colour (the shop page). */
 export function LabelChip({ kind }: { kind: ChipKind }) {
   const t = useTranslations("sellers");

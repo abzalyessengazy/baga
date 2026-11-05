@@ -7,6 +7,7 @@ import type { Market } from "@baga/db";
 import { Link } from "@/i18n/navigation";
 import { loadMarket } from "@/lib/market";
 import { dayMonth, type DatesT } from "@/lib/dayMonth";
+import { CountChip } from "./SellerChips";
 import { StatIcon, type StatIconName } from "./StatIcon";
 
 type L = "ru" | "kk";
@@ -36,22 +37,11 @@ function Thumb({ src }: { src: string | null }) {
   return src ? <img className="z-thumb" src={src} alt="" width={32} height={32} loading="lazy" /> : <span className="z-thumb" aria-hidden />;
 }
 
-// Lists show this many rows (two-line rows: fewer); the rest open under the slip with "Показать все".
+// Each slip shows only the rows that fit it whole; "Смотреть все →" opens the full list in the catalog
+// (/explore). One-line rows: 5, two-line rows: 4, three-line rows (categories): 3.
 const ROWS = 5;
-const ROWS_TALL = 4;
-
-/** The show-all switch under a list. The slip grows to fit while it is open. */
-function useExpand(total: number, rows = ROWS) {
-  const t = useTranslations("home");
-  const [open, setOpen] = useState(false);
-  const more = total > rows;
-  const toggle = more ? (
-    <button type="button" className="z-more" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
-      {open ? t("showLess") : t("showAll", { count: total })}
-    </button>
-  ) : null;
-  return { open, limit: open ? total : rows, toggle };
-}
+const ROWS_TWO = 4;
+const ROWS_THREE = 3;
 
 /** Counts up to `to` once `go` turns true; shows the final number right away when motion is reduced. */
 function CountUp({ to, go }: { to: number; go: boolean }) {
@@ -67,7 +57,7 @@ function CountUp({ to, go }: { to: number; go: boolean }) {
 }
 
 /* Totals: the Z-report head, stamped with the real time of the latest collector run. */
-function Totals({ s }: { s: Stats & { lastRun: NonNullable<Stats["lastRun"]> } }) {
+function Totals({ s, shops }: { s: Stats & { lastRun: NonNullable<Stats["lastRun"]> }; shops?: Market["shops"] }) {
   const td = useTranslations("dates") as unknown as DatesT;
   const t = useTranslations("home");
   const ref = useRef<HTMLDivElement>(null);
@@ -91,7 +81,17 @@ function Totals({ s }: { s: Stats & { lastRun: NonNullable<Stats["lastRun"]> } }
       </div>
       <dl className="z-grid">
         {cells.map(([icon, k, v, cls]) => (
-          <div key={k} className={`z-cell ${cls}`}><dt><StatIcon name={icon} />{k}</dt><dd><CountUp to={v} go={go} /></dd></div>
+          <div key={k} className={`z-cell ${cls}`}><dt><StatIcon name={icon} />{k}</dt><dd><CountUp to={v} go={go} /></dd>
+            {/* Shops by Kaspi rating, the seller table's chips (packages/core/src/sellers.ts); the catalogue has the rest. */}
+            {icon === "store" && shops && (
+              <Link href="/shops" className="z-shops" aria-label={t("zShopsLink")}>
+                <CountChip kind="high" n={shops.high} label={t("zShopsHigh")} />
+                <CountChip kind="mixed" n={shops.mixed + shops.low} label={t("zShopsMixed")} />
+                <CountChip kind="few" n={shops.few + shops.none} label={t("zShopsUnknown")} />
+                <span className="z-shops-go">→</span>
+              </Link>
+            )}
+          </div>
         ))}
       </dl>
       <motion.span className="stamp z-stamp" aria-hidden initial={reduce ? false : { scale: 1.8, opacity: 0, rotate: -16 }}
@@ -110,14 +110,12 @@ function MovesSlip({ moves, locale }: { moves: Stats["moves"]; locale: L }) {
   const go = useInView(ref, { once: true, amount: 0.4 }) || !!reduce;
   const [dir, setDir] = useState<keyof Moves>("drops");
   const [period, setPeriod] = useState<keyof Stats["moves"]>("day");
-  const all = moves[period][dir];
-  const { open, limit, toggle } = useExpand(all.length);
-  const rows = all.slice(0, limit);
+  const rows = moves[period][dir].slice(0, ROWS_TWO);
   const tab = <K extends string>(on: boolean, label: string, set: () => void, key: K) => (
     <button key={key} type="button" className={`z-tab${on ? " is-on" : ""}`} aria-pressed={on} onClick={set}>{label}</button>
   );
   return (
-    <div className={`slip-screen z-moves${open ? " is-open" : ""}`} ref={ref}>
+    <div className="slip-screen z-moves" ref={ref}>
       <div className="z-tabs">
         <span>{tab(dir === "drops", `↓ ${t("tabDrops")}`, () => setDir("drops"), "d")}{tab(dir === "rises", `↑ ${t("tabRises")}`, () => setDir("rises"), "r")}</span>
         <span>{tab(period === "day", t("periodDay"), () => setPeriod("day"), "day")}{tab(period === "week", t("periodWeek"), () => setPeriod("week"), "week")}</span>
@@ -133,7 +131,7 @@ function MovesSlip({ moves, locale }: { moves: Stats["moves"]; locale: L }) {
           </Link>
         </motion.div>
       ))}
-      <div className="z-foot">{toggle}<Link href={`/explore?list=${dir}`} className="z-all">{t("explore")} →</Link></div>
+      <div className="z-foot"><Link href={`/explore?list=${dir}`} className="z-all">{t("explore")} →</Link></div>
     </div>
   );
 }
@@ -145,10 +143,9 @@ function ListSlip({ items, locale, dated, more }: { items: Item[]; locale: L; da
   const ref = useRef<HTMLDivElement>(null);
   const reduce = useReducedMotion();
   const go = useInView(ref, { once: true, amount: 0.4 }) || !!reduce;
-  const { open, limit, toggle } = useExpand(items.length);
   return (
-    <div className={`slip-screen${open ? " is-open" : ""}`} ref={ref}>
-      {items.slice(0, limit).map((d, i) => (
+    <div className="slip-screen" ref={ref}>
+      {items.slice(0, ROWS).map((d, i) => (
         <motion.div key={d.externalId} initial={reduce ? false : { opacity: 0, y: 10 }} animate={go ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.3, delay: Math.min(i, ROWS) * 0.1 }}>
           <Link href={`/p/${d.externalId}`} className="seller-row z-drop z-has-thumb">
             <Thumb src={d.imageUrl} />
@@ -157,7 +154,7 @@ function ListSlip({ items, locale, dated, more }: { items: Item[]; locale: L; da
           </Link>
         </motion.div>
       ))}
-      {(toggle || more) && <div className="z-foot">{toggle}{more && <Link href={more} className="z-all">{t("explore")} →</Link>}</div>}
+      {more && <div className="z-foot"><Link href={more} className="z-all">{t("explore")} →</Link></div>}
     </div>
   );
 }
@@ -165,17 +162,16 @@ function ListSlip({ items, locale, dated, more }: { items: Item[]; locale: L; da
 /* Seller spread: the same product, the cheapest and the dearest seller of its latest check. */
 function SpreadSlip({ rows, locale }: { rows: Market["spread"]["top"]; locale: L }) {
   const t = useTranslations("home");
-  const { open, limit, toggle } = useExpand(rows.length, ROWS_TALL);
   return (
-    <div className={`slip-screen${open ? " is-open" : ""}`}>
-      {rows.slice(0, limit).map((s) => (
+    <div className="slip-screen">
+      {rows.slice(0, ROWS_TWO).map((s) => (
         <Link key={s.externalId} href={`/p/${s.externalId}`} className="seller-row z-drop z-spread z-gap z-has-thumb">
           <Thumb src={s.imageUrl} />
           <span className="name">{dropTitle(s, locale)}<span className="z-sub">{formatTenge(s.lo, locale)} – {formatTenge(s.hi, locale)}</span></span>
           <span className="p">+{formatTenge(s.hi - s.lo, locale)}</span>
         </Link>
       ))}
-      <div className="z-foot">{toggle}<Link href="/explore?list=spread" className="z-all">{t("explore")} →</Link></div>
+      <div className="z-foot"><Link href="/explore?list=spread" className="z-all">{t("explore")} →</Link></div>
     </div>
   );
 }
@@ -183,10 +179,9 @@ function SpreadSlip({ rows, locale }: { rows: Market["spread"]["top"]; locale: L
 /* Categories: how many products we watch in each, the lowest and the median price, the week change once known. */
 function CategorySlip({ rows, locale }: { rows: Market["categories"]; locale: L }) {
   const t = useTranslations("home");
-  const { open, limit, toggle } = useExpand(rows.length, ROWS_TALL);
   return (
-    <div className={`slip-screen${open ? " is-open" : ""}`}>
-      {rows.slice(0, limit).map((c) => (
+    <div className="slip-screen">
+      {rows.slice(0, ROWS_THREE).map((c) => (
         <Link key={c.name} href={`/explore?list=all&cat=${encodeURIComponent(c.name)}`} className="seller-row z-drop z-spread z-has-thumb">
           <Thumb src={c.imageUrl} />
           <span className="name">{c.name}<span className="z-sub">{t("catLine", { count: c.products, median: formatTenge(c.median, locale) })}
@@ -194,7 +189,7 @@ function CategorySlip({ rows, locale }: { rows: Market["categories"]; locale: L 
           <span className="p">{t("catFrom", { price: formatTenge(c.from, locale) })}</span>
         </Link>
       ))}
-      <div className="z-foot">{toggle}<Link href="/explore?list=all" className="z-all">{t("explore")} →</Link></div>
+      <div className="z-foot"><Link href="/explore?list=all" className="z-all">{t("explore")} →</Link></div>
     </div>
   );
 }
@@ -254,7 +249,7 @@ export function ZReport() {
     <section className="wrap section">
       <h2 className="section-title">{t("zTitle")}</h2>
       <p className="section-note">{t("zNote")}</p>
-      <Totals s={{ ...s, lastRun: s.lastRun }} />
+      <Totals s={{ ...s, lastRun: s.lastRun }} shops={m?.shops} />
       <div className="z-slips" data-n={slips.length}>
         {slips.map((x) => (
           <article key={x.title} className="slip">

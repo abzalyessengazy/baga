@@ -83,6 +83,7 @@ export function MarketReceipt() {
                   <span className="mk-day-row"><span className="mk-day-n is-down">{count(m!.shops.high)}</span> {t("shopsHigh")}</span>
                   <span className="mk-day-row"><span className="mk-day-n">{count(m!.shops.mixed + m!.shops.low)}</span> {t("shopsMixed")}</span>
                   <span className="mk-day-row"><span className="mk-day-n">{count(m!.shops.few + m!.shops.none)}</span> {t("shopsUnknown")}</span>
+                  <Link href="/shops" className="mk-day-row mk-link">{t("shopsAll")}</Link>
                 </p>}
                 {m!.shops && m!.shops.cheapOffers > 0 && <p className="mk-note is-ink">{t("shopsCheap", { count: m!.shops.cheapOffers })}</p>}
               </>
