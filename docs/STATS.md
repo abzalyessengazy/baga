@@ -17,8 +17,14 @@ select product_id, (observed_at at time zone 'Asia/Almaty')::date as day, min(mi
 from price_observations where min_price is not null group by 1, 2
 ```
 
-**Shift.** The latest Almaty day with a successful check (`max(last_checked_at)` of `product_state`). One
-collector run a day, 09:05–13:30 Almaty.
+**Shift.** The latest **complete** Almaty day with checks: today once Kaspi's Visit-time is over (13:45 Almaty,
+`lastCompleteShiftDay` in `packages/core/src/window.ts`), yesterday before that. A run still in progress is never
+shown as a day, so a morning visitor never sees "checked 29". Products checked on the shift = active products with a
+price observation that day (each check writes at least the daily heartbeat). One collector run a day, 09:05–13:30
+Almaty. `/api/stats` and `/api/market` are cached by the CDN for up to an hour but never past 13:45 Almaty.
+
+**Catalog first.** "Kaspi сегодня" leads with the whole catalog (priced active products, sellers in current offers,
+days since the first observation); the shift's changes are one line under it.
 
 **Change.** Two prices differ by `MOVE_MIN_PCT` (1%) of the earlier one or more (`packages/core/src/moves.ts`,
 `moveDirection`). Smaller differences are "no change": sellers nudge prices by a few tenge all the time.

@@ -380,6 +380,10 @@ a { color: inherit; }
 .mk-stats dd { margin: 6px 0 0; font-family: var(--font-ui); font-size: 2.25rem; font-weight: 800; letter-spacing: -0.03em; line-height: 1; font-variant-numeric: tabular-nums; }
 .mk-stats .is-down dd { color: var(--stamp); }
 .mk-stats .is-up dd { color: var(--stamp-red); }
+.mk-day { margin: 14px 0 0; color: var(--ink-soft); font-family: var(--font-ui); font-size: 0.875rem; line-height: 1.45; }
+.mk-day-n { font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.mk-day-n.is-down { color: var(--stamp); }
+.mk-day-n.is-up { color: var(--stamp-red); }
 .mk-note { margin: 14px 0 0; color: var(--ink-soft); font-family: var(--font-ui); font-size: 0.875rem; line-height: 1.45; }
 .mk-note.is-ink { color: var(--stamp); font-weight: 600; }
 .mk-label { margin: 0 0 10px; font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--stamp); }

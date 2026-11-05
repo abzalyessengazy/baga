@@ -18,6 +18,8 @@ export interface MarketPick {
 }
 
 export interface Market {
+  /** The whole catalog, shown first: priced active products, distinct sellers in current offers, first observed day. */
+  catalog: { products: number; sellers: number; firstDay: string | null };
   /** Rule D (docs/STATS.md): the latest shift, products checked, compared with an earlier day, and changed by MOVE_MIN_PCT. */
   day: string | null;
   checked: number;
@@ -50,10 +52,17 @@ export const MARKET_CONFIG = {
 export async function getMarket(sql: postgres.Sql): Promise<Market> {
   const c = MARKET_CONFIG;
   const moves = await dayMoves(sql);
+  const [catalog] = await sql<{ products: number; sellers: number; firstDay: string | null }[]>`
+    select (select count(*)::int from products p join product_state s on s.product_id = p.id
+            where p.status = 'active' and s.current_min_price is not null) as products,
+           (select count(distinct o.seller_id)::int from offers_current o join products p on p.id = o.product_id
+            where p.status = 'active') as sellers,
+           (select to_char(min((observed_at at time zone 'Asia/Almaty')::date), 'YYYY-MM-DD') from price_observations) as "firstDay"`;
   const [lows] = moves.day ? await sql<{ n: number }[]>`
     with d as (
       select product_id, (observed_at at time zone 'Asia/Almaty')::date as day, min(min_price) as p
-      from price_observations where min_price is not null group by 1, 2),
+      from price_observations where min_price is not null
+        and observed_at < (${moves.day}::date + 1)::timestamp at time zone 'Asia/Almaty' group by 1, 2),
     r as (
       select product_id, day, p, row_number() over (w order by day desc) as rn, count(*) over w as days,
              min(p) over (w order by day rows between unbounded preceding and 1 preceding) as before_low
@@ -114,6 +123,7 @@ export async function getMarket(sql: postgres.Sql): Promise<Market> {
   const pick = drop && (!seller || Math.abs(drop.pct) >= Math.abs(seller.pct)) ? drop : seller;
   const down = moves.down.length, up = moves.up.length;
   return {
+    catalog: catalog ?? { products: 0, sellers: 0, firstDay: null },
     day: moves.day, checked: moves.checked,
     compared: moves.compared, down, up, same: moves.compared - down - up,
     newLows: lows?.n ?? 0,

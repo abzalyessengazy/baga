@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isInVisitWindow, msUntilVisitWindow, nextVisitWindowDay, VISIT_WINDOW_MINUTES } from "./window";
+import { isInVisitWindow, lastCompleteShiftDay, msUntilVisitWindow, secondsUntilShiftEnds, nextVisitWindowDay, VISIT_WINDOW_MINUTES } from "./window";
 
 const utc = (hhmm: string) => new Date(`2026-11-02T${hhmm}:00Z`);
 
@@ -32,5 +32,23 @@ describe("Collection window inside Kaspi's robots.txt Visit-time 0400-0845 UTC",
     expect(nextVisitWindowDay(utc("08:30"))).toBe("tomorrow"); // 13:30 Almaty, closed
     expect(nextVisitWindowDay(utc("17:00"))).toBe("tomorrow"); // 22:00 Almaty
     expect(nextVisitWindowDay(utc("19:30"))).toBe("today");    // 00:30 Almaty, already the next day
+  });
+});
+
+describe("lastCompleteShiftDay", () => {
+  it("is yesterday while today's run may still be going, today after 13:45 Almaty", () => {
+    expect(lastCompleteShiftDay(new Date("2026-11-05T04:33:00Z"))).toBe("2026-11-04"); // 09:33 Almaty
+    expect(lastCompleteShiftDay(new Date("2026-11-05T08:44:00Z"))).toBe("2026-11-04");
+    expect(lastCompleteShiftDay(new Date("2026-11-05T08:45:00Z"))).toBe("2026-11-05"); // 13:45 Almaty
+    expect(lastCompleteShiftDay(new Date("2026-11-05T20:00:00Z"))).toBe("2026-11-05"); // 01:00 Almaty, 6 Nov
+    expect(lastCompleteShiftDay(new Date("2026-11-05T23:30:00Z"))).toBe("2026-11-05"); // 04:30 Almaty, 6 Nov
+  });
+});
+
+describe("secondsUntilShiftEnds", () => {
+  it("counts down to 08:45 UTC, today or tomorrow", () => {
+    expect(secondsUntilShiftEnds(new Date("2026-11-05T08:15:00Z"))).toBe(1800);
+    expect(secondsUntilShiftEnds(new Date("2026-11-05T08:45:00Z"))).toBe(86_400);
+    expect(secondsUntilShiftEnds(new Date("2026-11-05T20:45:00Z"))).toBe(12 * 3600);
   });
 });

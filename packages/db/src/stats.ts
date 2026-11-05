@@ -15,6 +15,8 @@ export interface PlatformStats {
   /** Sellers with an offer in the latest check of an active product. */
   sellers: number;
   /** The latest shift (rule D): products checked, how many changed by MOVE_MIN_PCT, how many of them got cheaper. */
+  /** The latest complete shift (rule D) that checks, changes and drops are counted for. */
+  shiftDay: string | null;
   checks: number;
   changes: number;
   drops: number;
@@ -78,6 +80,7 @@ export async function getPlatformStats(sql: postgres.Sql, dayCount = 14, listCou
   return {
     products: totals!.products,
     sellers: totals!.sellers,
+    shiftDay: day.day,
     checks: day.checked,
     changes: day.down.length + day.up.length,
     drops: day.down.length,

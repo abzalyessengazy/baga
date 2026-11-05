@@ -11,6 +11,9 @@ import { Wordmark } from "./Wordmark";
 type L = "ru" | "kk";
 const count = (n: number) => new Intl.NumberFormat("ru-RU").format(n);
 const ddmm = (day: string) => `${day.slice(8, 10)}.${day.slice(5, 7)}`;
+/** Calendar days from the first observed day to the latest complete shift, both included. */
+const historyDays = (first: string | null, last: string) =>
+  first ? Math.round((Date.parse(last) - Date.parse(first)) / 86_400_000) + 1 : 0;
 const name = (p: { title: string; titleKk: string | null }, locale: L) => shortTitle((locale === "kk" && p.titleKk) || p.title);
 
 // Printer feed: the paper advances in small steps, like a thermal printer.
@@ -37,7 +40,7 @@ export function MarketReceipt() {
   // The same outer element before and after loading, so useInView keeps watching it.
   if (m === undefined) return <div className="printer market-printer" ref={ref} aria-hidden><div className="printer-slot" /><div className="market-wait" /></div>;
   const f = (n: number) => formatTenge(n, locale);
-  const has = !!m?.day && m.checked > 0;
+  const has = !!m && m.catalog.products > 0;
   const spread = m?.spread;
   return (
     <div className="printer market-printer" ref={ref}>
@@ -47,18 +50,23 @@ export function MarketReceipt() {
           <section className="receipt market" aria-label={t("title")}>
             <div className="market-head">
               <span className="market-brand"><Wordmark /></span>
-              <span className="market-day">{t("head")}{has && ` · ${ddmm(m!.day!)}`}</span>
+              <span className="market-day">{t("head")}</span>
             </div>
             <hr className="rule" />
             {!has && <p className="market-empty">{t("empty")}</p>}
             {has && (
               <>
+                {/* The whole catalog first; the latest complete day is a line under it (docs/STATS.md). */}
                 <dl className="mk-stats">
-                  <div><dt>{t("checked")}</dt><dd>{count(m!.checked)}</dd></div>
-                  <div className="is-down"><dt>↓ {t("down")}</dt><dd>{count(m!.down)}</dd></div>
-                  <div className="is-up"><dt>↑ {t("up")}</dt><dd>{count(m!.up)}</dd></div>
+                  <div><dt>{t("products")}</dt><dd>{count(m!.catalog.products)}</dd></div>
+                  <div><dt>{t("sellers")}</dt><dd>{count(m!.catalog.sellers)}</dd></div>
+                  <div><dt>{t("days")}</dt><dd>{count(historyDays(m!.catalog.firstDay, m!.day ?? m!.catalog.firstDay ?? ""))}</dd></div>
                 </dl>
-                <p className="mk-note">{t("compared", { count: m!.compared })}</p>
+                {m!.day && <p className="mk-day">
+                  {t("dayLine", { date: ddmm(m!.day!), count: m!.compared })}{" "}
+                  <span className="mk-day-n is-down">↓ {count(m!.down)}</span> {t("down").toLowerCase()} ·{" "}
+                  <span className="mk-day-n is-up">↑ {count(m!.up)}</span> {t("up").toLowerCase()}
+                </p>}
                 {m!.newLows > 0 && <p className="mk-note is-ink">{t("newLows", { count: m!.newLows, days: 7 })}</p>}
               </>
             )}

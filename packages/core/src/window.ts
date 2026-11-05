@@ -45,3 +45,18 @@ export function nextVisitWindowDay(now: Date): "today" | "tomorrow" {
   const almatyMinute = (now.getUTCHours() * 60 + now.getUTCMinutes() + ALMATY_OFFSET_MINUTES) % (24 * 60);
   return almatyMinute < COLLECT_WINDOW_UTC.endMinute + ALMATY_OFFSET_MINUTES ? "today" : "tomorrow";
 }
+
+/**
+ * The latest Almaty day whose collection is over (docs/STATS.md, "Shift"): today once Kaspi's Visit-time has ended
+ * (08:45 UTC = 13:45 Almaty), yesterday before that. Numbers of a run still in progress are never shown as a day.
+ */
+export function lastCompleteShiftDay(now: Date): string {
+  return new Date(now.getTime() - KASPI_VISIT_WINDOW_UTC.endMinute * 60_000).toISOString().slice(0, 10);
+}
+
+/** Seconds until the next shift day completes (08:45 UTC): CDN copies of daily numbers should not outlive it. */
+export function secondsUntilShiftEnds(now: Date): number {
+  const end = KASPI_VISIT_WINDOW_UTC.endMinute * 60;
+  const s = now.getUTCHours() * 3600 + now.getUTCMinutes() * 60 + now.getUTCSeconds();
+  return s < end ? end - s : 86_400 - s + end;
+}

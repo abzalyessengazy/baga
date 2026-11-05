@@ -1,5 +1,5 @@
 import type postgres from "postgres";
-import { MOVE_MIN_PCT, moveDirection } from "@baga/core";
+import { lastCompleteShiftDay, MOVE_MIN_PCT, moveDirection } from "@baga/core";
 
 /**
  * Price moves, by the rules in docs/STATS.md. Prices are compared as daily lows (the lowest price of an Almaty
@@ -59,18 +59,26 @@ export interface DayMoves {
  * Rule D (docs/STATS.md): the latest shift's daily low of each product against its previous daily low (the most
  * recent earlier day it was seen in stock). Used by "Kaspi сегодня", the Z-report totals and its "day" lists.
  */
-export async function dayMoves(sql: postgres.Sql): Promise<DayMoves> {
+export async function dayMoves(sql: postgres.Sql, now = new Date()): Promise<DayMoves> {
+  // The latest complete shift (docs/STATS.md): a run still in progress is not a day yet. Every checked product has an
+  // observation on each checked day (the daily heartbeat), so observations count the products checked that day.
+  const cutoff = lastCompleteShiftDay(now);
   const [head] = await sql<{ day: string | null; checked: number }[]>`
-    with latest as (select max((last_checked_at at time zone 'Asia/Almaty')::date) as day from product_state)
+    with days as (
+      select (o.observed_at at time zone 'Asia/Almaty')::date as day, o.product_id
+      from price_observations o join products p on p.id = o.product_id
+      where p.status = 'active' and o.observed_at < (${cutoff}::date + 1)::timestamp at time zone 'Asia/Almaty'
+        and o.observed_at > now() - interval '60 days'),
+    latest as (select max(day) as day from days)
     select to_char(latest.day, 'YYYY-MM-DD') as day,
-           (select count(*)::int from product_state s join products p on p.id = s.product_id
-            where p.status = 'active' and (s.last_checked_at at time zone 'Asia/Almaty')::date = latest.day) as checked
+           (select count(distinct product_id)::int from days where days.day = latest.day) as checked
     from latest`;
   if (!head?.day) return { day: null, checked: 0, compared: 0, down: [], up: [] };
   const rows = await sql<Mover[]>`
     with d as (
       select product_id, (observed_at at time zone 'Asia/Almaty')::date as day, min(min_price)::int as p
-      from price_observations where min_price is not null group by 1, 2),
+      from price_observations where min_price is not null
+        and observed_at < (${head.day}::date + 1)::timestamp at time zone 'Asia/Almaty' group by 1, 2),
     r as (select product_id, day, p, row_number() over (partition by product_id order by day desc) as rn from d)
     select p.external_id as "externalId", p.title, p.title_kk as "titleKk", p.image_url as "imageUrl",
            a.p as now, b.p as was, round((a.p - b.p) * 100.0 / b.p)::int as pct,

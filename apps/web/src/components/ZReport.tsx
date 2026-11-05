@@ -12,7 +12,7 @@ type Drop = { externalId: string; title: string; titleKk: string | null; from: n
 type Item = { externalId: string; title: string; titleKk: string | null; price: number | null; at: string };
 type Moves = { drops: Drop[]; rises: Drop[] };
 type Stats = {
-  products: number; sellers: number; checks: number; changes: number; drops: number; alertsSent: number; watchers: number;
+  products: number; sellers: number; shiftDay: string | null; checks: number; changes: number; drops: number; alertsSent: number; watchers: number;
   lastRun: { startedAt: string; finishedAt: string } | null;
   days: { day: string; checks: number; drops: number }[];
   moves: { day: Moves; week: Moves };
@@ -68,8 +68,8 @@ function Totals({ s }: { s: Stats & { lastRun: NonNullable<Stats["lastRun"]> } }
   const go = useInView(ref, { once: true, amount: 0.4 }) || !!reduce;
   const cells: [string, number][] = [
     [t("zProducts"), s.products],
-    // "today" only while the latest run is from today (Almaty); the next morning, before the run, it names its date.
-    [ddmm(s.lastRun.finishedAt) === ddmm(new Date().toISOString()) ? t("zChecks") : t("zChecksOn", { date: ddmm(s.lastRun.finishedAt) }), s.checks],
+    // The latest complete shift (docs/STATS.md): "today" after today's run is over, otherwise its date.
+    [s.shiftDay && ddmm(s.shiftDay) === ddmm(new Date().toISOString()) ? t("zChecks") : t("zChecksOn", { date: s.shiftDay ? ddmm(s.shiftDay) : "—" }), s.checks],
     [t("zChanges"), s.changes],
     [t("zDrops"), s.drops],
     [t("zSellers"), s.sellers],
