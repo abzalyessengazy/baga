@@ -24,6 +24,8 @@ export interface PlatformStats {
   alertsSent: number;
   watchers: number;
   lastRun: { startedAt: Date; finishedAt: Date } | null;
+  /** The runs of the shift day: first start to last check that day (the Z-report head names the day its numbers are for). */
+  shiftRun: { startedAt: Date; finishedAt: Date } | null;
   days: StatsDay[];
   /** "day": rule D (latest shift vs previous daily low); "week": rule W (now vs the previous 7 days). Biggest percent first. */
   moves: { day: StatsMoves; week: StatsMoves };
@@ -49,6 +51,10 @@ export async function getPlatformStats(sql: postgres.Sql, dayCount = 14, listCou
     select r.started_at, max(o.observed_at) as finished_at
     from price_observations o join collection_runs r on r.id = o.run_id
     group by r.id order by max(o.observed_at) desc limit 1`;
+  const [shift] = day.day ? await sql<{ started_at: Date | null; finished_at: Date | null }[]>`
+    select min(r.started_at) as started_at, max(o.observed_at) as finished_at
+    from price_observations o join collection_runs r on r.id = o.run_id
+    where (o.observed_at at time zone 'Asia/Almaty')::date = ${day.day}::date` : [];
   const days = await sql<{ day: string; checks: number; drops: number }[]>`
     with r as (
       select ((observed_at at time zone 'Asia/Almaty')::date) as day, count(*)::int as checks
@@ -89,6 +95,7 @@ export async function getPlatformStats(sql: postgres.Sql, dayCount = 14, listCou
     alertsSent: totals!.alerts,
     watchers: totals!.watchers,
     lastRun: last ? { startedAt: last.started_at, finishedAt: last.finished_at } : null,
+    shiftRun: shift?.started_at && shift.finished_at ? { startedAt: shift.started_at, finishedAt: shift.finished_at } : null,
     days: days.reverse(),
     moves: {
       day: { drops: day.down.slice(0, listCount).map(move), rises: day.up.slice(0, listCount).map(move) },

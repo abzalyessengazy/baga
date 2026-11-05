@@ -356,8 +356,14 @@ a { color: inherit; }
 .z-slips .slip-screen.is-open { height: auto; }
 /* Z-report numbers in the UI type, with air between rows (same voice as "Kaspi сегодня"). */
 .z-cell dd { font-family: var(--font-ui); font-size: clamp(1.75rem, 3.4vw, 2.5rem); }
-.z-cell:nth-child(3) dd { color: var(--stamp); }
-.z-cell:nth-child(4) dd { color: var(--stamp-red); }
+.z-cell.is-down dd { color: var(--stamp); }
+.z-cell.is-up dd { color: var(--stamp-red); }
+/* Stat icons: small, in the label's colour, never louder than the number. */
+.mk-stats > div { display: flex; flex-direction: column; justify-content: space-between; }
+.stat-icon { flex: none; width: 14px; height: 14px; opacity: 0.85; }
+.z-cell dt, .mk-stats dt { display: flex; align-items: center; gap: 6px; }
+.z-cell dt, .mk-stats dt { align-items: flex-start; white-space: normal; line-height: 1.25; }
+.z-cell dt .stat-icon, .mk-stats dt .stat-icon { margin-top: 0; }
 .z-grid { gap: 22px 24px; }
 .z-slips .seller-row { padding: 9px 8px; font-size: 0.875rem; }
 .z-slips .seller-row + .seller-row, .z-slips .slip-screen > div + div > .seller-row { border-top: 1px dashed color-mix(in srgb, var(--rule) 60%, transparent); }
@@ -377,7 +383,7 @@ a { color: inherit; }
 .market-day { color: var(--ink-soft); font-size: 0.75rem; letter-spacing: 0.06em; text-transform: uppercase; }
 /* Analytics speak in the UI type, larger and with air; the receipt frame and labels stay mono. */
 .mk-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 4px 0 0; }
-.mk-stats dt { color: var(--ink-soft); font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; }
+.mk-stats dt { color: var(--ink-soft); font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.05em; }
 .mk-stats dd { margin: 6px 0 0; font-family: var(--font-ui); font-size: 2.25rem; font-weight: 800; letter-spacing: -0.03em; line-height: 1; font-variant-numeric: tabular-nums; }
 .mk-stats .is-down dd { color: var(--stamp); }
 .mk-stats .is-up dd { color: var(--stamp-red); }

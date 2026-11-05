@@ -7,10 +7,11 @@ import type { Market } from "@baga/db";
 import { Link } from "@/i18n/navigation";
 import { loadMarket } from "@/lib/market";
 import { Wordmark } from "./Wordmark";
+import { StatIcon } from "./StatIcon";
+import { dayMonth, type DatesT } from "@/lib/dayMonth";
 
 type L = "ru" | "kk";
 const count = (n: number) => new Intl.NumberFormat("ru-RU").format(n);
-const ddmm = (day: string) => `${day.slice(8, 10)}.${day.slice(5, 7)}`;
 /** "today" / "yesterday" for a YYYY-MM-DD day, by the Almaty calendar; anything older is named by its date. */
 function relativeDay(day: string): "today" | "yesterday" | "other" {
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Almaty" }).format(new Date());
@@ -32,6 +33,7 @@ const printerEase = (t: number) => Math.round(t * 28) / 28;
  */
 export function MarketReceipt() {
   const t = useTranslations("market");
+  const td = useTranslations("dates") as unknown as DatesT;
   const locale = useLocale() as L;
   const reduce = useReducedMotion();
   const [m, setM] = useState<Market | null | undefined>(undefined);
@@ -64,12 +66,12 @@ export function MarketReceipt() {
               <>
                 {/* The whole catalog first; the latest complete day is a line under it (docs/STATS.md). */}
                 <dl className="mk-stats">
-                  <div><dt>{t("products")}</dt><dd>{count(m!.catalog.products)}</dd></div>
-                  <div><dt>{t("sellers")}</dt><dd>{count(m!.catalog.sellers)}</dd></div>
-                  <div><dt>{t("days")}</dt><dd>{count(historyDays(m!.catalog.firstDay, m!.day ?? m!.catalog.firstDay ?? ""))}</dd></div>
+                  <div><dt><StatIcon name="box" />{t("products")}</dt><dd>{count(m!.catalog.products)}</dd></div>
+                  <div><dt><StatIcon name="store" />{t("sellers")}</dt><dd>{count(m!.catalog.sellers)}</dd></div>
+                  <div><dt><StatIcon name="calendar" />{t("days")}</dt><dd>{count(historyDays(m!.catalog.firstDay, m!.day ?? m!.catalog.firstDay ?? ""))}</dd></div>
                 </dl>
                 {m!.day && <p className="mk-day">
-                  {t("dayLine", { when: relativeDay(m!.day!), date: ddmm(m!.day!), count: m!.compared })}{" "}
+                  {t("dayLine", { when: relativeDay(m!.day!), date: dayMonth(m!.day!, td), count: m!.compared })}{" "}
                   <span className="mk-day-n is-down">↓ {count(m!.down)}</span> {t("down").toLowerCase()} ·{" "}
                   <span className="mk-day-n is-up">↑ {count(m!.up)}</span> {t("up").toLowerCase()}
                 </p>}

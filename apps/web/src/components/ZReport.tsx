@@ -6,13 +6,15 @@ import { formatTenge, shortTitle } from "@baga/core";
 import type { Market } from "@baga/db";
 import { Link } from "@/i18n/navigation";
 import { loadMarket } from "@/lib/market";
+import { dayMonth, type DatesT } from "@/lib/dayMonth";
+import { StatIcon, type StatIconName } from "./StatIcon";
 
 type L = "ru" | "kk";
 type Drop = { externalId: string; title: string; titleKk: string | null; from: number; to: number; pct: number; at: string };
 type Item = { externalId: string; title: string; titleKk: string | null; price: number | null; at: string };
 type Moves = { drops: Drop[]; rises: Drop[] };
 type Stats = {
-  products: number; sellers: number; shiftDay: string | null; checks: number; changes: number; drops: number; rises: number; alertsSent: number; watchers: number;
+  products: number; sellers: number; shiftDay: string | null; shiftRun?: { startedAt: string; finishedAt: string } | null; checks: number; changes: number; drops: number; rises: number; alertsSent: number; watchers: number;
   lastRun: { startedAt: string; finishedAt: string } | null;
   days: { day: string; checks: number; drops: number }[];
   moves: { day: Moves; week: Moves };
@@ -26,7 +28,6 @@ const SHOW_ALERTS_FROM = 50;
 
 const count = (n: number) => new Intl.NumberFormat("ru-RU").format(n);
 const almaty = (iso: string, opts: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat("ru-RU", { timeZone: "Asia/Almaty", ...opts }).format(new Date(iso));
-const ddmm = (iso: string) => almaty(iso, { day: "2-digit", month: "2-digit" });
 const hhmm = (iso: string) => almaty(iso, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 const dropTitle = (d: { title: string; titleKk: string | null }, locale: L) => shortTitle((locale === "kk" && d.titleKk) || d.title);
 
@@ -62,30 +63,30 @@ function CountUp({ to, go }: { to: number; go: boolean }) {
 
 /* Totals: the Z-report head, stamped with the real time of the latest collector run. */
 function Totals({ s }: { s: Stats & { lastRun: NonNullable<Stats["lastRun"]> } }) {
+  const td = useTranslations("dates") as unknown as DatesT;
   const t = useTranslations("home");
   const ref = useRef<HTMLDivElement>(null);
   const reduce = useReducedMotion();
   const go = useInView(ref, { once: true, amount: 0.4 }) || !!reduce;
-  const cells: [string, number][] = [
-    [t("zProducts"), s.products],
-    // The latest complete shift (docs/STATS.md): "today" after today's run is over, otherwise its date.
-    [s.shiftDay && ddmm(s.shiftDay) === ddmm(new Date().toISOString()) ? t("zChecks") : t("zChecksOn", { date: s.shiftDay ? ddmm(s.shiftDay) : "—" }), s.checks],
-    [t("zDrops"), s.drops],
-    [t("zRises"), s.rises],
-    [t("zSellers"), s.sellers],
-    ...(s.alertsSent >= SHOW_ALERTS_FROM ? [[t("zAlerts"), s.alertsSent] as [string, number]] : []),
-    ...(s.watchers >= SHOW_WATCHERS_FROM ? [[t("zWatchers"), s.watchers] as [string, number]] : []),
+  // The whole catalog and the latest complete shift's changes (docs/STATS.md); the head names that shift's day.
+  const cells: [StatIconName, string, number, string][] = [
+    ["box", t("zProducts"), s.products, ""],
+    ["down", t("zDrops"), s.drops, "is-down"],
+    ["up", t("zRises"), s.rises, "is-up"],
+    ["store", t("zSellers"), s.sellers, ""],
+    ...(s.alertsSent >= SHOW_ALERTS_FROM ? [["box", t("zAlerts"), s.alertsSent, ""] as [StatIconName, string, number, string]] : []),
+    ...(s.watchers >= SHOW_WATCHERS_FROM ? [["box", t("zWatchers"), s.watchers, ""] as [StatIconName, string, number, string]] : []),
   ];
-  const { startedAt, finishedAt } = s.lastRun;
+  const run = s.shiftRun ?? s.lastRun;
   return (
     <div className="slip z-totals" ref={ref}>
       <div className="z-head">
         <span className="z-name">BAĞA · {t("zHead")}</span>
-        <span className="z-shift">{t("zShift", { date: ddmm(finishedAt), from: hhmm(startedAt), to: hhmm(finishedAt) })}</span>
+        <span className="z-shift">{t("zShift", { date: dayMonth(s.shiftDay ?? run.finishedAt, td), from: hhmm(run.startedAt), to: hhmm(run.finishedAt) })}</span>
       </div>
       <dl className="z-grid">
-        {cells.map(([k, v]) => (
-          <div key={k} className="z-cell"><dt>{k}</dt><dd><CountUp to={v} go={go} /></dd></div>
+        {cells.map(([icon, k, v, cls]) => (
+          <div key={k} className={`z-cell ${cls}`}><dt><StatIcon name={icon} />{k}</dt><dd><CountUp to={v} go={go} /></dd></div>
         ))}
       </dl>
       <motion.span className="stamp z-stamp" aria-hidden initial={reduce ? false : { scale: 1.8, opacity: 0, rotate: -16 }}
@@ -133,6 +134,7 @@ function MovesSlip({ moves, locale }: { moves: Stats["moves"]; locale: L }) {
 
 /* Plain product lists: most tracked, and newly added to the catalog. */
 function ListSlip({ items, locale, dated }: { items: Item[]; locale: L; dated?: boolean }) {
+  const td = useTranslations("dates") as unknown as DatesT;
   const ref = useRef<HTMLDivElement>(null);
   const reduce = useReducedMotion();
   const go = useInView(ref, { once: true, amount: 0.4 }) || !!reduce;
@@ -142,7 +144,7 @@ function ListSlip({ items, locale, dated }: { items: Item[]; locale: L; dated?: 
       {items.slice(0, limit).map((d, i) => (
         <motion.div key={d.externalId} initial={reduce ? false : { opacity: 0, y: 10 }} animate={go ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.3, delay: Math.min(i, ROWS) * 0.1 }}>
           <Link href={`/p/${d.externalId}`} className="seller-row z-drop">
-            <span className="name">{dated && <span className="z-date">{ddmm(d.at)}</span>}{dropTitle(d, locale)}</span>
+            <span className="name">{dated && <span className="z-date">{dayMonth(d.at, td)}</span>}{dropTitle(d, locale)}</span>
             <span className="p">{d.price !== null ? formatTenge(d.price, locale) : "—"}</span>
           </Link>
         </motion.div>
@@ -188,6 +190,7 @@ function CategorySlip({ rows, locale }: { rows: Market["categories"]; locale: L 
 
 /* 3. The biggest drop: the old price, the new one, and a stamp with the difference. */
 function BestSlip({ d, locale }: { d: Drop; locale: L }) {
+  const td = useTranslations("dates") as unknown as DatesT;
   const t = useTranslations("home");
   const ref = useRef<HTMLAnchorElement>(null);
   const reduce = useReducedMotion();
@@ -199,7 +202,7 @@ function BestSlip({ d, locale }: { d: Drop; locale: L }) {
       <motion.div className="countdown-price" initial={reduce ? false : { opacity: 0.3, y: -6 }} animate={go ? { opacity: 1, y: 0 } : {}} transition={{ delay: 0.3 }}>
         {formatTenge(d.to, locale)}
       </motion.div>
-      <div className="mail-line">✓ {ddmm(d.at)} · Kaspi</div>
+      <div className="mail-line">✓ {dayMonth(d.at, td)} · Kaspi</div>
       <motion.div className="stamp countdown-stamp" initial={reduce ? false : { scale: 1.8, opacity: 0, rotate: -12 }}
         animate={go ? { scale: 1, opacity: 0.92, rotate: -5 } : {}} transition={{ type: "spring", stiffness: 500, damping: 18, delay: 0.9 }}>
         −{formatTenge(d.from - d.to, locale)}
