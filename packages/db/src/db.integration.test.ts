@@ -57,7 +57,7 @@ describe.skipIf(!url)("database (disposable Postgres)", () => {
   }
   async function notification(watcherId: string, channel: "telegram" | "email", age = "0 minutes") {
     const [t] = await sql<{ id: string }[]>`
-      insert into trackings (watcher_id, external_id, target_price, status) values (${watcherId}, '100000001', 1000, 'active')
+      insert into trackings (watcher_id, external_id, target_price, status) values (${watcherId}, ${String(100_000_000 + ++n)}, 1000, 'active')
       returning id`;
     const [row] = await sql<{ id: number }[]>`
       insert into notifications (tracking_id, type, channel, price, idempotency_key, created_at)
