@@ -139,25 +139,37 @@ export async function getWatcherTracking(sql: postgres.Sql, watcherId: string, e
 
 export type EmailRequest = { ok: true; send: boolean } | { ok: false; reason: "too_soon" | "too_many" };
 
+/** Confirmation emails a day: per address across all watchers, and per watcher (any addresses). */
+export const EMAIL_REQUEST_LIMITS = { perAddressPerDay: 5, perWatcherPerDay: 10 } as const;
+
 /**
  * Stores an address waiting for confirmation (migration 0008) with a fresh token and unsubscribe code. An address
- * this watcher already confirmed needs no new email (send: false). Limits: one request a minute per watcher, and
- * at most 5 a day per address across all watchers, so the form cannot be used to flood someone's inbox.
+ * this watcher already confirmed needs no new email (send: false). Limits, counted in the email_requests ledger
+ * (migration 0014) so they hold however often one browser asks: one request a minute per watcher, and
+ * EMAIL_REQUEST_LIMITS a day, so the form cannot be used to flood someone's inbox. One address is handled at a time
+ * (advisory lock), so parallel requests cannot pass a limit together.
  */
 export async function requestWatcherEmail(sql: postgres.Sql, watcherId: string, email: string, tokenHash: string, stopCode: string): Promise<EmailRequest> {
-  const [w] = await sql<{ email: string | null; confirmed: boolean; recent: boolean }[]>`
-    select email, email_confirmed_at is not null as confirmed,
-           coalesce(email_requested_at > now() - interval '1 minute', false) as recent
-    from watchers where id = ${watcherId}`;
-  if (w?.email === email && w.confirmed) return { ok: true, send: false };
-  if (w?.recent) return { ok: false, reason: "too_soon" };
-  const [n] = await sql<{ n: number }[]>`
-    select count(*)::int as n from watchers where email = ${email} and email_requested_at > now() - interval '1 day'`;
-  if ((n?.n ?? 0) >= 5) return { ok: false, reason: "too_many" };
-  await sql`update watchers set email = ${email}, email_confirmed_at = null, email_token_hash = ${tokenHash},
-    email_token_expires_at = now() + interval '2 days', email_requested_at = now(), email_stop_code = ${stopCode}
-    where id = ${watcherId}`;
-  return { ok: true, send: true };
+  return sql.begin(async (tx) => {
+    await tx`select pg_advisory_xact_lock(hashtext(${email}))`;
+    const [w] = await tx<{ email: string | null; confirmed: boolean }[]>`
+      select email, email_confirmed_at is not null as confirmed from watchers where id = ${watcherId}`;
+    if (w?.email === email && w.confirmed) return { ok: true, send: false } as const;
+    const hash = tx`sha256(convert_to(${email}, 'UTF8'))`;
+    const [n] = await tx<{ recent: number; address: number; watcher: number }[]>`
+      select count(*) filter (where watcher_id = ${watcherId} and at > now() - interval '1 minute')::int as recent,
+             count(*) filter (where email_hash = ${hash})::int as address,
+             count(*) filter (where watcher_id = ${watcherId})::int as watcher
+      from email_requests where at > now() - interval '1 day' and (email_hash = ${hash} or watcher_id = ${watcherId})`;
+    if ((n?.recent ?? 0) > 0) return { ok: false, reason: "too_soon" } as const;
+    if ((n?.address ?? 0) >= EMAIL_REQUEST_LIMITS.perAddressPerDay || (n?.watcher ?? 0) >= EMAIL_REQUEST_LIMITS.perWatcherPerDay)
+      return { ok: false, reason: "too_many" } as const;
+    await tx`insert into email_requests (email_hash, watcher_id) values (${hash}, ${watcherId})`;
+    await tx`update watchers set email = ${email}, email_confirmed_at = null, email_token_hash = ${tokenHash},
+      email_token_expires_at = now() + interval '2 days', email_requested_at = now(), email_stop_code = ${stopCode}
+      where id = ${watcherId}`;
+    return { ok: true, send: true } as const;
+  });
 }
 
 /** The confirmation link was opened and its button pressed: alerts may now go to the address. */

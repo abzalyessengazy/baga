@@ -456,6 +456,7 @@ async function queueBoughtAsks() {
     returning t.id, w.telegram_chat_id is not null as tg, w.email_confirmed_at is not null as mail`;
   for (const t of due) await queueNotification(t, "bought_ask", 0, `${t.id}:bought`);
   await sql`delete from events where at < now() - interval '180 days'`;
+  await sql`delete from email_requests where at < now() - interval '2 days'`;
 }
 
 /**
