@@ -208,7 +208,10 @@ function BestSlip({ d, locale }: { d: Drop; locale: L }) {
   const go = useInView(ref, { once: true, amount: 0.4 }) || !!reduce;
   return (
     <Link href={`/p/${d.externalId}`} className="slip-screen z-best" ref={ref}>
-      <div className="z-best-title">{dropTitle(d, locale)}</div>
+      <div className="z-best-head">
+        {d.imageUrl ? <img className="z-thumb z-best-img" src={d.imageUrl} alt="" width={48} height={48} loading="lazy" /> : <span className="z-thumb z-best-img" aria-hidden />}
+        <div className="z-best-title">{dropTitle(d, locale)}</div>
+      </div>
       <div className="countdown-target"><span>{t("bestWas")}</span><s>{formatTenge(d.from, locale)}</s></div>
       <motion.div className="countdown-price" initial={reduce ? false : { opacity: 0.3, y: -6 }} animate={go ? { opacity: 1, y: 0 } : {}} transition={{ delay: 0.3 }}>
         {formatTenge(d.to, locale)}

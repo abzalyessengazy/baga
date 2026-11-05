@@ -689,3 +689,7 @@ span.z-thumb { display: block; background: var(--paper-shade); box-shadow: none;
   background: linear-gradient(color-mix(in srgb, var(--paper) 0%, transparent), var(--paper) 45%);
 }
 .mk-day-row { display: block; margin-top: 2px; }
+/* The biggest drop of the week: the product's picture beside its name. */
+.z-best-head { display: flex; gap: 12px; align-items: center; margin-bottom: 14px; }
+.z-best-head .z-best-title { margin-bottom: 0; }
+.z-best-img { width: 48px; height: 48px; }
