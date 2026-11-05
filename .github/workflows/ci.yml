@@ -31,4 +31,4 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
-      - run: pnpm exec vitest run packages/db/src/db.integration.test.ts
+      - run: pnpm exec vitest run packages/db/src/db.integration.test.ts --reporter=default --reporter=github-actions
