@@ -102,6 +102,11 @@ export default async function ProductPage({ params, searchParams }: Props) {
         : verdict.kind === "typical"
           ? tv("typicalText", { low: f(verdict.typicalLow!), high: f(verdict.typicalHigh!) })
           : tv("highText", { pct: verdict.aboveMedianPct ?? 0, min: f(verdict.min!), date: fmtDate(verdict.minDay!, locale) });
+  // The chart shows each day's lowest price; the total is the latest check. When a cheaper offer was seen earlier the
+  // same day and is gone now, say so, so the two numbers do not look like a mistake.
+  const checkedDay = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Almaty" }).format(new Date(v.checkedAt));
+  const lastLow = v.history[v.history.length - 1];
+  const earlierLow = v.minPrice !== null && lastLow && lastLow.day === checkedDay && lastLow.price < v.minPrice ? lastLow.price : null;
   const shown = v.offers.slice(0, 12);
   const delivery = (d: string | null) => {
     const key = `delivery${d ?? "Unknown"}`;
@@ -133,6 +138,7 @@ export default async function ProductPage({ params, searchParams }: Props) {
           <span className="total-label">{tr("total")}</span>
           <span className="total-value">{v.minPrice !== null ? f(v.minPrice) : t("outOfStock")}</span>
           {v.offerCount > 0 && <span className="total-sub">{tr("from", { count: v.offerCount })}</span>}
+          {earlierLow !== null && <span className="total-sub total-earlier">{t("earlierToday", { price: f(earlierLow) })}</span>}
         </div>
         {verdict && (
           <>

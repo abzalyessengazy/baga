@@ -4,9 +4,9 @@ import { dayMoves, weekMovers, type Mover } from "./movers";
 /** One Almaty calendar day of collector work. */
 export interface StatsDay { day: string; checks: number; drops: number }
 /** A price move by rule D or W (docs/STATS.md): from the earlier daily low to the current one. */
-export interface StatsMove { externalId: string; title: string; titleKk: string | null; from: number; to: number; pct: number; at: Date }
+export interface StatsMove { externalId: string; title: string; titleKk: string | null; imageUrl: string | null; from: number; to: number; pct: number; at: Date }
 /** A product in a plain list (most tracked, newest). */
-export interface StatsProduct { externalId: string; title: string; titleKk: string | null; price: number | null; at: Date }
+export interface StatsProduct { externalId: string; title: string; titleKk: string | null; imageUrl: string | null; price: number | null; at: Date }
 export interface StatsMoves { drops: StatsMove[]; rises: StatsMove[] }
 
 export interface PlatformStats {
@@ -69,18 +69,18 @@ export async function getPlatformStats(sql: postgres.Sql, dayCount = 14, listCou
     from r left join d using (day) order by r.day desc limit ${dayCount}`;
   const weekDown = await weekMovers(sql, "down", listCount);
   const weekUp = await weekMovers(sql, "up", listCount);
-  const move = (m: Mover): StatsMove => ({ externalId: m.externalId, title: m.title, titleKk: m.titleKk, from: m.was, to: m.now, pct: m.pct, at: m.checkedAt });
-  const product = (r: { external_id: string; title: string; title_kk: string | null; price: number | null; at: Date }): StatsProduct =>
-    ({ externalId: r.external_id, title: r.title, titleKk: r.title_kk, price: r.price, at: r.at });
+  const move = (m: Mover): StatsMove => ({ externalId: m.externalId, title: m.title, titleKk: m.titleKk, imageUrl: m.imageUrl, from: m.was, to: m.now, pct: m.pct, at: m.checkedAt });
+  const product = (r: { external_id: string; title: string; title_kk: string | null; image_url: string | null; price: number | null; at: Date }): StatsProduct =>
+    ({ externalId: r.external_id, title: r.title, titleKk: r.title_kk, imageUrl: r.image_url, price: r.price, at: r.at });
   // Ordered by how many watchers track a product; the counts themselves stay private while they are small.
-  const tracked = await sql<{ external_id: string; title: string; title_kk: string | null; price: number | null; at: Date }[]>`
-    select p.external_id, p.title, p.title_kk, s.current_min_price as price, max(t.created_at) as at
+  const tracked = await sql<{ external_id: string; title: string; title_kk: string | null; image_url: string | null; price: number | null; at: Date }[]>`
+    select p.external_id, p.title, p.title_kk, p.image_url, s.current_min_price as price, max(t.created_at) as at
     from trackings t join products p on p.id = t.product_id left join product_state s on s.product_id = p.id
     where p.status = 'active'
     group by p.id, s.current_min_price
     order by count(*) desc, max(t.created_at) desc limit ${listCount}`;
-  const newest = await sql<{ external_id: string; title: string; title_kk: string | null; price: number | null; at: Date }[]>`
-    select p.external_id, p.title, p.title_kk, s.current_min_price as price, p.first_seen_at as at
+  const newest = await sql<{ external_id: string; title: string; title_kk: string | null; image_url: string | null; price: number | null; at: Date }[]>`
+    select p.external_id, p.title, p.title_kk, p.image_url, s.current_min_price as price, p.first_seen_at as at
     from products p join product_state s on s.product_id = p.id
     where p.status = 'active' and s.current_min_price is not null
     order by p.first_seen_at desc limit ${listCount}`;

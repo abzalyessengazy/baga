@@ -2,9 +2,10 @@ import type postgres from "postgres";
 import { dayMoves, weekMovers, type Mover } from "./movers";
 
 /** One product where sellers ask very different prices right now (offers of its latest check). */
-export interface MarketSpread { externalId: string; title: string; titleKk: string | null; lo: number; hi: number; sellers: number }
+export interface MarketSpread { externalId: string; title: string; titleKk: string | null; imageUrl: string | null; lo: number; hi: number; sellers: number }
 /** A Kaspi leaf category we watch enough products in. `weekPct` stays null until enough of them have a week of history. */
-export interface MarketCategory { name: string; products: number; from: number; median: number; weekPct: number | null; compared: number }
+/** `imageUrl`: the picture of its most reviewed product, as the category's icon. */
+export interface MarketCategory { name: string; imageUrl: string | null; products: number; from: number; median: number; weekPct: number | null; compared: number }
 
 /**
  * The home page's find of the day, with the reason it was picked: the biggest week drop (rule W) or the product
@@ -84,7 +85,7 @@ export async function getMarket(sql: postgres.Sql): Promise<Market> {
     from x`;
   const top = await sql<MarketSpread[]>`
     with x as (${offers})
-    select p.external_id as "externalId", p.title, p.title_kk as "titleKk", x.lo, x.hi, x.sellers
+    select p.external_id as "externalId", p.title, p.title_kk as "titleKk", p.image_url as "imageUrl", x.lo, x.hi, x.sellers
     from x join products p on p.id = x.product_id
     where x.lo >= ${c.spreadMinPrice}
     order by (x.hi - x.lo)::numeric / x.lo desc limit ${c.spreadTop}`;
@@ -97,11 +98,13 @@ export async function getMarket(sql: postgres.Sql): Promise<Market> {
       select distinct on (product_id) product_id, p from d, today
       where d.day >= today.day - 7 and d.day < today.day - 1 order by product_id, d.day),
     x as (
-      select p.category_path[array_length(p.category_path, 1)] as name, s.current_min_price as now, w.p as was
+      select p.category_path[array_length(p.category_path, 1)] as name, s.current_min_price as now, w.p as was,
+             p.image_url, coalesce(p.kaspi_reviews, 0) as reviews
       from products p join product_state s on s.product_id = p.id left join was w on w.product_id = p.id, today
       where p.status = 'active' and s.in_stock and s.current_min_price is not null and array_length(p.category_path, 1) > 0
         and (s.last_checked_at at time zone 'Asia/Almaty')::date >= today.day - 1)
-    select name, count(*)::int as products, min(now)::int as "from",
+    select name, (array_agg(image_url order by reviews desc) filter (where image_url is not null))[1] as "imageUrl",
+           count(*)::int as products, min(now)::int as "from",
            round(percentile_cont(0.5) within group (order by now))::int as median,
            count(was)::int as compared,
            case when count(was) >= ${c.categoryCompared}

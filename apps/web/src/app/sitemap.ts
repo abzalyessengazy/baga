@@ -10,6 +10,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const pages: MetadataRoute.Sitemap = ["ru", "kk"].flatMap((l) => [
     { url: `${base}/${l}`, changeFrequency: "weekly" as const },
     { url: `${base}/${l}/drops`, changeFrequency: "daily" as const },
+    { url: `${base}/${l}/explore`, changeFrequency: "daily" as const },
     ...["privacy", "terms"].map((doc) => ({ url: `${base}/${l}/${doc}`, changeFrequency: "yearly" as const })),
   ]);
   const sql = getSql();

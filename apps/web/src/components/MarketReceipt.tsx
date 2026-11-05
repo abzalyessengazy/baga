@@ -87,6 +87,7 @@ export function MarketReceipt() {
                 <div className="mk-rows">
                   {spread.top.slice(0, 3).map((s) => (
                     <Link key={s.externalId} href={`/p/${s.externalId}`} className="mk-row">
+                      {s.imageUrl ? <img className="z-thumb" src={s.imageUrl} alt="" width={32} height={32} loading="lazy" /> : <span className="z-thumb" aria-hidden />}
                       <span className="mk-row-name">{name(s, locale)}<span>{f(s.lo)} – {f(s.hi)}</span></span>
                       <span className="mk-row-v">+{f(s.hi - s.lo)}</span>
                     </Link>
