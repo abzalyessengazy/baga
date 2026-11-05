@@ -20,6 +20,7 @@ export interface PlatformStats {
   checks: number;
   changes: number;
   drops: number;
+  rises: number;
   alertsSent: number;
   watchers: number;
   lastRun: { startedAt: Date; finishedAt: Date } | null;
@@ -84,6 +85,7 @@ export async function getPlatformStats(sql: postgres.Sql, dayCount = 14, listCou
     checks: day.checked,
     changes: day.down.length + day.up.length,
     drops: day.down.length,
+    rises: day.up.length,
     alertsSent: totals!.alerts,
     watchers: totals!.watchers,
     lastRun: last ? { startedAt: last.started_at, finishedAt: last.finished_at } : null,
