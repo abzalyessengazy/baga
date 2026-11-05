@@ -1,4 +1,5 @@
 import type postgres from "postgres";
+import { INTERVAL_MINUTES } from "@baga/core";
 
 /**
  * Trackings before registration (migration 0007): an anonymous watcher holds a secret (cookie + private link,
@@ -115,6 +116,13 @@ export async function upsertWatcherTracking(sql: postgres.Sql, watcherId: string
           -- A new target (or tracking again after "bought") may be asked "Вы купили?" again (migration 0011).
           bought = null, bought_at = null, bought_asked_at = null, bought_code = null
     returning id`;
+  // Tracked products are always first (PRIORITY_ORDER): promote the product now, not after its next check, and make it
+  // due within the tracked interval of its last check. Hot products stay hot; the collector sets the exact tier after the check.
+  if (prod.id) await sql`
+    update collection_schedule cs set priority = 'tracked', interval_minutes = ${INTERVAL_MINUTES.tracked},
+      next_check_at = least(cs.next_check_at, coalesce(s.last_checked_at, now()) + make_interval(mins => ${INTERVAL_MINUTES.tracked}))
+    from product_state s
+    where cs.product_id = ${prod.id} and s.product_id = cs.product_id and cs.priority not in ('hot', 'tracked')`;
   return { ok: true, trackingId: t!.id };
 }
 
