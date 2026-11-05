@@ -71,3 +71,33 @@ export function isSuspiciousJump(previous: number | null, next: number, maxChang
   if (previous === null || previous === 0) return false;
   return Math.abs((next - previous) / previous) * 100 > maxChangePct;
 }
+
+/**
+ * Queue lanes (DECISIONS.md, 2026-11-05 "What people want is checked first"), worked out from live data on every
+ * claim, never from a stored label that may be stale:
+ *   0 = someone tracks it: due when its tier says so, or at the latest TRACKED_MAX_AGE_MIN after its last check;
+ *   1 = a person opened it (pasted a link, searched, followed a link) since its last check and it is not checked
+ *       today: due in the next run, whatever its tier;
+ *   2 = everything else (catalog enrichment): due by its tier.
+ * New products pasted by visitors (seed_queue) are fetched before lane 2 as well. The collector's SQL in
+ * apps/worker/src/collect.ts mirrors this function.
+ */
+export const USER_INTEREST = { viewedWithinDays: 7, trackedMaxAgeMin: INTERVAL_MINUTES.tracked } as const;
+
+export function queueLane(p: {
+  activeTrackings: number; lastViewedAt: Date | null; lastCheckedAt: Date | null; nextCheckAt: Date; intervalMinutes: number; now: Date;
+}): { lane: 0 | 1 | 2; due: boolean } {
+  const checked = p.lastCheckedAt?.getTime() ?? -Infinity;
+  const tierDue = p.nextCheckAt.getTime() <= p.now.getTime();
+  if (p.activeTrackings > 0) {
+    const maxAge = Math.min(p.intervalMinutes, USER_INTEREST.trackedMaxAgeMin) * 60_000;
+    return { lane: 0, due: tierDue || p.now.getTime() - checked >= maxAge };
+  }
+  const viewed = p.lastViewedAt?.getTime() ?? -Infinity;
+  const recent = p.now.getTime() - viewed <= USER_INTEREST.viewedWithinDays * 86_400_000;
+  const checkedToday = p.lastCheckedAt !== null && almatyDate(p.lastCheckedAt) === almatyDate(p.now);
+  if (recent && viewed > checked && !checkedToday) return { lane: 1, due: true };
+  return { lane: 2, due: tierDue };
+}
+
+const almatyDate = (d: Date) => new Date(d.getTime() + 5 * 3_600_000).toISOString().slice(0, 10);

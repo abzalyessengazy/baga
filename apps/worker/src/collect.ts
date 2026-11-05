@@ -7,7 +7,7 @@
 import { createKaspiClient, buildSnapshot, KaspiHttpError, KaspiParseError, canonicalProductUrl, parseKaspiUrl, queuedLinkUrl, variantLinkCode } from "@baga/kaspi";
 import { saveSnapshot, connectionOptions, requestProduct, attachShortLinkTrackings, weekMovers } from "@baga/db";
 import {
-  evaluateAlert, priorityFor, INTERVAL_MINUTES, PRIORITY_ORDER, CATALOG, SEED_MIN_PRICE, backoffMinutes, isSuspiciousJump, type TrackingAlertState,
+  evaluateAlert, priorityFor, INTERVAL_MINUTES, PRIORITY_ORDER, USER_INTEREST, CATALOG, SEED_MIN_PRICE, backoffMinutes, isSuspiciousJump, type TrackingAlertState,
   KASPI_CRAWL_DELAY_MS, isInVisitWindow, needsPageRefresh, msUntilVisitWindow, targetForDrop, almatyDay, runningSale, type Priority,
 } from "@baga/core";
 import postgres from "postgres";
@@ -55,9 +55,9 @@ async function main() {
   let seeded = 0;
   const tried = new Set<string>(); // each queued product gets at most one attempt per run
 
-  // Order on every turn (DECISIONS.md, 2026-11-04 "Tracked first, real views, spread page refreshes"): new products
-  // someone tracks, then due hot and tracked products, then other visitor requests, then the rest of the due
-  // products, then seed rows. When there is nothing to do, poll for new visitor requests until the window closes.
+  // Order on every turn (DECISIONS.md, 2026-11-05 "What people want is checked first"): new products someone tracks,
+  // then due tracked products (lane 0), then other products visitors pasted, then products people opened since their
+  // last check (lane 1), then catalog enrichment (lane 2), then seed rows. When there is nothing to do, poll for new visitor requests until the window closes.
   // Called before every product, so a visitor waits for at most one product in progress, not a whole chunk.
   async function serveVisitors(): Promise<boolean> {
     const links = await resolveShortLinks();
@@ -144,26 +144,46 @@ async function resolveShortLinks(): Promise<number> {
 }
 
 /**
- * Claims due rows, watched products first (PRIORITY_ORDER), so when the day's requests run short the catalog
- * slips, not a tracked product. locked_until stops an overlapping run from taking the same product.
+ * Queue lanes, worked out from live data on every claim (queueLane in packages/core/src/schedule.ts; DECISIONS.md,
+ * 2026-11-05 "What people want is checked first"): 0 = tracked (due by its tier or USER_INTEREST.trackedMaxAgeMin after
+ * its last check), 1 = opened by a person since its last check and not checked today, 2 = catalog enrichment by its tier.
+ * A stale stored priority can never hold back a product someone wants.
+ */
+const lanes = () => sql`
+  select cs.product_id, cs.priority, cs.next_check_at,
+    case
+      when exists (select 1 from trackings t where t.product_id = cs.product_id and t.status = 'active') then 0
+      when p.last_viewed_at > now() - make_interval(days => ${USER_INTEREST.viewedWithinDays})
+        and p.last_viewed_at > coalesce(s.last_checked_at, '-infinity')
+        and (s.last_checked_at is null
+          or (s.last_checked_at at time zone 'Asia/Almaty')::date < (now() at time zone 'Asia/Almaty')::date) then 1
+      else 2 end as lane,
+    coalesce(s.last_checked_at, '-infinity') as last_checked_at, cs.interval_minutes
+  from collection_schedule cs join products p on p.id = cs.product_id left join product_state s on s.product_id = cs.product_id
+  where p.status = 'active' and cs.fail_count < 10 and (cs.locked_until is null or cs.locked_until < now())`;
+const isDue = () => sql`(l.next_check_at <= now() or l.lane = 1
+  or (l.lane = 0 and l.last_checked_at <= now() - make_interval(mins => least(l.interval_minutes, ${USER_INTEREST.trackedMaxAgeMin}))))`;
+
+/**
+ * Claims due rows: lane first, then the tier (PRIORITY_ORDER), then the longest overdue, so when the day's requests
+ * run short the catalog slips, never a product someone wants. locked_until stops an overlapping run from taking it.
  */
 function claimDue(limit: number) {
   return sql<DueRow[]>`
     update collection_schedule cs set locked_until = now() + interval '45 minutes'
     from products p left join product_state s on s.product_id = p.id
     where cs.product_id = p.id and cs.product_id in (
-      select product_id from collection_schedule
-      where next_check_at <= now() and fail_count < 10 and (locked_until is null or locked_until < now())
-      order by array_position(${sql.array(PRIORITY_ORDER)}::text[], priority), next_check_at
-      limit ${limit} for update skip locked)
+      select l.product_id from (${lanes()}) l join collection_schedule c on c.product_id = l.product_id
+      where ${isDue()}
+      order by l.lane, array_position(${sql.array(PRIORITY_ORDER)}::text[], l.priority), l.next_check_at
+      limit ${limit} for update of c skip locked)
     returning cs.product_id, p.external_id, p.slug, cs.fail_count, cs.interval_minutes, s.current_min_price,
               p.title, p.image_url, p.category_path, p.page_checked_at, cs.priority`;
 }
 
-/** Due hot or tracked products not yet claimed: while there are any, a request nobody tracks waits. */
+/** Due products someone tracks, not yet claimed: while there are any, a pasted product nobody tracks waits. */
 async function watchedDue(): Promise<boolean> {
-  const rows = await sql`select 1 from collection_schedule where priority in ('hot', 'tracked') and next_check_at <= now()
-    and fail_count < 10 and (locked_until is null or locked_until < now()) limit 1`;
+  const rows = await sql`select 1 from (${lanes()}) l where l.lane = 0 and ${isDue()} limit 1`;
   return rows.length > 0;
 }
 

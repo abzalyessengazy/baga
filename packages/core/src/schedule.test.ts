@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { priorityFor, backoffMinutes, isSuspiciousJump, needsPageRefresh, INTERVAL_MINUTES, CATALOG } from "./schedule";
+import { priorityFor, backoffMinutes, isSuspiciousJump, needsPageRefresh, queueLane, INTERVAL_MINUTES, CATALOG } from "./schedule";
 import { VISIT_WINDOW_MINUTES } from "./window";
 import { formatTenge, toTenge } from "./money";
 
@@ -60,5 +60,29 @@ describe("money", () => {
   it("rounds floats from the API", () => {
     expect(toTenge(749364.0)).toBe(749364);
     expect(() => toTenge(-1)).toThrow();
+  });
+});
+
+describe("queueLane", () => {
+  const now = new Date("2026-11-05T05:00:00Z"); // 10:00 Almaty
+  const h = (n: number) => new Date(now.getTime() - n * 3_600_000);
+  const base = { activeTrackings: 0, lastViewedAt: null, lastCheckedAt: h(24), nextCheckAt: h(-5), intervalMinutes: 1080, now };
+
+  it("puts a tracked product first and makes it due 3 h after its last check, even with a stale catalog tier", () => {
+    expect(queueLane({ ...base, activeTrackings: 1 })).toEqual({ lane: 0, due: true });
+    expect(queueLane({ ...base, activeTrackings: 1, lastCheckedAt: h(1) })).toEqual({ lane: 0, due: false });
+    expect(queueLane({ ...base, activeTrackings: 1, lastCheckedAt: null })).toEqual({ lane: 0, due: true });
+  });
+
+  it("checks a product a person opened in the next run, once a day", () => {
+    expect(queueLane({ ...base, lastViewedAt: h(2) })).toEqual({ lane: 1, due: true }); // opened last night, checked yesterday
+    expect(queueLane({ ...base, lastViewedAt: h(0.1), lastCheckedAt: h(0.5) })).toEqual({ lane: 2, due: false }); // already checked today
+    expect(queueLane({ ...base, lastViewedAt: h(30) })).toEqual({ lane: 2, due: false }); // opened before its last check
+    expect(queueLane({ ...base, lastViewedAt: h(24 * 8), lastCheckedAt: h(24 * 9) })).toEqual({ lane: 2, due: false }); // too long ago
+  });
+
+  it("leaves catalog products to their tier", () => {
+    expect(queueLane(base)).toEqual({ lane: 2, due: false });
+    expect(queueLane({ ...base, nextCheckAt: h(1) })).toEqual({ lane: 2, due: true });
   });
 });
