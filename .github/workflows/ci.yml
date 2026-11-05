@@ -31,4 +31,8 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
-      - run: pnpm exec vitest run packages/db/src/db.integration.test.ts --reporter=default --reporter=github-actions
+      # The output's tail also goes out as an annotation: annotations are readable without signing in.
+      - run: |
+          set -o pipefail
+          pnpm exec vitest run packages/db/src/db.integration.test.ts --reporter=default --reporter=github-actions 2>&1 | tee vitest.log || {
+            echo "::error title=db tests::$(tail -c 4000 vitest.log | sed 's/\x1b\[[0-9;]*m//g' | sed ':a;N;$!ba;s/%/%25/g;s/\n/%0A/g')"; exit 1; }
