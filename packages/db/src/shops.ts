@@ -107,7 +107,9 @@ export function shopTab(rating: number | null, reviews: number | null): Exclude<
   return l === "high" ? "high" : l === "mixed" || l === "low" ? "mixed" : "unknown";
 }
 
-export async function listShops(sql: postgres.Sql, x: { tab?: ShopTab; q?: string; sort?: ShopSort; page?: number }): Promise<ShopList> {
+/** Every shop with a current offer, with its far-below-others counts: the costly part, cached by the website. */
+export type ShopIndex = ShopListItem[];
+export async function loadShopIndex(sql: postgres.Sql): Promise<ShopIndex> {
   const rows = await sql<{ id: number; externalId: string; name: string; rating: number | null; reviews: number | null; products: number }[]>`
     select se.id, se.external_id as "externalId", se.name, se.rating, se.reviews, count(*)::int as products
     from sellers se join offers_current o on o.seller_id = se.id join products p on p.id = o.product_id
@@ -125,7 +127,11 @@ export async function listShops(sql: postgres.Sql, x: { tab?: ShopTab; q?: strin
       if (shop) shop[n.kind === "check" ? "checks" : "facts"]++;
     });
   }
-  const all = [...byId.values()];
+  return [...byId.values()].map(({ id: _, ...r }) => r);
+}
+
+/** The catalogue's tab, search, sort and page over a ShopIndex (no database). */
+export function pickShops(all: ShopIndex, x: { tab?: ShopTab; q?: string; sort?: ShopSort; page?: number }): ShopList {
   const counts = { all: all.length, established: 0, high: 0, mixed: 0, unknown: 0 } as Record<ShopTab, number>;
   for (const r of all) counts[shopTab(r.rating, r.reviews)]++;
   const tab = x.tab ?? "all";
@@ -137,9 +143,12 @@ export async function listShops(sql: postgres.Sql, x: { tab?: ShopTab; q?: strin
     .sort((a, b) =>
       sort === "products" ? b.products - a.products
       : sort === "rating" ? (adjustedRating(b.rating, b.reviews) ?? -1) - (adjustedRating(a.rating, a.reviews) ?? -1)
-      : (b.reviews ?? 0) - (a.reviews ?? 0))
-    .map(({ id: _, ...r }) => r);
+      : (b.reviews ?? 0) - (a.reviews ?? 0));
   const pages = Math.max(1, Math.ceil(picked.length / SHOP_LIST.perPage));
   const page = Math.min(pages, Math.max(1, Math.floor(x.page ?? 1)));
   return { items: picked.slice((page - 1) * SHOP_LIST.perPage, page * SHOP_LIST.perPage), total: picked.length, page, pages, counts };
+}
+
+export async function listShops(sql: postgres.Sql, x: { tab?: ShopTab; q?: string; sort?: ShopSort; page?: number }): Promise<ShopList> {
+  return pickShops(await loadShopIndex(sql), x);
 }

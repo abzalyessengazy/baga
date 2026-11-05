@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import { getTranslations, setRequestLocale } from "next-intl/server";
-import { getSql, listShops, SHOP_SORTS, SHOP_TABS, type ShopList, type ShopSort, type ShopTab } from "@baga/db";
+import { getSql, loadShopIndex, pickShops, SHOP_SORTS, SHOP_TABS, type ShopList, type ShopSort, type ShopTab } from "@baga/db";
 import { Link } from "@/i18n/navigation";
 import { ExploreFilters } from "@/components/ExploreFilters";
+import { cachedDaily } from "@/lib/dailyCache";
 import { SellerChip, SellerLegend, chipKind, type LegendKind } from "@/components/SellerChips";
 
 type Search = { list?: string; q?: string; sort?: string; page?: string };
@@ -33,7 +34,9 @@ export default async function ShopsPage({ params, searchParams }: Props) {
   const q = (one(sp.q) ?? "").slice(0, 80);
   const page = Number.parseInt(one(sp.page) ?? "1", 10) || 1;
   const sql = getSql();
-  const r: ShopList | null = sql ? await listShops(sql, { tab, q, sort, page }).catch((e) => { console.error(`[shops] ${e}`); return null; }) : null;
+  // Reading every current offer is the costly part: cached (cachedDaily), the tab, search and page are not.
+  const index = sql ? await cachedDaily(["shops-index"], () => loadShopIndex(sql)).catch((e) => { console.error(`[shops] ${e}`); return null; }) : null;
+  const r: ShopList | null = index ? pickShops(index, { tab, q, sort, page }) : null;
   const href = (x: Partial<Search>) => {
     const s = new URLSearchParams();
     const v = { list: tab, q, sort, ...x };

@@ -4,6 +4,7 @@ import { formatTenge, shortTitle } from "@baga/core";
 import { getSql, exploreCatalog, EXPLORE_LISTS, EXPLORE_SORTS, type ExploreList, type ExploreResult, type ExploreSort } from "@baga/db";
 import { Link } from "@/i18n/navigation";
 import { ExploreFilters } from "@/components/ExploreFilters";
+import { cachedDaily } from "@/lib/dailyCache";
 
 type Search = { list?: string; q?: string; cat?: string; sort?: string; page?: string };
 type Props = { params: Promise<{ locale: string }>; searchParams: Promise<Search> };
@@ -41,7 +42,9 @@ export default async function ExplorePage({ params, searchParams }: Props) {
 
   const sql = getSql();
   let r: ExploreResult | null = null;
-  if (sql) r = await exploreCatalog(sql, { list, q, category: cat, sort: sortIn, page }).catch((e) => { console.error(`[explore] ${e}`); return null; });
+  // Cached per list, search, category, sort and page (cachedDaily): the numbers change only during the morning run.
+  const args = { list, q, category: cat, sort: sortIn, page };
+  if (sql) r = await cachedDaily(["explore", JSON.stringify(args)], () => exploreCatalog(sql, args)).catch((e) => { console.error(`[explore] ${e}`); return null; });
 
   const href = (x: Partial<Search>) => {
     const s = new URLSearchParams();
