@@ -19,7 +19,7 @@ export interface ProductView {
   delisted: boolean;
   /** The latest observed lowest price, also for a delisted product (minPrice is null then). */
   lastPrice?: number | null;
-  offers: { sellerName: string; sellerRating: number | null; price: number; deliveryDuration: string | null }[];
+  offers: { sellerId: string; sellerName: string; sellerRating: number | null; sellerReviews: number | null; price: number; deliveryDuration: string | null }[];
   history: DailyLow[]; // observed daily lows only
   observedSince: string; // ISO
   checkedAt: string; // ISO
@@ -52,7 +52,7 @@ function fromSnapshot(s: ProductSnapshot): ProductView {
   return {
     externalId: s.externalId, title: s.title, imageUrl: s.imageUrl, categoryPath: s.categoryPath,
     kaspiUrl: `https://kaspi.kz/shop/p/-${s.externalId}/`, minPrice: s.minPrice, offerCount: s.offerCount,
-    inStock: s.inStock, delisted: false, offers: s.offers.map((o) => ({ sellerName: o.sellerName, sellerRating: o.sellerRating, price: o.price, deliveryDuration: o.deliveryDuration })),
+    inStock: s.inStock, delisted: false, offers: s.offers.map((o) => ({ sellerId: o.sellerId, sellerName: o.sellerName, sellerRating: o.sellerRating, sellerReviews: o.sellerReviews, price: o.price, deliveryDuration: o.deliveryDuration })),
     history: [], observedSince: s.fetchedAt, checkedAt: s.fetchedAt,
   };
 }

@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
+import { ShopFeedback } from "@/components/ShopFeedback";
 
 type Answer = "yes" | "later" | "no";
 
@@ -9,8 +10,10 @@ type Answer = "yes" | "later" | "no";
  * "Вы купили?" with three answers (migration 0011). `by` is the link's code (email page) or the tracking id (this
  * browser's "Мои товары"). `suggested` is the answer the email link was pressed for: highlighted, still one press.
  */
-export function BoughtPrompt({ title, by, href, suggested, answered }: {
+export function BoughtPrompt({ title, by, href, suggested, answered, sellers }: {
   title: string; by: { code: string } | { trackingId: string }; href?: string; suggested?: Answer; answered?: Answer | null;
+  /** The product's current sellers, for "Как прошла покупка?" after "yes". */
+  sellers?: { sellerId: string; name: string }[];
 }) {
   const t = useTranslations("bought");
   const [answer, setAnswer] = useState<Answer | null>(answered ?? null);
@@ -33,9 +36,12 @@ export function BoughtPrompt({ title, by, href, suggested, answered }: {
       <p className="channel-title">{t("question")}</p>
       <p className="bought-name">{href ? <Link href={href}>{title}</Link> : title}</p>
       {answer ? (
-        <p className="channel-text" role="status">
-          {t(answer === "yes" ? "thanksYes" : answer === "later" ? "thanksLater" : "thanksNo")}
-        </p>
+        <>
+          <p className="channel-text" role="status">
+            {t(answer === "yes" ? "thanksYes" : answer === "later" ? "thanksLater" : "thanksNo")}
+          </p>
+          {answer === "yes" && <ShopFeedback by={by} sellers={sellers ?? []} />}
+        </>
       ) : (
         <>
           <p className="channel-text">{t("why")}</p>

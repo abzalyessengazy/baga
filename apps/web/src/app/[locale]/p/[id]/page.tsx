@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import type { Metadata } from "next";
-import { computeVerdict, formatTenge, moveDirection, nextVisitWindowDay, isValidSlug, slugName, isInVisitWindow } from "@baga/core";
+import { cheapOutliers, sellerLabel, computeVerdict, formatTenge, moveDirection, nextVisitWindowDay, isValidSlug, slugName, isInVisitWindow } from "@baga/core";
 import { getProductView, queuedSlug, collectorRunning } from "@/lib/product";
 import { QueuedWatcher } from "@/components/QueuedWatcher";
 import { alreadyTracked } from "@/lib/catalog";
@@ -14,6 +14,7 @@ import { trackInitial } from "@/lib/watcher";
 import { PrintIn, StampIn } from "@/components/PrintIn";
 import { dayMonth, type DatesT } from "@/lib/dayMonth";
 import { jsonLdHtml } from "@/lib/jsonLd";
+import { SellerTable, type SellerRow } from "@/components/SellerTable";
 
 type Props = { params: Promise<{ locale: string; id: string }>; searchParams: Promise<{ s?: string | string[] }> };
 const fmtDate = (iso: string, locale: string) =>
@@ -117,6 +118,14 @@ export default async function ProductPage({ params, searchParams }: Props) {
     const key = `delivery${d ?? "Unknown"}`;
     return t.has(key) ? t(key) : t("deliveryUnknown");
   };
+  // Shop evidence for every offer (packages/core/src/sellers.ts): Kaspi's rating as a label, and an offer far below
+  // the other sellers pointed out. Computed over all stored offers, not only the 12 shown.
+  const outliers = cheapOutliers(v.offers.map((o) => o.price));
+  const sellerRows: SellerRow[] = v.offers.map((o, i) => ({
+    sellerId: o.sellerId, sellerName: o.sellerName, sellerRating: o.sellerRating, sellerReviews: o.sellerReviews,
+    price: o.price, priceText: f(o.price), deliveryText: delivery(o.deliveryDuration),
+    label: sellerLabel(o.sellerRating, o.sellerReviews), cheaperPct: outliers[i] ?? null,
+  }));
   const jsonLd = {
     "@context": "https://schema.org", "@type": "Product", name: v.title, image: v.imageUrl ?? undefined,
     offers: v.minPrice ? { "@type": "AggregateOffer", priceCurrency: "KZT", lowPrice: v.minPrice, offerCount: v.offerCount } : undefined,
@@ -163,20 +172,9 @@ export default async function ProductPage({ params, searchParams }: Props) {
         <PriceChart history={v.history} />
         <hr className="rule" />
         <h2 className="receipt-caption" style={{ fontSize: "inherit", fontWeight: 400, margin: "0 0 6px" }}>{t("sellersTitle")}</h2>
-        {shown.length > 0 ? (
-          <table className="offers">
-            <thead><tr><th>{t("seller")}</th><th className="col-delivery">{t("delivery")}</th><th className="num">{t("price")}</th></tr></thead>
-            <tbody>
-              {shown.map((o, i) => (
-                <tr key={`${o.sellerName}-${i}`} className={i === 0 ? "is-best" : undefined}>
-                  <td>{o.sellerName}{o.sellerRating ? <span style={{ color: "var(--ink-faint)" }}> ★{o.sellerRating.toFixed(1)}</span> : null}</td>
-                  <td className="col-delivery">{delivery(o.deliveryDuration)}</td>
-                  <td className="num">{f(o.price)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : <p className="verdict-text">{v.delisted ? t("delisted") : t("outOfStock")}</p>}
+        {sellerRows.length > 0
+          ? <SellerTable rows={sellerRows} shown={shown.length} ratedAt={dayMonth(v.checkedAt, td)} />
+          : <p className="verdict-text">{v.delisted ? t("delisted") : t("outOfStock")}</p>}
         {v.offerCount > shown.length && <p className="note">{t("moreSellers", { count: v.offerCount - shown.length })}</p>}
         <p className="note">{t("nationalPrice")}</p>
         <a className="kaspi-link" href={`/go/${v.externalId}`} rel="noopener">{t("openOnKaspi")}</a>

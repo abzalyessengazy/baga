@@ -10,3 +10,4 @@ export * from "./movers";
 export * from "./market";
 export * from "./explore";
 export * from "./delivery";
+export * from "./shops";

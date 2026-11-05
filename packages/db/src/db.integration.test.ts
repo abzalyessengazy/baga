@@ -11,6 +11,9 @@ import { fileURLToPath } from "node:url";
 import { DELIVERY } from "@baga/core";
 import { claimNotifications, markFailed, markSent, startSend, tidyDeliveries } from "./delivery";
 import { requestWatcherEmail, EMAIL_REQUEST_LIMITS } from "./watchers";
+import { saveSnapshot } from "./queries";
+import { getShop, productSellers, saveShopFeedback } from "./shops";
+import type { ProductSnapshot } from "@baga/kaspi";
 
 const url = process.env.TEST_DATABASE_URL;
 const dir = join(dirname(fileURLToPath(import.meta.url)), "..", "migrations");
@@ -44,7 +47,8 @@ describe.skipIf(!url)("database (disposable Postgres)", () => {
   afterAll(async () => { await sql?.end(); });
 
   beforeEach(async () => {
-    await sql`truncate notifications, trackings, email_requests, watchers restart identity cascade`;
+    await sql`truncate notifications, trackings, email_requests, watchers, seller_feedback, seller_daily, offers_current,
+      sellers, price_observations, product_state, collection_schedule, products restart identity cascade`;
   });
 
   async function watcher(opts: { chat?: number; email?: string } = {}) {
@@ -170,6 +174,55 @@ describe.skipIf(!url)("database (disposable Postgres)", () => {
     it("needs no email for an address this browser already confirmed", async () => {
       const w = await watcher({ email: "g@example.com" });
       expect(await ask(w, "g@example.com")).toEqual({ ok: true, send: false });
+    });
+  });
+
+  describe("shops", () => {
+    const offer = (sellerId: string, price: number, rating: number | null, reviews: number | null) => ({
+      sellerId, sellerName: `Shop ${sellerId}`, sellerRating: rating, sellerReviews: reviews, price, deliveryDuration: "TOMORROW", preorderDays: 0,
+    });
+    const snap = (externalId: string, offers: ReturnType<typeof offer>[]): ProductSnapshot => ({
+      marketplace: "kaspi", externalId, title: `Product ${externalId}`, imageUrl: null, categoryPath: ["Cat"], reviews: null, rating: null,
+      offers, minPrice: offers[0]?.price ?? null, offerCount: offers.length, inStock: offers.length > 0, fetchedAt: new Date().toISOString(),
+    });
+
+    it("records each shop's rating and reviews once a day, the day's latest value", async () => {
+      await saveSnapshot(sql, snap("200000001", [offer("m1", 60_000, 4.9, 100), offer("m2", 100_000, 4.5, 30), offer("m3", 101_000, 0, 0)]), null, null);
+      await saveSnapshot(sql, snap("200000002", [offer("m1", 5_000, 4.9, 104)]), null, null);
+      const rows = await sql<{ external_id: string; reviews: number; first_seen: boolean }[]>`
+        select se.external_id, d.reviews, se.first_seen_at is not null as first_seen
+        from seller_daily d join sellers se on se.id = d.seller_id order by 1`;
+      expect(rows.map((r) => [r.external_id, r.reviews])).toEqual([["m1", 104], ["m2", 30], ["m3", 0]]);
+      expect(rows.every((r) => r.first_seen)).toBe(true);
+    });
+
+    it("shows a shop with its products and the other sellers' prices", async () => {
+      await saveSnapshot(sql, snap("200000001", [offer("m1", 60_000, 4.9, 100), offer("m2", 100_000, 4.5, 30), offer("m3", 101_000, 0, 0)]), null, null);
+      const shop = await getShop(sql, "m1");
+      expect(shop).toMatchObject({ name: "Shop m1", reviews: 100, productCount: 1 });
+      expect(shop!.products[0]).toMatchObject({ externalId: "200000001", price: 60_000, minPrice: 60_000 });
+      expect(shop!.products[0]!.others.sort()).toEqual([100_000, 101_000]);
+      expect(shop!.daily).toHaveLength(1);
+      expect(await getShop(sql, "nobody")).toBeNull();
+      expect((await productSellers(sql, "200000001")).map((s) => s.sellerId)).toEqual(["m1", "m2", "m3"]);
+    });
+
+    it("takes purchase feedback only after 'bought: yes', one per tracking, and only for a shop selling the product", async () => {
+      await saveSnapshot(sql, snap("200000001", [offer("m1", 60_000, 4.9, 100)]), null, null);
+      await saveSnapshot(sql, snap("200000009", [offer("m9", 9_000, 4.9, 100)]), null, null);
+      const w = await watcher();
+      const [t] = await sql<{ id: string }[]>`
+        insert into trackings (watcher_id, external_id, product_id, target_price, status, bought_code)
+        values (${w}, '200000001', (select id from products where external_id = '200000001'), 1000, 'active', ${"c".repeat(20)}) returning id`;
+      expect(await saveShopFeedback(sql, { code: "c".repeat(20) }, "m1", "ok")).toBe(false); // not bought yet
+      await sql`update trackings set bought = 'yes' where id = ${t!.id}`;
+      expect(await saveShopFeedback(sql, { code: "c".repeat(20) }, "m1", "late")).toBe(true);
+      expect(await saveShopFeedback(sql, { watcherId: w, trackingId: t!.id }, "m1", "not_delivered")).toBe(true); // replaces
+      expect(await saveShopFeedback(sql, { code: "c".repeat(20) }, "m9", "ok")).toBe(true); // m9 does not sell it: no shop
+      const rows = await sql<{ seller_id: number | null; outcome: string }[]>`select seller_id, outcome from seller_feedback`;
+      expect(rows).toEqual([{ seller_id: null, outcome: "ok" }]);
+      await saveShopFeedback(sql, { code: "c".repeat(20) }, "m1", "not_delivered");
+      expect((await getShop(sql, "m1"))!.feedback).toMatchObject({ n: 1, not_delivered: 1, ok: 0 });
     });
   });
 });

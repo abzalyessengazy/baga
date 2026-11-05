@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { getTranslations, setRequestLocale } from "next-intl/server";
-import { getSql, listWatched } from "@baga/db";
+import { getSql, listWatched, productSellers } from "@baga/db";
 import { slugName } from "@baga/core";
 import { currentWatcher, telegramConnectUrl, botUsername, emailReady } from "@/lib/watcher";
 import { siteUrl } from "@/lib/site";
@@ -28,6 +28,11 @@ export default async function MyPage({ params }: Props) {
   const found = await currentWatcher();
   const sql = getSql();
   const items = found && sql ? await listWatched(sql, found.watcher.id) : [];
+  // The current sellers of each product asked "Вы купили?", for "Как прошла покупка?" after "yes" (one by one: pool).
+  const sellersOf = new Map<string, { sellerId: string; name: string }[]>();
+  for (const i of items.filter((x) => x.askBought && x.externalId)) {
+    if (sql) sellersOf.set(i.externalId!, await productSellers(sql, i.externalId!).catch(() => []));
+  }
   const tgUrl = found ? await telegramConnectUrl(found.watcher) : null;
   const shareUrl = found ? `${siteUrl()}/api/my?k=${found.secret}&l=${locale}` : null;
   return (
@@ -41,7 +46,7 @@ export default async function MyPage({ params }: Props) {
           </div>
         )}
         {items.filter((i) => i.askBought).map((i) => (
-          <BoughtPrompt key={i.trackingId} by={{ trackingId: i.trackingId }} href={i.pagePath}
+          <BoughtPrompt key={i.trackingId} by={{ trackingId: i.trackingId }} href={i.pagePath} sellers={i.externalId ? sellersOf.get(i.externalId) : []}
             title={i.title ?? (i.slug ? slugName(i.slug) : i.externalId ? `№ ${i.externalId}` : t("shortLinkItem"))} />
         ))}
         {items.length === 0 ? (

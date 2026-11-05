@@ -43,8 +43,9 @@ export async function getDailyLows(sql: postgres.Sql, productId: number, days = 
 }
 
 export async function getOffers(sql: postgres.Sql, productId: number) {
-  return sql<{ sellerName: string; sellerRating: number | null; price: number; deliveryDuration: string | null }[]>`
-    select se.name as "sellerName", se.rating as "sellerRating", o.price, o.delivery_duration as "deliveryDuration"
+  return sql<{ sellerId: string; sellerName: string; sellerRating: number | null; sellerReviews: number | null; price: number; deliveryDuration: string | null }[]>`
+    select se.external_id as "sellerId", se.name as "sellerName", se.rating as "sellerRating", se.reviews as "sellerReviews",
+           o.price, o.delivery_duration as "deliveryDuration"
     from offers_current o join sellers se on se.id = o.seller_id
     where o.product_id = ${productId} order by o.price asc limit 50`;
 }
@@ -112,6 +113,12 @@ export async function saveSnapshot(
         values ((select id from marketplaces where code = 'kaspi'), ${o.sellerId}, ${o.sellerName}, ${o.sellerRating}, ${o.sellerReviews})
         on conflict (marketplace_id, external_id) do update set name = excluded.name, rating = excluded.rating, reviews = excluded.reviews
         returning id`;
+      // Today's rating and review count of the shop (migration 0016), the day's latest value.
+      if (o.sellerReviews != null || o.sellerRating != null) {
+        await tx`insert into seller_daily (seller_id, day, rating, reviews)
+          values (${s!.id}, (now() at time zone 'Asia/Almaty')::date, ${o.sellerRating}, ${o.sellerReviews})
+          on conflict (seller_id, day) do update set rating = excluded.rating, reviews = excluded.reviews`;
+      }
       await tx`insert into offers_current (product_id, seller_id, price, delivery_duration)
                values (${productId}, ${s!.id}, ${o.price}, ${o.deliveryDuration})
                on conflict (product_id, seller_id) do update set price = least(offers_current.price, excluded.price)`;
