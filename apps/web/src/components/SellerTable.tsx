@@ -1,21 +1,21 @@
 "use client";
 import { useState } from "react";
 import { useTranslations } from "next-intl";
-import { byRating, type SellerLabel } from "@baga/core";
+import { byRating, type PriceNote } from "@baga/core";
 import { Link } from "@/i18n/navigation";
+import { SellerChip, PriceNoteChip, SellerLegend, chipKind, type LegendKind } from "@/components/SellerChips";
 
 export interface SellerRow {
   sellerId: string; sellerName: string; sellerRating: number | null; sellerReviews: number | null;
   price: number; priceText: string; deliveryText: string;
-  label: SellerLabel;
-  /** How many percent below the other sellers (cheapOutlierPct), or null. */
-  cheaperPct: number | null;
+  /** An offer far below the other sellers (priceNote), or null. */
+  note: PriceNote;
 }
 
 /**
  * The sellers of a product (DECISIONS.md, 2026-11-05 "Shop evidence, not verdicts"): cheapest first by default,
  * or by Kaspi's rating (confidence-adjusted, byRating) on request; nothing is hidden either way. Each shop shows
- * Kaspi's rating, review count and the label they earn, and links to its page.
+ * a chip with Kaspi's rating and review count, and links to its page; the legend explains the chips in view.
  */
 export function SellerTable({ rows, shown, ratedAt }: { rows: SellerRow[]; shown: number; ratedAt: string }) {
   const t = useTranslations("product");
@@ -23,7 +23,11 @@ export function SellerTable({ rows, shown, ratedAt }: { rows: SellerRow[]; shown
   const [order, setOrder] = useState<"price" | "rated">("price");
   const list = (order === "rated" ? byRating(rows) : rows).slice(0, shown);
   const cheapest = Math.min(...rows.map((r) => r.price));
-  const count = (n: number) => ts("reviews", { count: n });
+  const kinds = new Set<LegendKind>();
+  for (const o of list) {
+    kinds.add(chipKind(o.sellerRating, o.sellerReviews));
+    if (o.note) kinds.add(o.note.kind);
+  }
 
   return (
     <>
@@ -40,11 +44,10 @@ export function SellerTable({ rows, shown, ratedAt }: { rows: SellerRow[]; shown
             <tr key={o.sellerId} className={o.price === cheapest ? "is-best" : undefined}>
               <td>
                 <Link className="seller-link" href={`/s/${o.sellerId}`}>{o.sellerName}</Link>
-                <span className="seller-meta">
-                  {o.label !== "none" && <>★{o.sellerRating!.toFixed(1)} · {count(o.sellerReviews!)} · </>}
-                  <span className={`seller-label is-${o.label}`}>{ts(`label_${o.label}`)}</span>
+                <span className="chips">
+                  <SellerChip rating={o.sellerRating} reviews={o.sellerReviews} />
+                  {o.note && <PriceNoteChip note={o.note} />}
                 </span>
-                {o.cheaperPct !== null && <span className="seller-warn">{ts("cheaper", { pct: o.cheaperPct })}</span>}
               </td>
               <td className="col-delivery">{o.deliveryText}</td>
               <td className="num">{o.priceText}</td>
@@ -52,7 +55,7 @@ export function SellerTable({ rows, shown, ratedAt }: { rows: SellerRow[]; shown
           ))}
         </tbody>
       </table>
-      <p className="note">{ts("source", { date: ratedAt })}</p>
+      <SellerLegend kinds={kinds} date={ratedAt} />
     </>
   );
 }

@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getTranslations, setRequestLocale } from "next-intl/server";
-import { cheapOutlierPct, formatTenge, reviewGrowth, sellerLabel, shortTitle, SHOP_FEEDBACK } from "@baga/core";
+import { priceNote, formatTenge, reviewGrowth, shortTitle, SHOP_FEEDBACK } from "@baga/core";
 import { getSql, getShop, type ShopView } from "@baga/db";
 import { Link } from "@/i18n/navigation";
 import { dayMonth } from "@/lib/dayMonth";
+import { LabelChip, PriceNoteChip, SellerLegend, chipKind, type LegendKind } from "@/components/SellerChips";
 
 type Props = { params: Promise<{ locale: string; id: string }> };
 // Read from our own checks on every request; never contacts Kaspi.
@@ -37,12 +38,13 @@ export default async function ShopPage({ params }: Props) {
   const s = await load(id);
   if (!s) notFound();
   const t = await getTranslations("shop");
-  const ts = await getTranslations("sellers");
   const td = await getTranslations("dates");
   const L = locale as "ru" | "kk";
   const f = (n: number) => formatTenge(n, L);
   const num = (n: number) => new Intl.NumberFormat("ru-RU").format(n);
-  const label = sellerLabel(s.rating, s.reviews);
+  const kind = chipKind(s.rating, s.reviews);
+  const notes = s.products.map((p) => priceNote(p.price, p.others, s.rating, s.reviews));
+  const noteKinds = new Set<LegendKind>(notes.flatMap((n) => (n ? [n.kind] : [])));
   const growth = reviewGrowth(s.daily);
   const fb = s.feedback;
 
@@ -53,9 +55,9 @@ export default async function ShopPage({ params }: Props) {
 
       <article className="receipt">
         <dl className="shop-facts">
-          <div><dt>{t("rating")}</dt><dd>{label === "none" ? ts("label_none") : `★${s.rating!.toFixed(1)}`}</dd></div>
+          <div><dt>{t("rating")}</dt><dd>{kind === "none" ? "—" : `★${s.rating!.toFixed(1)}`}</dd></div>
           <div><dt>{t("reviewsCount")}</dt><dd>{s.reviews ? num(s.reviews) : "—"}</dd></div>
-          <div><dt>{t("label")}</dt><dd><span className={`seller-label is-${label}`}>{ts(`label_${label}`)}</span></dd></div>
+          <div><dt>{t("label")}</dt><dd><LabelChip kind={kind} /></dd></div>
         </dl>
         <p className="note">
           {s.seenAt && t("asOf", { date: dayMonth(s.seenAt.toISOString(), td) })}
@@ -81,8 +83,8 @@ export default async function ShopPage({ params }: Props) {
 
       <h2 className="shop-products-title">{t("productsTitle")} · {t("productsCount", { count: s.productCount })}</h2>
       <ul className="catalog-list movers explore-list">
-        {s.products.map((p) => {
-          const cheaper = cheapOutlierPct(p.price, p.others);
+        {s.products.map((p, i) => {
+          const note = notes[i];
           const isMin = p.minPrice !== null && p.price <= p.minPrice;
           return (
             <li key={p.externalId}>
@@ -94,7 +96,7 @@ export default async function ShopPage({ params }: Props) {
                 </span>
                 <span className="catalog-price">
                   {f(p.price)}
-                  {cheaper !== null ? <small className="is-warn">{t("cheaperWarn", { pct: cheaper })}</small>
+                  {note ? <small><PriceNoteChip note={note} /></small>
                     : isMin && p.others.length > 0 ? <small className="is-down">{t("cheapest")}</small> : null}
                 </span>
               </Link>
@@ -102,6 +104,7 @@ export default async function ShopPage({ params }: Props) {
           );
         })}
       </ul>
+      {notes.some(Boolean) && <SellerLegend kinds={noteKinds} />}
       {s.productCount > s.products.length && <p className="note">{t("productsMore", { shown: s.products.length })}</p>}
     </main>
   );

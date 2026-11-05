@@ -11,6 +11,9 @@
   --rule: #b9bcc2;
   --stamp: #4b3fd1;
   --stamp-red: #c23b2c;
+  /* Caution amber: only for "check this seller" signals (low Kaspi rating, a price far below the others). */
+  --caution: #8a5300;
+  --caution-bg: #fbecc8;
   --slot: #2a2d33;
   --focus: #4b3fd1;
 
@@ -701,30 +704,41 @@ span.z-thumb { display: block; background: var(--paper-shade); box-shadow: none;
   border: 1px solid var(--rule); background: transparent; color: var(--ink-soft);
 }
 .seller-order button.is-on { border-color: var(--stamp); color: var(--stamp); font-weight: 650; }
-.offers .seller-link { color: inherit; text-decoration: underline; text-decoration-color: var(--rule); text-underline-offset: 3px; }
-.offers .seller-link:hover { text-decoration-color: currentColor; }
-.seller-meta { display: block; font-size: 0.75rem; font-weight: 400; color: var(--ink-faint); margin-top: 2px; }
-.seller-label { white-space: nowrap; }
-.seller-label.is-high { color: var(--stamp); }
-.seller-label.is-low { color: var(--ink); font-weight: 650; }
-.seller-warn {
-  display: block; margin-top: 4px; padding: 4px 8px; font-size: 0.75rem; font-weight: 500; line-height: 1.35;
-  color: var(--ink); background: var(--paper-shade); border-left: 2px solid var(--ink);
-}
-.offers tr.is-best .seller-meta, .offers tr.is-best .seller-warn { font-weight: 400; }
 .shop-kicker { margin: 0 0 4px; color: var(--ink-soft); }
 .shop .receipt { margin-bottom: 24px; }
 .shop-facts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 0 0 10px; }
 .shop-facts div { min-width: 0; }
 .shop-facts dt { font-size: 0.75rem; color: var(--ink-soft); }
 .shop-facts dd { margin: 2px 0 0; font-family: var(--font-receipt); font-weight: 700; font-size: var(--step-1); }
-.shop-facts dd .seller-label { font-size: var(--step-0); }
 .shop-h2 { font-size: inherit; font-weight: 400; margin: 0 0 6px; }
 .shop-products-title { font-size: var(--step-0); font-weight: 600; margin: 0 0 8px; color: var(--ink-on-counter, var(--ink)); }
-.movers .catalog-price small.is-warn { color: var(--ink); font-weight: 650; }
 @media (max-width: 520px) {
   .shop-facts { grid-template-columns: 1fr 1fr; }
 }
 .shop-feedback { margin-top: 14px; padding-top: 12px; border-top: 1px dotted var(--rule); }
 .shop-feedback-seller { display: grid; gap: 4px; margin: 0 0 10px; font-size: var(--step--1); color: var(--ink-soft); }
 .shop-feedback-seller select { font: inherit; color: var(--ink); padding: 8px; border: 1px solid var(--rule); border-radius: 6px; background: var(--paper); max-width: 100%; }
+
+/* Shop chips (components/SellerChips.tsx): icon + numbers, colour by meaning; the legend gives the words. */
+.offers .seller-link { color: inherit; text-decoration: underline; text-decoration-color: var(--rule); text-underline-offset: 3px; }
+.offers .seller-link:hover { text-decoration-color: currentColor; }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+p.chips { margin: 6px 0 0; }
+.chip {
+  display: inline-flex; align-items: center; gap: 4px; padding: 2px 7px 2px 5px; border-radius: 999px;
+  font-family: var(--font-receipt); font-size: 0.6875rem; font-weight: 600; line-height: 1.5; white-space: nowrap;
+  border: 1px solid transparent; font-variant-numeric: tabular-nums;
+}
+.chip-icon { flex: none; }
+.chip.is-established { background: var(--stamp); color: #fff; }
+.chip.is-high { background: color-mix(in srgb, var(--stamp) 11%, transparent); color: var(--stamp); }
+.chip.is-mixed { background: var(--paper-shade); color: var(--ink-soft); }
+.chip.is-low, .chip.is-check { background: var(--caution-bg); color: var(--caution); }
+.chip.is-few, .chip.is-none { border-color: var(--rule); color: var(--ink-faint); font-weight: 500; }
+.chip.is-fact { border-color: color-mix(in srgb, var(--stamp) 45%, transparent); color: var(--stamp); }
+.chip.is-dot { padding: 3px; }
+.chip-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 10px 0 0; font-size: 0.75rem; color: var(--ink-soft); }
+.chip-legend-item { display: inline-flex; align-items: center; gap: 5px; }
+.chip-legend-src { flex-basis: 100%; color: var(--ink-faint); }
+.mk-pick .chips .chip { font-size: 0.75rem; }
+.shop-facts dd .chip { font-family: var(--font-ui); font-size: 0.8125rem; white-space: normal; }

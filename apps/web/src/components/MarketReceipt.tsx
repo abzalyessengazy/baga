@@ -1,4 +1,5 @@
 "use client";
+import { PriceNoteChip } from "@/components/SellerChips";
 import { motion, useInView, useReducedMotion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
@@ -114,6 +115,7 @@ export function MarketReceipt() {
                     <p className="mk-pick-why">{m!.pick.kind === "drop"
                       ? t("pickDrop", { pct: Math.abs(m!.pick.pct), ref: f(m!.pick.ref) })
                       : t("pickSeller", { pct: Math.abs(m!.pick.pct), ref: f(m!.pick.ref), sellers: m!.pick.sellers })}</p>
+                    {m!.pick.note?.kind === "check" && <p className="chips"><PriceNoteChip note={m!.pick.note} bare /></p>}
                   </div>
                 </div>
                 <span className="stamp mk-pick-stamp" aria-hidden>−{Math.abs(m!.pick.pct)}%</span>

@@ -3,9 +3,12 @@
  * BAGA observed; they never call a shop honest or dishonest. Kaspi shows 0 for a shop nobody rated yet, so 0 and
  * missing values are "no rating", never a low one. The thresholds are provisional, set against the 862 shops seen
  * by 5 Nov 2026 (median rating 4.8, median 103 reviews); a change to them bumps SELLER_RULES.version.
+ * Version 2 (5 Nov): half of the "much cheaper" flags were big chains (Sulpak, Technodom, Mechta) whose low price
+ * is a promotion, so an established shop gets the plain fact without "check the seller", and 3+ other sellers are
+ * needed (with 2, their "usual price" is an average of two shops that may both be dear).
  */
 export const SELLER_RULES = {
-  version: 1,
+  version: 2,
   /** Fewer reviews than this: too few to call the rating high or low. */
   enoughReviews: 20,
   highRating: 4.8,
@@ -15,7 +18,9 @@ export const SELLER_RULES = {
   priorReviews: 50,
   /** An offer this far below the median of the other sellers' prices is pointed out (2+ other sellers needed). */
   cheapOutlierPct: 30,
-  cheapOutlierMinOthers: 2,
+  cheapOutlierMinOthers: 3,
+  /** An established shop: a high rating from at least this many Kaspi reviews. */
+  establishedReviews: 1_000,
   /** Review growth is shown only over a span of at least this many days of BAGA's own daily records. */
   growthMinDays: 7,
 } as const;
@@ -32,6 +37,11 @@ export function sellerLabel(rating: number | null | undefined, reviews: number |
   if (rating! >= SELLER_RULES.highRating) return "high";
   if (rating! < SELLER_RULES.lowRating) return "low";
   return "mixed";
+}
+
+/** A high rating from SELLER_RULES.establishedReviews or more reviews (Kaspi's numbers; not a judgment of honesty). */
+export function isEstablished(rating: number | null | undefined, reviews: number | null | undefined): boolean {
+  return sellerLabel(rating, reviews) === "high" && reviews! >= SELLER_RULES.establishedReviews;
 }
 
 /**
@@ -64,6 +74,22 @@ export function cheapOutlierPct(price: number, others: number[]): number | null 
   if (median <= 0) return null;
   const pct = Math.floor(((median - price) / median) * 100);
   return pct >= SELLER_RULES.cheapOutlierPct ? pct : null;
+}
+
+/**
+ * What to say about an offer far below the others: "fact" (an established shop: just the gap) or "check" (any
+ * other shop: the gap and "check the seller before buying"); null when the offer is not far below.
+ */
+export type PriceNote = { pct: number; kind: "fact" | "check" } | null;
+export function priceNote(price: number, others: number[], rating: number | null | undefined, reviews: number | null | undefined): PriceNote {
+  const pct = cheapOutlierPct(price, others);
+  if (pct === null) return null;
+  return { pct, kind: isEstablished(rating, reviews) ? "fact" : "check" };
+}
+
+/** priceNote for every offer of one product, each against all the others. */
+export function priceNotes(offers: { price: number; sellerRating: number | null; sellerReviews: number | null }[]): PriceNote[] {
+  return offers.map((o, i) => priceNote(o.price, offers.filter((_, j) => j !== i).map((x) => x.price), o.sellerRating, o.sellerReviews));
 }
 
 /** cheapOutlierPct for every offer of one product, each against all the others. */

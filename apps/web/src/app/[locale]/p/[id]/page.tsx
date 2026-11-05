@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import type { Metadata } from "next";
-import { cheapOutliers, sellerLabel, computeVerdict, formatTenge, moveDirection, nextVisitWindowDay, isValidSlug, slugName, isInVisitWindow } from "@baga/core";
+import { priceNotes, computeVerdict, formatTenge, moveDirection, nextVisitWindowDay, isValidSlug, slugName, isInVisitWindow } from "@baga/core";
 import { getProductView, queuedSlug, collectorRunning } from "@/lib/product";
 import { QueuedWatcher } from "@/components/QueuedWatcher";
 import { alreadyTracked } from "@/lib/catalog";
@@ -120,11 +120,10 @@ export default async function ProductPage({ params, searchParams }: Props) {
   };
   // Shop evidence for every offer (packages/core/src/sellers.ts): Kaspi's rating as a label, and an offer far below
   // the other sellers pointed out. Computed over all stored offers, not only the 12 shown.
-  const outliers = cheapOutliers(v.offers.map((o) => o.price));
+  const notes = priceNotes(v.offers);
   const sellerRows: SellerRow[] = v.offers.map((o, i) => ({
     sellerId: o.sellerId, sellerName: o.sellerName, sellerRating: o.sellerRating, sellerReviews: o.sellerReviews,
-    price: o.price, priceText: f(o.price), deliveryText: delivery(o.deliveryDuration),
-    label: sellerLabel(o.sellerRating, o.sellerReviews), cheaperPct: outliers[i] ?? null,
+    price: o.price, priceText: f(o.price), deliveryText: delivery(o.deliveryDuration), note: notes[i] ?? null,
   }));
   const jsonLd = {
     "@context": "https://schema.org", "@type": "Product", name: v.title, image: v.imageUrl ?? undefined,

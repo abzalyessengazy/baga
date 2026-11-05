@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { sellerLabel, adjustedRating, byRating, cheapOutlierPct, cheapOutliers, reviewGrowth, SELLER_RULES } from "./sellers";
+import { sellerLabel, adjustedRating, byRating, cheapOutlierPct, cheapOutliers, reviewGrowth, isEstablished, priceNote, priceNotes, SELLER_RULES } from "./sellers";
 
 describe("sellerLabel", () => {
   it("treats a missing or zero rating as no rating, never a low one", () => {
@@ -41,14 +41,31 @@ describe("adjustedRating / byRating", () => {
 describe("cheapOutlierPct", () => {
   it("points out an offer far below the other sellers", () => {
     expect(cheapOutlierPct(60_000, [100_000, 101_000, 99_000])).toBe(40);
-    expect(cheapOutlierPct(71_000, [100_000, 100_000])).toBeNull(); // 29%: not enough
-    expect(cheapOutlierPct(70_000, [100_000, 100_000])).toBe(30);
+    expect(cheapOutlierPct(71_000, [100_000, 100_000, 100_000])).toBeNull(); // 29%: not enough
+    expect(cheapOutlierPct(70_000, [100_000, 100_000, 100_000])).toBe(30);
   });
-  it("needs at least two other sellers", () => {
-    expect(cheapOutlierPct(10_000, [100_000])).toBeNull();
+  it("needs at least three other sellers (two may both be dear)", () => {
+    expect(cheapOutlierPct(10_000, [100_000, 100_000])).toBeNull(); // the Sulpak page of 5 Nov: 2 others
   });
   it("checks every offer against the others", () => {
-    expect(cheapOutliers([50_000, 100_000, 102_000, 98_000])).toEqual([50, null, null, null]);
+    expect(cheapOutliers([50_000, 100_000, 102_000, 98_000, 100_000])).toEqual([50, null, null, null, null]);
+  });
+});
+
+describe("priceNote", () => {
+  const others = [289_999, 300_000, 323_528];
+  it("gives an established shop the plain fact, any other shop the advice to check", () => {
+    expect(isEstablished(4.9, 57_981)).toBe(true);
+    expect(isEstablished(4.9, 999)).toBe(false);
+    expect(isEstablished(4.5, 5_000)).toBe(false); // many reviews, not a high rating
+    expect(priceNote(144_990, others, 4.9, 57_981)).toEqual({ pct: 51, kind: "fact" });
+    expect(priceNote(144_990, others, 4.8, 520)).toEqual({ pct: 51, kind: "check" });
+    expect(priceNote(144_990, others, 0, 0)).toEqual({ pct: 51, kind: "check" });
+    expect(priceNote(280_000, others, 4.8, 520)).toBeNull();
+  });
+  it("checks every offer against the others", () => {
+    const o = [144_990, ...others].map((price) => ({ price, sellerRating: 4.8, sellerReviews: 100 }));
+    expect(priceNotes(o).map((n) => n?.kind ?? null)).toEqual(["check", null, null, null]);
   });
 });
 
