@@ -1,4 +1,5 @@
 import type postgres from "postgres";
+import { cheapOutlierPct, sellerLabel, type SellerLabel } from "@baga/core";
 import { dayMoves, weekMovers, type Mover } from "./movers";
 
 /** One product where sellers ask very different prices right now (offers of its latest check). */
@@ -32,6 +33,12 @@ export interface Market {
   /** Biggest drops against the previous 7 days (the same rule as /drops). */
   deals: Mover[];
   pick: MarketPick | null;
+  /**
+   * Shop evidence (DECISIONS.md, 2026-11-05 "Shop evidence, not verdicts"): the shops in current offers by the
+   * label of their Kaspi rating (sellerLabel), and the products whose cheapest offer is cheapOutlierPct below the
+   * other sellers. The same rules as the seller table.
+   */
+  shops: Record<SellerLabel, number> & { cheapOffers: number };
 }
 
 export const MARKET_CONFIG = {
@@ -59,6 +66,17 @@ export async function getMarket(sql: postgres.Sql): Promise<Market> {
            (select count(distinct o.seller_id)::int from offers_current o join products p on p.id = o.product_id
             where p.status = 'active') as sellers,
            (select to_char(min((observed_at at time zone 'Asia/Almaty')::date), 'YYYY-MM-DD') from price_observations) as "firstDay"`;
+  const shopRows = await sql<{ rating: number | null; reviews: number | null }[]>`
+    select se.rating, se.reviews from sellers se
+    where exists (select 1 from offers_current o join products p on p.id = o.product_id where o.seller_id = se.id and p.status = 'active')`;
+  const shops = { high: 0, mixed: 0, low: 0, few: 0, none: 0, cheapOffers: 0 } as Market["shops"];
+  for (const r of shopRows) shops[sellerLabel(r.rating, r.reviews)]++;
+  const priceLists = await sql<{ prices: number[] }[]>`
+    select array_agg(o.price order by o.price) as prices from offers_current o join products p on p.id = o.product_id
+    join product_state s on s.product_id = p.id
+    where p.status = 'active' and s.in_stock and s.last_checked_at > now() - interval '3 days'
+    group by o.product_id having count(*) >= 3`;
+  for (const { prices } of priceLists) if (cheapOutlierPct(prices[0]!, prices.slice(1)) !== null) shops.cheapOffers++;
   const [lows] = moves.day ? await sql<{ n: number }[]>`
     with d as (
       select product_id, (observed_at at time zone 'Asia/Almaty')::date as day, min(min_price) as p
@@ -131,6 +149,6 @@ export async function getMarket(sql: postgres.Sql): Promise<Market> {
     compared: moves.compared, down, up, same: moves.compared - down - up,
     newLows: lows?.n ?? 0,
     spread: { products: spread?.products ?? 0, over10: spread?.over10 ?? 0, over25: spread?.over25 ?? 0, medianPct: spread?.median ?? null, top },
-    categories, deals, pick,
+    categories, deals, pick, shops,
   };
 }

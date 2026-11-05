@@ -76,6 +76,14 @@ export function MarketReceipt() {
                   <span className="mk-day-row"><span className="mk-day-n is-up">↑ {count(m!.up)}</span> {t("dayUp")}</span>
                 </p>}
                 {m!.newLows > 0 && <p className="mk-note is-ink">{t("newLows", { count: m!.newLows, days: 7 })}</p>}
+                {/* Shops by Kaspi's rating, the same labels as the seller table (packages/core/src/sellers.ts). */}
+                {m!.shops && m!.catalog.sellers > 0 && <p className="mk-day">
+                  {t("shopsLine")}{" "}
+                  <span className="mk-day-row"><span className="mk-day-n is-down">{count(m!.shops.high)}</span> {t("shopsHigh")}</span>
+                  <span className="mk-day-row"><span className="mk-day-n">{count(m!.shops.mixed + m!.shops.low)}</span> {t("shopsMixed")}</span>
+                  <span className="mk-day-row"><span className="mk-day-n">{count(m!.shops.few + m!.shops.none)}</span> {t("shopsUnknown")}</span>
+                </p>}
+                {m!.shops && m!.shops.cheapOffers > 0 && <p className="mk-note is-ink">{t("shopsCheap", { count: m!.shops.cheapOffers })}</p>}
               </>
             )}
             {has && spread && spread.products > 0 && spread.medianPct !== null && (
