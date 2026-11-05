@@ -13,3 +13,22 @@ jobs:
       - run: pnpm test
       - run: pnpm typecheck
       - run: BAGA_FIXTURES=1 pnpm build
+  # Integration tests on a disposable Postgres (packages/db/src/db.integration.test.ts): every migration on an empty
+  # database, then the SQL that has to hold under concurrency (delivery claims, email limits). Same major as Supabase.
+  db:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env: { POSTGRES_PASSWORD: ci }
+        ports: ["5432:5432"]
+        options: --health-cmd pg_isready --health-interval 2s --health-timeout 5s --health-retries 20
+    env:
+      TEST_DATABASE_URL: postgresql://postgres:ci@localhost:5432/postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec vitest run packages/db/src/db.integration.test.ts
