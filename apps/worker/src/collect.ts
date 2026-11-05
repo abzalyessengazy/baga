@@ -22,11 +22,14 @@ const sql = postgres(env.databaseUrl(), { max: 2, ...connectionOptions(env.datab
 // The last word before each request, after its pacing wait: nothing is sent once the breaker is open or the window
 // (04:05–08:30 UTC) has closed, whatever the caller planned.
 const breaker = new CircuitBreaker();
+// Every request that passes the guard is sent: counted for collection_runs.requests (migration 0017).
+let requests = 0;
 const kaspi = createKaspiClient({
   minIntervalMs: KASPI_CRAWL_DELAY_MS, jitterMs: 2_000,
   beforeRequest: () => {
     if (breaker.openReason) throw new KaspiRequestRefused(breaker.openReason);
     if (!isInVisitWindow(new Date(), 0)) throw new KaspiRequestRefused("outside the visit window");
+    requests++;
   },
 });
 
@@ -79,7 +82,15 @@ async function main() {
     return links > 0 || visitors.length > 0;
   }
 
+  // The request count is saved as the run goes, so a crashed or cancelled run keeps it.
+  let savedRequests = -1;
+  const saveRequests = async () => {
+    if (requests === savedRequests) return;
+    await sql`update collection_runs set requests = ${requests} where id = ${runId}`;
+    savedRequests = requests;
+  };
   while (!breaker.openReason && inWindow()) {
+    await saveRequests();
     if (await serveVisitors()) continue;
     const due = await claimDue(env.chunkSize());
     if (due.length) {
@@ -106,11 +117,11 @@ async function main() {
   await sendQueued();
   const aborted = breaker.openReason;
   await sql`update collection_runs set finished_at = now(), checked = ${breaker.checked}, changed = ${changed},
-    failed = ${breaker.failed}, aborted_reason = ${aborted} where id = ${runId}`;
+    failed = ${breaker.failed}, aborted_reason = ${aborted}, requests = ${requests} where id = ${runId}`;
   const [left] = await sql<{ due: number; queued: number }[]>`
     select (select count(*)::int from collection_schedule where next_check_at <= now() and fail_count < 10) as due,
            (select count(*)::int from seed_queue where status = 'pending' and attempts < 3) as queued`;
-  console.log(JSON.stringify({ runId, checked: breaker.checked, changed, seeded, failed: breaker.failed, aborted, stillDue: left?.due, stillQueued: left?.queued }));
+  console.log(JSON.stringify({ runId, requests, checked: breaker.checked, changed, seeded, failed: breaker.failed, aborted, stillDue: left?.due, stillQueued: left?.queued }));
   if (!aborted) await postToChannel(runId).catch((e) => console.error(`channel post: ${e}`));
   const hc = env.healthcheckUrl();
   if (hc) await fetch(aborted ? `${hc}/fail` : hc, { method: "POST", body: aborted ?? "ok" }).catch(() => {});

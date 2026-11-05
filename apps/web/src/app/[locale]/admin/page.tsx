@@ -140,10 +140,10 @@ export default async function AdminPage({ params, searchParams }: Props) {
         <h2>{t("runs")}</h2>
         <div className="admin-scroll">
           <table className="admin-table">
-            <thead><tr><th>#</th><th>{t("started")}</th><th>{t("lastCheck")}</th><th>{t("checks")}</th><th>{t("failed")}</th><th>{t("state")}</th></tr></thead>
+            <thead><tr><th>#</th><th>{t("started")}</th><th>{t("lastCheck")}</th><th>{t("requests")}</th><th>{t("checks")}</th><th>{t("failed")}</th><th>{t("state")}</th></tr></thead>
             <tbody>
               {h.runs.map((r) => (
-                <tr key={r.id}><td>{r.id}</td><td>{at(r.startedAt)}</td><td>{at(r.lastCheckAt)}</td><td>{count(r.checks)}</td><td>{count(r.failed)}</td><td>{state(r)}</td></tr>
+                <tr key={r.id}><td>{r.id}</td><td>{at(r.startedAt)}</td><td>{at(r.lastCheckAt)}</td><td>{r.requests === null ? "—" : count(r.requests)}</td><td>{count(r.checks)}</td><td>{count(r.failed)}</td><td>{state(r)}</td></tr>
               ))}
             </tbody>
           </table>
