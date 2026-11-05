@@ -81,7 +81,8 @@ function finish(): never {
     const added = candidates.filter((c) => !ids.has(c.productId) && ids.add(c.productId));
     writeFileSync(linksFile, [...prev, ...added.map((c) => `${c.productId}\t${c.slug}`)].join("\n") + "\n");
     console.log(`${added.length} new links saved (${prev.length + added.length} in ${linksFile})`);
-    if (more) candidates.push(...prev.map((l) => { const [productId, slug] = l.split("\t"); return { productId: productId!, slug: slug! }; }));
+    // A loop, not push(...): over a million saved links overflow the call stack (5 Nov 2026).
+    if (more) for (const l of prev) { const [productId, slug] = l.split("\t"); candidates.push({ productId: productId!, slug: slug! }); }
   }
   const fresh = candidates.filter((c) => !excluded.has(c.productId));
   const picked = pickSeedProducts(fresh, perCategory);
