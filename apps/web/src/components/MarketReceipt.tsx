@@ -11,6 +11,12 @@ import { Wordmark } from "./Wordmark";
 type L = "ru" | "kk";
 const count = (n: number) => new Intl.NumberFormat("ru-RU").format(n);
 const ddmm = (day: string) => `${day.slice(8, 10)}.${day.slice(5, 7)}`;
+/** "today" / "yesterday" for a YYYY-MM-DD day, by the Almaty calendar; anything older is named by its date. */
+function relativeDay(day: string): "today" | "yesterday" | "other" {
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Almaty" }).format(new Date());
+  const yesterday = new Date(Date.parse(today) - 86_400_000).toISOString().slice(0, 10);
+  return day === today ? "today" : day === yesterday ? "yesterday" : "other";
+}
 /** Calendar days from the first observed day to the latest complete shift, both included. */
 const historyDays = (first: string | null, last: string) =>
   first ? Math.round((Date.parse(last) - Date.parse(first)) / 86_400_000) + 1 : 0;
@@ -63,7 +69,7 @@ export function MarketReceipt() {
                   <div><dt>{t("days")}</dt><dd>{count(historyDays(m!.catalog.firstDay, m!.day ?? m!.catalog.firstDay ?? ""))}</dd></div>
                 </dl>
                 {m!.day && <p className="mk-day">
-                  {t("dayLine", { date: ddmm(m!.day!), count: m!.compared })}{" "}
+                  {t("dayLine", { when: relativeDay(m!.day!), date: ddmm(m!.day!), count: m!.compared })}{" "}
                   <span className="mk-day-n is-down">↓ {count(m!.down)}</span> {t("down").toLowerCase()} ·{" "}
                   <span className="mk-day-n is-up">↑ {count(m!.up)}</span> {t("up").toLowerCase()}
                 </p>}
