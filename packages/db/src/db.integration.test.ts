@@ -33,8 +33,9 @@ describe.skipIf(!url)("database (disposable Postgres)", () => {
         if not exists (select 1 from pg_roles where rolname = 'anon') then create role anon; end if;
         if not exists (select 1 from pg_roles where rolname = 'authenticated') then create role authenticated; end if;
         if not exists (select 1 from pg_roles where rolname = 'service_role') then create role service_role; end if;
-      end $$;`);
-    // Every migration, in order, each in its own transaction (as migrate.ts does).
+      end $$;
+      create table _migrations (name text primary key, applied_at timestamptz not null default now());`);
+    // Every migration, in order, each in its own transaction (as migrate.ts does, which also creates _migrations).
     for (const file of readdirSync(dir).filter((f) => f.endsWith(".sql")).sort()) {
       await sql.begin((tx) => tx.unsafe(readFileSync(join(dir, file), "utf8")));
     }
