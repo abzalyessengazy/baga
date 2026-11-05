@@ -71,9 +71,9 @@ export function MarketReceipt() {
                   <div><dt><StatIcon name="calendar" />{t("days")}</dt><dd>{count(historyDays(m!.catalog.firstDay, m!.day ?? m!.catalog.firstDay ?? ""))}</dd></div>
                 </dl>
                 {m!.day && <p className="mk-day">
-                  {t("dayLine", { when: relativeDay(m!.day!), date: dayMonth(m!.day!, td), count: m!.compared })}{" "}
-                  <span className="mk-day-n is-down">↓ {count(m!.down)}</span> {t("down").toLowerCase()} ·{" "}
-                  <span className="mk-day-n is-up">↑ {count(m!.up)}</span> {t("up").toLowerCase()}
+                  {t("dayLine", { when: relativeDay(m!.day!), date: dayMonth(m!.day!, td), dateIn: dayMonth(m!.day!, td, true), count: m!.compared })}{" "}
+                  <span className="mk-day-row"><span className="mk-day-n is-down">↓ {count(m!.down)}</span> {t("dayDown")}</span>
+                  <span className="mk-day-row"><span className="mk-day-n is-up">↑ {count(m!.up)}</span> {t("dayUp")}</span>
                 </p>}
                 {m!.newLows > 0 && <p className="mk-note is-ink">{t("newLows", { count: m!.newLows, days: 7 })}</p>}
               </>
