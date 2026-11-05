@@ -755,3 +755,12 @@ p.chips { margin: 6px 0 0; }
 .shop-item .chips { grid-area: chips; margin: 0; }
 .shop-item-n { grid-area: n; font-size: 0.8125rem; color: var(--ink-faint); white-space: nowrap; }
 .shops .chip-legend { color: var(--ink-on-counter, var(--ink-soft)); }
+/* Phones: the totals grid has two columns, so the shop chips would push the neighbouring number down and meet
+   the stamp. One chip (high rating) and the arrow; numbers start at the same height in each row; the stamp gets
+   its own room under the grid. */
+@media (max-width: 560px) {
+  .z-totals { padding-bottom: 76px; }
+  .z-totals .z-cell { justify-content: flex-start; }
+  .z-totals .z-cell dt { min-height: 2.6em; }
+  .z-shops .chip:not(:first-child) { display: none; }
+}
