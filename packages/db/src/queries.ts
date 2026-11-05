@@ -12,6 +12,8 @@ export interface ProductRow {
   currentMinPrice: number | null;
   offerCount: number;
   inStock: boolean;
+  /** Kaspi answered 404: no longer sold there. Its observed history stays. */
+  delisted: boolean;
   lastCheckedAt: Date | null;
   observedSince: Date;
 }
@@ -21,7 +23,7 @@ export async function getProductByExternalId(sql: postgres.Sql, externalId: stri
     select p.id, p.external_id as "externalId", p.slug, p.title, p.image_url as "imageUrl",
            p.category_path as "categoryPath", s.current_min_price as "currentMinPrice",
            coalesce(s.offer_count, 0) as "offerCount", coalesce(s.in_stock, false) as "inStock",
-           s.last_checked_at as "lastCheckedAt", coalesce(s.observed_since, p.first_seen_at) as "observedSince"
+           p.status = 'delisted' as delisted, s.last_checked_at as "lastCheckedAt", coalesce(s.observed_since, p.first_seen_at) as "observedSince"
     from products p
     join marketplaces m on m.id = p.marketplace_id and m.code = 'kaspi'
     left join product_state s on s.product_id = p.id

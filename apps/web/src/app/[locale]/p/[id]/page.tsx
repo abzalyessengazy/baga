@@ -141,7 +141,10 @@ export default async function ProductPage({ params, searchParams }: Props) {
         <hr className="rule" />
         <div className="total">
           <span className="total-label">{tr("total")}</span>
-          <span className="total-value">{v.minPrice !== null ? f(v.minPrice) : t("outOfStock")}</span>
+          <span className="total-value">{v.delisted ? t("delisted") : v.minPrice !== null ? f(v.minPrice) : t("outOfStock")}</span>
+          {v.delisted && v.lastPrice != null && (
+            <span className="total-sub total-earlier">{t("delistedText", { price: f(v.lastPrice), date: fmtDate(v.checkedAt, locale) })}</span>
+          )}
           {v.offerCount > 0 && <span className="total-sub">{tr("from", { count: v.offerCount })}</span>}
           {earlierLow !== null && <span className="total-sub total-earlier">{t("earlierToday", { price: f(earlierLow) })}</span>}
         </div>
@@ -173,14 +176,17 @@ export default async function ProductPage({ params, searchParams }: Props) {
               ))}
             </tbody>
           </table>
-        ) : <p className="verdict-text">{t("outOfStock")}</p>}
+        ) : <p className="verdict-text">{v.delisted ? t("delisted") : t("outOfStock")}</p>}
         {v.offerCount > shown.length && <p className="note">{t("moreSellers", { count: v.offerCount - shown.length })}</p>}
         <p className="note">{t("nationalPrice")}</p>
         <a className="kaspi-link" href={`/go/${v.externalId}`} rel="noopener">{t("openOnKaspi")}</a>
         <div className="barcode" aria-hidden />
       </article>
-      <TrackPanel productId={v.externalId} current={v.minPrice} initial={await trackInitial(v.externalId)}
-        related={<Related lists={await alreadyTracked(v.externalId, null, 6, v.title)} locale={L} />} />
+      {/* Nothing to track on a delisted product: no alert can ever fire. */}
+      {!v.delisted && (
+        <TrackPanel productId={v.externalId} current={v.minPrice} initial={await trackInitial(v.externalId)}
+          related={<Related lists={await alreadyTracked(v.externalId, null, 6, v.title)} locale={L} />} />
+      )}
     </main>
   );
 }

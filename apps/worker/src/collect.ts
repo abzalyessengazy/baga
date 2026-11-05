@@ -325,12 +325,20 @@ async function afterSave(productId: number, externalId: string, price: number | 
       if (target) await sql`update trackings set target_price = ${target} where id = ${p.id} and target_price is null`;
     }
   }
-  const waiting = await sql<{ id: string; tg: boolean; mail: boolean }[]>`
-    update trackings t set first_price_sent_at = now()
-    from watchers w
-    where t.product_id = ${productId} and t.watcher_id = w.id and t.status = 'active' and t.first_price_sent_at is null
-    returning t.id, w.telegram_chat_id is not null as tg, w.email_confirmed_at is not null as mail`;
-  for (const w of waiting) await queueNotification(w, "first_price", price ?? 0, `${w.id}:first`);
+  // The first price goes out once there is a price and somewhere to send it: a watcher who connects Telegram or
+  // confirms an email later gets it after the next check, and nobody is ever told "0 ₸". Marking and queueing
+  // happen in one transaction, so a crash cannot mark a tracking as told without its message.
+  if (price !== null) {
+    await sql.begin(async (tx) => {
+      const waiting = await tx<{ id: string; tg: boolean; mail: boolean }[]>`
+        update trackings t set first_price_sent_at = now()
+        from watchers w
+        where t.product_id = ${productId} and t.watcher_id = w.id and t.status = 'active' and t.first_price_sent_at is null
+          and (w.telegram_chat_id is not null or w.email_confirmed_at is not null)
+        returning t.id, w.telegram_chat_id is not null as tg, w.email_confirmed_at is not null as mail`;
+      for (const w of waiting) await queueNotification(tx, w, "first_price", price, `${w.id}:first`);
+    });
+  }
   if (price !== null) await evaluateTrackings(productId, externalId, price, seller);
   await sendQueued();
 }
@@ -339,7 +347,7 @@ async function afterSave(productId: number, externalId: string, price: number | 
  * One notification row per connected channel. Telegram keeps the plain idempotency key (rows from before email
  * existed use it); email adds ":email". The unique key makes a duplicate impossible, even with overlapping runs.
  */
-async function queueNotification(t: { id: string; tg: boolean; mail: boolean }, type: "first_price" | "target_reached" | "bought_ask", price: number, key: string) {
+async function queueNotification(sql: postgres.Sql | postgres.TransactionSql, t: { id: string; tg: boolean; mail: boolean }, type: "first_price" | "target_reached" | "bought_ask", price: number, key: string) {
   if (t.tg) await sql`insert into notifications (tracking_id, type, channel, price, idempotency_key)
     values (${t.id}, ${type}, 'telegram', ${price}, ${key}) on conflict (idempotency_key) do nothing`;
   if (t.mail) await sql`insert into notifications (tracking_id, type, channel, price, idempotency_key)
@@ -375,10 +383,14 @@ async function evaluateTrackings(productId: number, externalId: string, price: n
         : { action: "none", next: state };
     }
     const n = d.next;
-    await sql`update trackings set alert_state = ${n.state}, episode = ${n.episode},
-      last_triggered_at = ${n.lastTriggeredAt}, above_since = ${n.aboveSince} where id = ${r.id}`;
-    // A watcher with no channel has nowhere to be told; the page and "Мои товары" still show the price.
-    if (d.action === "send") await queueNotification(r, "target_reached", price, d.idempotencyKey);
+    // The new alert state and its messages are saved together: a crash in between can neither lose an alert
+    // (state "triggered", nothing queued) nor queue one twice (the idempotency key).
+    await sql.begin(async (tx) => {
+      await tx`update trackings set alert_state = ${n.state}, episode = ${n.episode},
+        last_triggered_at = ${n.lastTriggeredAt}, above_since = ${n.aboveSince} where id = ${r.id}`;
+      // A watcher with no channel has nowhere to be told; the page and "Мои товары" still show the price.
+      if (d.action === "send") await queueNotification(tx, r, "target_reached", price, d.idempotencyKey);
+    });
     void seller;
   }
 }
@@ -447,14 +459,16 @@ async function postToChannel(runId: number) {
  * events older than 180 days, as the privacy page says. Database only, no Kaspi request.
  */
 async function queueBoughtAsks() {
-  const due = await sql<{ id: string; tg: boolean; mail: boolean }[]>`
-    update trackings t set bought_asked_at = now(), bought_code = replace(gen_random_uuid()::text, '-', '')
-    from watchers w
-    where w.id = t.watcher_id and t.bought is null and t.bought_asked_at is null and t.product_id is not null
-      and exists (select 1 from notifications n where n.tracking_id = t.id and n.type = 'target_reached' and n.status = 'sent'
-                  and n.sent_at between now() - interval '7 days' and now() - interval '20 hours')
-    returning t.id, w.telegram_chat_id is not null as tg, w.email_confirmed_at is not null as mail`;
-  for (const t of due) await queueNotification(t, "bought_ask", 0, `${t.id}:bought`);
+  await sql.begin(async (tx) => {
+    const due = await tx<{ id: string; tg: boolean; mail: boolean }[]>`
+      update trackings t set bought_asked_at = now(), bought_code = replace(gen_random_uuid()::text, '-', '')
+      from watchers w
+      where w.id = t.watcher_id and t.bought is null and t.bought_asked_at is null and t.product_id is not null
+        and exists (select 1 from notifications n where n.tracking_id = t.id and n.type = 'target_reached' and n.status = 'sent'
+                    and n.sent_at between now() - interval '7 days' and now() - interval '20 hours')
+      returning t.id, w.telegram_chat_id is not null as tg, w.email_confirmed_at is not null as mail`;
+    for (const t of due) await queueNotification(tx, t, "bought_ask", 0, `${t.id}:bought`);
+  });
   await sql`delete from events where at < now() - interval '180 days'`;
   await sql`delete from email_requests where at < now() - interval '2 days'`;
 }

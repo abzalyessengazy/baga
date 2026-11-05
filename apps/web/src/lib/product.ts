@@ -15,6 +15,10 @@ export interface ProductView {
   minPrice: number | null;
   offerCount: number;
   inStock: boolean;
+  /** Kaspi no longer has the product: the page shows its last observed price as history, never as current. */
+  delisted: boolean;
+  /** The latest observed lowest price, also for a delisted product (minPrice is null then). */
+  lastPrice?: number | null;
   offers: { sellerName: string; sellerRating: number | null; price: number; deliveryDuration: string | null }[];
   history: DailyLow[]; // observed daily lows only
   observedSince: string; // ISO
@@ -48,7 +52,7 @@ function fromSnapshot(s: ProductSnapshot): ProductView {
   return {
     externalId: s.externalId, title: s.title, imageUrl: s.imageUrl, categoryPath: s.categoryPath,
     kaspiUrl: `https://kaspi.kz/shop/p/-${s.externalId}/`, minPrice: s.minPrice, offerCount: s.offerCount,
-    inStock: s.inStock, offers: s.offers.map((o) => ({ sellerName: o.sellerName, sellerRating: o.sellerRating, price: o.price, deliveryDuration: o.deliveryDuration })),
+    inStock: s.inStock, delisted: false, offers: s.offers.map((o) => ({ sellerName: o.sellerName, sellerRating: o.sellerRating, price: o.price, deliveryDuration: o.deliveryDuration })),
     history: [], observedSince: s.fetchedAt, checkedAt: s.fetchedAt,
   };
 }
@@ -109,7 +113,9 @@ export const getProductView = cache(async function getProductView(externalId: st
       view: {
         externalId: row.externalId, title: row.title, imageUrl: row.imageUrl, categoryPath: row.categoryPath,
         kaspiUrl: `https://kaspi.kz/shop/p/${row.slug ? `${row.slug}-` : "-"}${row.externalId}/`,
-        minPrice: row.currentMinPrice, offerCount: row.offerCount, inStock: row.inStock, offers,
+        minPrice: row.delisted ? null : row.currentMinPrice, lastPrice: row.currentMinPrice,
+        offerCount: row.delisted ? 0 : row.offerCount, inStock: row.inStock && !row.delisted, delisted: row.delisted,
+        offers: row.delisted ? [] : offers,
         history, observedSince: row.observedSince.toISOString(), checkedAt: (row.lastCheckedAt ?? row.observedSince).toISOString(),
       },
     };
