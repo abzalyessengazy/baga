@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { formatTenge, moveDirection, type DailyLow } from "@baga/core";
+import { dayMonth, type DatesT } from "@/lib/dayMonth";
 
 const DAY = 86_400_000;
 type Range = 30 | 90 | 0;
@@ -9,10 +10,13 @@ type Range = 30 | 90 | 0;
 /**
  * Bar chart of observed daily lows: one slot per calendar day, one bar per observed day. A day without a check stays
  * an empty slot (a tick on the baseline); nothing is interpolated. A bar is violet when the low fell by MOVE_MIN_PCT
- * or more against the previous observed day, red when it rose. Tapping or hovering a bar shows its date and price.
+ * or more against the previous observed day, red when it rose. When the bars are wide enough each one carries its price
+ * and date (the lowest in violet); otherwise the dashed lines give the lowest and highest, and tapping or hovering a bar
+ * shows its date and price.
  */
 export function PriceChart({ history }: { history: DailyLow[] }) {
   const t = useTranslations("product");
+  const td = useTranslations("dates") as unknown as DatesT;
   const locale = useLocale() as "ru" | "kk";
   const [range, setRange] = useState<Range>(90);
   const [picked, setPicked] = useState<string | null>(null);
@@ -33,10 +37,12 @@ export function PriceChart({ history }: { history: DailyLow[] }) {
 
   if (history.length < 2) return <div className="empty-history">{t("noHistory")}</div>;
 
-  const H = W < 520 ? 190 : 230, padL = 0, padR = W < 520 ? 78 : 96, padT = 12, padB = 26;
-  const plotW = W - padL - padR, plotH = H - padT - padB;
   const first = Date.parse(data[0]!.day);
   const slots = Math.round((Date.parse(data[data.length - 1]!.day) - first) / DAY) + 1;
+  // Every bar gets its own price and date when a slot is wide enough for "1 449 990 ₸"; then the side scale is not needed.
+  const labelAll = W / slots >= 84;
+  const H = W < 520 ? 200 : 240, padL = 0, padR = labelAll ? 0 : W < 520 ? 78 : 96, padT = labelAll ? 24 : 12, padB = 26;
+  const plotW = W - padL - padR, plotH = H - padT - padB;
   const slotW = plotW / slots;
   const barW = Math.max(1.5, Math.min(slotW * 0.72, 36));
   const prices = data.map((d) => d.price);
@@ -53,7 +59,7 @@ export function PriceChart({ history }: { history: DailyLow[] }) {
   const hasGap = observed.size < slots;
   const selIdx = Math.max(0, data.findIndex((d) => d.day === picked));
   const sel = data[picked && data.some((d) => d.day === picked) ? selIdx : data.length - 1]!;
-  const fmtDay = (s: string) => `${s.slice(8, 10)}.${s.slice(5, 7)}`;
+  const fmtDay = (s: string) => dayMonth(s, td);
   const mono = { fontFamily: "var(--font-receipt)", fontSize: 12 } as const;
   const move = (step: number) => {
     const i = data.findIndex((d) => d.day === sel.day);
@@ -70,8 +76,9 @@ export function PriceChart({ history }: { history: DailyLow[] }) {
           </button>
         ))}
       </div>
+      {/* One legend line; a picked bar's date and price only when the bars do not carry them. */}
       <p className="chart-readout" aria-live="polite">
-        <span>{fmtDay(sel.day)}</span> <b>{formatTenge(sel.price, locale)}</b> <span>{t("dayLow")}</span>
+        {!labelAll && picked ? <><span>{fmtDay(sel.day)}</span> <b>{formatTenge(sel.price, locale)}</b></> : <span>{t("barsLegend")}</span>}
       </p>
       <div ref={box}>
         <svg
@@ -83,11 +90,13 @@ export function PriceChart({ history }: { history: DailyLow[] }) {
             if (e.key === "ArrowRight") { e.preventDefault(); move(1); }
           }}
         >
-          <line x1={padL} x2={W - padR + 4} y1={Y(hi)} y2={Y(hi)} stroke="var(--rule)" strokeDasharray="2 4" />
-          <line x1={padL} x2={W - padR + 4} y1={Y(lo)} y2={Y(lo)} stroke="var(--stamp)" strokeDasharray="2 4" />
+          {!labelAll && <>
+            <line x1={padL} x2={W - padR + 4} y1={Y(hi)} y2={Y(hi)} stroke="var(--rule)" strokeDasharray="2 4" />
+            <line x1={padL} x2={W - padR + 4} y1={Y(lo)} y2={Y(lo)} stroke="var(--stamp)" strokeDasharray="2 4" />
+            {hi !== lo && <text x={W - padR + 8} y={Y(hi) + 4} {...mono} fill="var(--ink-soft)">{formatTenge(hi, locale)}</text>}
+            <text x={W - padR + 8} y={Y(lo) + (hi - lo > 0 && Y(lo) - Y(hi) < 16 ? 14 : 4)} {...mono} fill="var(--stamp)" fontWeight="700">{formatTenge(lo, locale)}</text>
+          </>}
           <line x1={padL} x2={W - padR} y1={base} y2={base} stroke="var(--rule)" />
-          {hi !== lo && <text x={W - padR + 8} y={Y(hi) + 4} {...mono} fill="var(--ink-soft)">{formatTenge(hi, locale)}</text>}
-          <text x={W - padR + 8} y={Y(lo) + (hi - lo > 0 && Y(lo) - Y(hi) < 16 ? 14 : 4)} {...mono} fill="var(--stamp)" fontWeight="700">{formatTenge(lo, locale)}</text>
           {Array.from({ length: slots }, (_, s) => s).filter((s) => !observed.has(s)).map((s) => (
             <line key={`g${s}`} x1={cx(s) - Math.min(barW, 6) / 2} x2={cx(s) + Math.min(barW, 6) / 2} y1={base - 1} y2={base - 1} stroke="var(--ink-soft)" strokeWidth="2" />
           ))}
@@ -100,6 +109,11 @@ export function PriceChart({ history }: { history: DailyLow[] }) {
               <g key={d.day}>
                 {on && <rect x={padL + slotW * s} y={padT} width={slotW} height={plotH} fill="var(--rule)" opacity="0.15" />}
                 <rect x={cx(s) - barW / 2} y={Y(d.price)} width={barW} height={Math.max(1, base - Y(d.price))} fill={fill} opacity={on ? 1 : 0.82} />
+                {labelAll && <>
+                  <text x={cx(s)} y={Y(d.price) - 7} {...mono} fontSize={11.5} textAnchor="middle"
+                    fill={d.price === lo && hi !== lo ? "var(--stamp)" : "var(--ink)"} fontWeight={d.price === lo && hi !== lo ? 700 : 600}>{formatTenge(d.price, locale)}</text>
+                  <text x={cx(s)} y={H - 6} {...mono} fontSize={11} textAnchor="middle" fill="var(--ink-soft)">{fmtDay(d.day)}</text>
+                </>}
                 <rect
                   x={padL + slotW * s} y={padT} width={slotW} height={plotH + padB} fill="transparent"
                   onPointerEnter={(e) => { if (e.pointerType === "mouse") setPicked(d.day); }}
@@ -110,8 +124,10 @@ export function PriceChart({ history }: { history: DailyLow[] }) {
               </g>
             );
           })}
-          <text x={padL} y={H - 6} {...mono} fontSize={11} fill="var(--ink-soft)">{fmtDay(data[0]!.day)}</text>
-          <text x={W - padR} y={H - 6} {...mono} fontSize={11} fill="var(--ink-soft)" textAnchor="end">{fmtDay(data[data.length - 1]!.day)}</text>
+          {!labelAll && <>
+            <text x={padL} y={H - 6} {...mono} fontSize={11} fill="var(--ink-soft)">{fmtDay(data[0]!.day)}</text>
+            <text x={W - padR} y={H - 6} {...mono} fontSize={11} fill="var(--ink-soft)" textAnchor="end">{fmtDay(data[data.length - 1]!.day)}</text>
+          </>}
         </svg>
       </div>
       {hasGap && <p className="note">{t("gap")}</p>}

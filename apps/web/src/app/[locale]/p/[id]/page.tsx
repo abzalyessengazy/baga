@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import type { Metadata } from "next";
-import { computeVerdict, formatTenge, nextVisitWindowDay, isValidSlug, slugName, isInVisitWindow } from "@baga/core";
+import { computeVerdict, formatTenge, moveDirection, nextVisitWindowDay, isValidSlug, slugName, isInVisitWindow } from "@baga/core";
 import { getProductView, queuedSlug, collectorRunning } from "@/lib/product";
 import { QueuedWatcher } from "@/components/QueuedWatcher";
 import { alreadyTracked } from "@/lib/catalog";
@@ -12,12 +12,14 @@ import { SaleCheck } from "@/components/SaleCheck";
 import { ProductLookup } from "@/components/ProductLookup";
 import { trackInitial } from "@/lib/watcher";
 import { PrintIn, StampIn } from "@/components/PrintIn";
+import { dayMonth, type DatesT } from "@/lib/dayMonth";
 
 type Props = { params: Promise<{ locale: string; id: string }>; searchParams: Promise<{ s?: string | string[] }> };
 const fmtDate = (iso: string, locale: string) =>
   new Intl.DateTimeFormat(locale === "kk" ? "kk-KZ" : "ru-KZ", { day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Almaty" }).format(new Date(iso));
-const fmtTime = (iso: string, locale: string) =>
-  new Intl.DateTimeFormat(locale === "kk" ? "kk-KZ" : "ru-KZ", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Almaty" }).format(new Date(iso));
+/** "5 қар, 12:19" / "5 ноя, 12:19" (Almaty time); month names from messages, browsers lack Kazakh ones. */
+const fmtTime = (iso: string, td: DatesT) =>
+  `${dayMonth(iso, td)}, ${new Intl.DateTimeFormat("ru-RU", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "Asia/Almaty" }).format(new Date(iso))}`;
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { locale, id } = await params;
@@ -39,7 +41,8 @@ export default async function ProductPage({ params, searchParams }: Props) {
   const { locale, id } = await params;
   setRequestLocale(locale);
   if (!/^\d{5,12}$/.test(id)) notFound();
-  const [t, tr, tv] = await Promise.all([getTranslations("product"), getTranslations("receipt"), getTranslations("verdict")]);
+  const [t, tr, tv, tdates] = await Promise.all([getTranslations("product"), getTranslations("receipt"), getTranslations("verdict"), getTranslations("dates")]);
+  const td = tdates as unknown as DatesT;
   const r = await getProductView(id);
   if (!r.ok && (r.reason === "unknown" || r.reason === "queued")) {
     // Not tracked yet. Everything here comes from our database or the visitor's own link; no Kaspi request.
@@ -106,7 +109,8 @@ export default async function ProductPage({ params, searchParams }: Props) {
   // same day and is gone now, say so, so the two numbers do not look like a mistake.
   const checkedDay = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Almaty" }).format(new Date(v.checkedAt));
   const lastLow = v.history[v.history.length - 1];
-  const earlierLow = v.minPrice !== null && lastLow && lastLow.day === checkedDay && lastLow.price < v.minPrice ? lastLow.price : null;
+  // Only a real difference (MOVE_MIN_PCT, as everywhere on the site), not a few tenge.
+  const earlierLow = v.minPrice !== null && lastLow && lastLow.day === checkedDay && moveDirection(lastLow.price, v.minPrice) > 0 ? lastLow.price : null;
   const shown = v.offers.slice(0, 12);
   const delivery = (d: string | null) => {
     const key = `delivery${d ?? "Unknown"}`;
@@ -131,7 +135,7 @@ export default async function ProductPage({ params, searchParams }: Props) {
         <hr className="rule" />
         <div className="meta-row">
           <span>{tr("observedSince", { date: fmtDate(v.observedSince, locale) })}</span>
-          <strong>{tr("checkedAt", { time: fmtTime(v.checkedAt, locale) })}</strong>
+          <strong>{tr("checkedAt", { time: fmtTime(v.checkedAt, td) })}</strong>
         </div>
         <hr className="rule" />
         <div className="total">
