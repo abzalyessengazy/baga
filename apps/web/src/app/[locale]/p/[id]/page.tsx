@@ -13,6 +13,7 @@ import { ProductLookup } from "@/components/ProductLookup";
 import { trackInitial } from "@/lib/watcher";
 import { PrintIn, StampIn } from "@/components/PrintIn";
 import { dayMonth, type DatesT } from "@/lib/dayMonth";
+import { jsonLdHtml } from "@/lib/jsonLd";
 
 type Props = { params: Promise<{ locale: string; id: string }>; searchParams: Promise<{ s?: string | string[] }> };
 const fmtDate = (iso: string, locale: string) =>
@@ -123,7 +124,7 @@ export default async function ProductPage({ params, searchParams }: Props) {
 
   return (
     <main className="wrap product-grid">
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdHtml(jsonLd) }} />
       <article className="receipt product-receipt">
         <div className="product-head">
           {v.imageUrl ? <img src={v.imageUrl} alt="" width={72} height={72} /> : <span />}

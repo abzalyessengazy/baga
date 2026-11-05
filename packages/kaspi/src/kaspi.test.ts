@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseKaspiUrl, canonicalProductUrl, shortLinkCode, variantLinkCode, queuedLinkUrl } from "./url";
 import { parseOffers, parseProductPage, buildSnapshot, KaspiParseError } from "./snapshot";
-import { createKaspiClient, KaspiHttpError } from "./client";
+import { createKaspiClient, KaspiHttpError, KaspiRequestRefused } from "./client";
 
 const fx = (f: string) => readFileSync(join(__dirname, "..", "fixtures", f), "utf8");
 
@@ -143,6 +143,21 @@ describe("client", () => {
     ]);
     expect(starts).toHaveLength(3);
     for (let i = 1; i < starts.length; i++) expect(starts[i]! - starts[i - 1]!).toBe(11_000);
+  });
+
+  it("asks beforeRequest after the pacing wait and sends nothing when it refuses", async () => {
+    let t = 0;
+    let sent = 0;
+    const client = createKaspiClient({
+      minIntervalMs: 10_000,
+      clock: { now: () => t, sleep: async (ms) => { t += ms; }, random: () => 0 },
+      beforeRequest: () => { if (t >= 10_000) throw new KaspiRequestRefused("window closed"); },
+      fetch: (async () => { sent++; return new Response("", { status: 404 }); }) as unknown as typeof fetch,
+    });
+    await client.fetchOffers("177318181").catch(() => {});
+    const err = await client.fetchOffers("177318415").catch((e) => e);
+    expect(sent).toBe(1); // the second request waited until t = 10 000, then was refused before sending
+    expect(err).toBeInstanceOf(KaspiRequestRefused);
   });
 
   it("does not wait at all when no interval is set (web on-demand lookups)", async () => {

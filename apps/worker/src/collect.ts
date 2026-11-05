@@ -4,7 +4,7 @@
  * products; poll for new visitor requests until the window closes; evaluate alerts; send the first price and
  * target alerts to Telegram right after each check, queued emails at the end. Started by .github/workflows/collect.yml at 03:50 UTC; waits for 04:05.
  */
-import { createKaspiClient, buildSnapshot, KaspiHttpError, KaspiParseError, canonicalProductUrl, parseKaspiUrl, queuedLinkUrl, variantLinkCode } from "@baga/kaspi";
+import { createKaspiClient, buildSnapshot, KaspiHttpError, KaspiParseError, KaspiRequestRefused, canonicalProductUrl, parseKaspiUrl, queuedLinkUrl, variantLinkCode } from "@baga/kaspi";
 import { saveSnapshot, connectionOptions, requestProduct, attachShortLinkTrackings, weekMovers } from "@baga/db";
 import {
   evaluateAlert, priorityFor, INTERVAL_MINUTES, PRIORITY_ORDER, USER_INTEREST, CATALOG, SEED_MIN_PRICE, backoffMinutes, isSuspiciousJump, type TrackingAlertState,
@@ -19,8 +19,16 @@ import { renderChannelPost } from "./channel";
 
 const sql = postgres(env.databaseUrl(), { max: 2, ...connectionOptions(env.databaseUrl()) });
 // Every request this run makes (page, offers, re-checks, alert confirmations) goes through this gate.
-const kaspi = createKaspiClient({ minIntervalMs: KASPI_CRAWL_DELAY_MS, jitterMs: 2_000 });
+// The last word before each request, after its pacing wait: nothing is sent once the breaker is open or the window
+// (04:05–08:30 UTC) has closed, whatever the caller planned.
 const breaker = new CircuitBreaker();
+const kaspi = createKaspiClient({
+  minIntervalMs: KASPI_CRAWL_DELAY_MS, jitterMs: 2_000,
+  beforeRequest: () => {
+    if (breaker.openReason) throw new KaspiRequestRefused(breaker.openReason);
+    if (!isInVisitWindow(new Date(), 0)) throw new KaspiRequestRefused("outside the visit window");
+  },
+});
 
 // Worst case for one product: page + offers + suspicious re-check + alert confirmation = 4 requests ≈ 48 s.
 // Stop starting new products when less than this remains, so no request lands after 08:30 UTC.
@@ -133,6 +141,7 @@ async function resolveShortLinks(): Promise<number> {
       await attachShortLinkTrackings(sql, r.code, p.productId);
       breaker.record(true);
     } catch (e) {
+      if (e instanceof KaspiRequestRefused) break; // not sent: the link keeps its tries
       const http = e instanceof KaspiHttpError ? e : null;
       breaker.record(false, http?.isBlocking ?? false, e instanceof KaspiParseError);
       await sql`update short_link_queue set attempts = attempts + 1, last_error = ${String(e).slice(0, 500)},
@@ -158,11 +167,12 @@ const lanes = () => sql`
         and (s.last_checked_at is null
           or (s.last_checked_at at time zone 'Asia/Almaty')::date < (now() at time zone 'Asia/Almaty')::date) then 1
       else 2 end as lane,
-    coalesce(s.last_checked_at, '-infinity') as last_checked_at, cs.interval_minutes
+    coalesce(s.last_checked_at, '-infinity') as last_checked_at, cs.interval_minutes, cs.fail_count
   from collection_schedule cs join products p on p.id = cs.product_id left join product_state s on s.product_id = cs.product_id
   where p.status = 'active' and cs.fail_count < 10 and (cs.locked_until is null or cs.locked_until < now())`;
-const isDue = () => sql`(l.next_check_at <= now() or l.lane = 1
-  or (l.lane = 0 and l.last_checked_at <= now() - make_interval(mins => least(l.interval_minutes, ${USER_INTEREST.trackedMaxAgeMin}))))`;
+// A failing product (fail_count > 0) waits for its retry time in every lane (queueLane).
+const isDue = () => sql`(l.next_check_at <= now() or (l.fail_count = 0 and (l.lane = 1
+  or (l.lane = 0 and l.last_checked_at <= now() - make_interval(mins => least(l.interval_minutes, ${USER_INTEREST.trackedMaxAgeMin}))))))`;
 
 /**
  * Claims due rows: lane first, then the tier (PRIORITY_ORDER), then the longest overdue, so when the day's requests
@@ -217,6 +227,7 @@ async function checkProduct(row: DueRow, runId: number): Promise<boolean> {
     breaker.record(true);
     return saved.priceChanged;
   } catch (e) {
+    if (e instanceof KaspiRequestRefused) { await release(row.product_id); return false; } // not sent: no failure
     const http = e instanceof KaspiHttpError ? e : null;
     breaker.record(false, http?.isBlocking ?? false, e instanceof KaspiParseError);
     if (http?.isNotFound) await sql`update products set status = 'delisted' where id = ${row.product_id}`;
@@ -259,6 +270,7 @@ async function addQueued(q: Queued, runId: number): Promise<boolean> {
     breaker.record(true);
     return true;
   } catch (e) {
+    if (e instanceof KaspiRequestRefused) return false; // not sent: the row keeps its tries
     const http = e instanceof KaspiHttpError ? e : null;
     breaker.record(false, http?.isBlocking ?? false, e instanceof KaspiParseError);
     if (http?.isNotFound) await sql`update seed_queue set status = 'not_found', last_error = ${String(e).slice(0, 500)} where external_id = ${q.external_id}`;
@@ -340,6 +352,14 @@ async function evaluateTrackings(productId: number, externalId: string, price: n
            coalesce(w.telegram_chat_id is not null, false) as tg, coalesce(w.email_confirmed_at is not null, false) as mail
     from trackings t left join watchers w on w.id = t.watcher_id
     where t.product_id = ${productId} and t.status = 'active' and t.target_price is not null`;
+  // One confirmation request per product and check, however many watchers crossed their price. A failed or refused
+  // confirmation sends nothing (the next check tries again); a 403/429 stops the run like any other request.
+  let confirmed: Promise<number | null> | undefined;
+  const confirm = () => (confirmed ??= kaspi.fetchOffers(externalId).then((o) => o[0]?.price ?? null, (e) => {
+    if (e instanceof KaspiHttpError && e.isBlocking) breaker.blockedOnce();
+    if (!(e instanceof KaspiRequestRefused)) console.error(`confirmation ${externalId}: ${e}`);
+    return null;
+  }));
   for (const r of rows) {
     const state: TrackingAlertState = {
       trackingId: r.id, targetPrice: r.target_price, state: r.alert_state, episode: r.episode,
@@ -349,9 +369,8 @@ async function evaluateTrackings(productId: number, externalId: string, price: n
     let d = evaluateAlert(state, price, now, false);
     if (d.action === "confirm") {
       // Re-fetch once before alerting so a glitch never reaches an inbox.
-      const offers = await kaspi.fetchOffers(externalId).catch(() => []);
-      const confirmedPrice = offers[0]?.price;
-      d = confirmedPrice !== undefined && confirmedPrice <= r.target_price
+      const confirmedPrice = await confirm();
+      d = confirmedPrice !== null && confirmedPrice <= r.target_price
         ? evaluateAlert(state, confirmedPrice, now, true)
         : { action: "none", next: state };
     }

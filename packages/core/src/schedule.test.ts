@@ -81,6 +81,13 @@ describe("queueLane", () => {
     expect(queueLane({ ...base, lastViewedAt: h(24 * 8), lastCheckedAt: h(24 * 9) })).toEqual({ lane: 2, due: false }); // too long ago
   });
 
+  it("makes a failing product wait for its retry time in every lane", () => {
+    const failed = { ...base, failCount: 1, nextCheckAt: h(-0.1) }; // retry in 6 minutes
+    expect(queueLane({ ...failed, activeTrackings: 1 })).toEqual({ lane: 0, due: false });
+    expect(queueLane({ ...failed, lastViewedAt: h(2) })).toEqual({ lane: 1, due: false });
+    expect(queueLane({ ...failed, activeTrackings: 1, nextCheckAt: h(0) })).toEqual({ lane: 0, due: true }); // retry time reached
+  });
+
   it("leaves catalog products to their tier", () => {
     expect(queueLane(base)).toEqual({ lane: 2, due: false });
     expect(queueLane({ ...base, nextCheckAt: h(1) })).toEqual({ lane: 2, due: true });

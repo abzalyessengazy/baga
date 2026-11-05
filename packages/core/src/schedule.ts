@@ -79,6 +79,8 @@ export function isSuspiciousJump(previous: number | null, next: number, maxChang
  *   1 = a person opened it (pasted a link, searched, followed a link) since its last check and it is not checked
  *       today: due in the next run, whatever its tier;
  *   2 = everything else (catalog enrichment): due by its tier.
+ * A product whose last check failed (failCount > 0) waits for its retry time (backoffMinutes) in every lane: the
+ * lane decides the order, never that a failing product is asked for again at once.
  * New products pasted by visitors (seed_queue) are fetched before lane 2 as well. The collector's SQL in
  * apps/worker/src/collect.ts mirrors this function.
  */
@@ -86,17 +88,19 @@ export const USER_INTEREST = { viewedWithinDays: 7, trackedMaxAgeMin: INTERVAL_M
 
 export function queueLane(p: {
   activeTrackings: number; lastViewedAt: Date | null; lastCheckedAt: Date | null; nextCheckAt: Date; intervalMinutes: number; now: Date;
+  failCount?: number;
 }): { lane: 0 | 1 | 2; due: boolean } {
   const checked = p.lastCheckedAt?.getTime() ?? -Infinity;
   const tierDue = p.nextCheckAt.getTime() <= p.now.getTime();
+  const retrying = (p.failCount ?? 0) > 0;
   if (p.activeTrackings > 0) {
     const maxAge = Math.min(p.intervalMinutes, USER_INTEREST.trackedMaxAgeMin) * 60_000;
-    return { lane: 0, due: tierDue || p.now.getTime() - checked >= maxAge };
+    return { lane: 0, due: tierDue || (!retrying && p.now.getTime() - checked >= maxAge) };
   }
   const viewed = p.lastViewedAt?.getTime() ?? -Infinity;
   const recent = p.now.getTime() - viewed <= USER_INTEREST.viewedWithinDays * 86_400_000;
   const checkedToday = p.lastCheckedAt !== null && almatyDate(p.lastCheckedAt) === almatyDate(p.now);
-  if (recent && viewed > checked && !checkedToday) return { lane: 1, due: true };
+  if (recent && viewed > checked && !checkedToday) return { lane: 1, due: !retrying || tierDue };
   return { lane: 2, due: tierDue };
 }
 

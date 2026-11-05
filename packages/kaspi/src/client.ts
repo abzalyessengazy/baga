@@ -21,8 +21,21 @@ export interface KaspiClientOptions {
   minIntervalMs?: number;
   /** Extra random wait, 0..jitterMs, added to each gap. */
   jitterMs?: number;
+  /**
+   * Called after the pacing wait, right before each request is sent. It throws (KaspiRequestRefused) to stop a
+   * request the caller may no longer make: the visit window closed while it waited, or the circuit breaker opened.
+   */
+  beforeRequest?: () => void;
   /** Injectable clock for tests. */
   clock?: { now: () => number; sleep: (ms: number) => Promise<void>; random?: () => number };
+}
+
+/** Thrown by a beforeRequest guard: the request was never sent, so it says nothing about the product. */
+export class KaspiRequestRefused extends Error {
+  constructor(reason: string) {
+    super(`request not sent: ${reason}`);
+    this.name = "KaspiRequestRefused";
+  }
 }
 
 export class KaspiHttpError extends Error {
@@ -67,6 +80,7 @@ export function createKaspiClient(opts: KaspiClientOptions = {}) {
 
   async function request(url: string, init: RequestInit = {}) {
     await gate();
+    opts.beforeRequest?.();
     const res = await f(url, {
       ...init,
       headers: { "User-Agent": ua, ...(init.headers ?? {}) },
@@ -120,6 +134,7 @@ export function createKaspiClient(opts: KaspiClientOptions = {}) {
    */
   async function resolveShortLink(url: string): Promise<string | null> {
     await gate();
+    opts.beforeRequest?.();
     const res = await f(url, { method: "GET", redirect: "manual", headers: { "User-Agent": ua, Accept: "text/html" }, signal: AbortSignal.timeout(timeoutMs) });
     await res.body?.cancel().catch(() => undefined);
     const location = res.headers.get("location");

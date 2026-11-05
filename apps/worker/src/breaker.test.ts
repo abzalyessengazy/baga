@@ -2,12 +2,19 @@ import { describe, expect, it } from "vitest";
 import { CircuitBreaker } from "./breaker";
 
 describe("CircuitBreaker", () => {
-  it("opens on repeated blocking responses", () => {
+  it("opens on the first blocking response (rule 6)", () => {
     const b = new CircuitBreaker();
-    b.record(false, true);
+    b.record(true);
     expect(b.openReason).toBeNull();
     b.record(false, true);
     expect(b.openReason).toMatch(/blocked/);
+  });
+  it("opens when an uncounted request (alert confirmation) was blocked", () => {
+    const b = new CircuitBreaker();
+    b.record(true);
+    b.blockedOnce();
+    expect(b.openReason).toMatch(/blocked/);
+    expect(b.checked).toBe(1);
   });
   it("opens when more than 20% fail after 10 checks", () => {
     const b = new CircuitBreaker();
