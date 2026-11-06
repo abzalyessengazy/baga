@@ -124,12 +124,11 @@ export async function saveSnapshot(
         product_id: productId, seller_id: idOf.get(o.sellerId)!, price: o.price, delivery_duration: o.deliveryDuration,
       })))}`;
       // Today's rating and review count of each shop (migration 0016), the day's latest value.
+      const day = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Almaty" }).format(new Date());
       const daily = offers.filter((o) => o.sellerReviews != null || o.sellerRating != null)
-        .map((o) => ({ seller_id: idOf.get(o.sellerId)!, rating: o.sellerRating, reviews: o.sellerReviews }));
+        .map((o) => ({ seller_id: idOf.get(o.sellerId)!, day, rating: o.sellerRating, reviews: o.sellerReviews }));
       if (daily.length) {
-        await tx`insert into seller_daily (seller_id, day, rating, reviews)
-          select x.seller_id, (now() at time zone 'Asia/Almaty')::date, x.rating, x.reviews
-          from jsonb_to_recordset(${JSON.stringify(daily)}::jsonb) as x(seller_id bigint, rating real, reviews integer)
+        await tx`insert into seller_daily ${tx(daily)}
           on conflict (seller_id, day) do update set rating = excluded.rating, reviews = excluded.reviews`;
       }
     }
