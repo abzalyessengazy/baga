@@ -63,7 +63,7 @@ export async function saveSnapshot(
 ) {
   const pageFetched = opts.pageFetched ?? true;
   return sql.begin(async (tx) => {
-    const [p] = await tx<{ id: number }[]>`
+    const [p] = await tx<{ id: number; marketplace_id: number }[]>`
       insert into products (marketplace_id, external_id, slug, title, image_url, category_path, page_checked_at, kaspi_reviews, kaspi_rating)
       values ((select id from marketplaces where code = 'kaspi'), ${snap.externalId}, ${slug}, ${snap.title},
               ${snap.imageUrl}, ${snap.categoryPath}, ${pageFetched ? new Date() : null},
@@ -74,8 +74,9 @@ export async function saveSnapshot(
             page_checked_at = coalesce(excluded.page_checked_at, products.page_checked_at),
             kaspi_reviews = case when excluded.page_checked_at is null then products.kaspi_reviews else excluded.kaspi_reviews end,
             kaspi_rating = case when excluded.page_checked_at is null then products.kaspi_rating else excluded.kaspi_rating end
-      returning id`;
+      returning id, marketplace_id`;
     const productId = p!.id;
+    const marketplaceId = p!.marketplace_id;
     // Watcher trackings made while the product was still queued (migration 0007).
     await tx`update trackings set product_id = ${productId} where external_id = ${snap.externalId} and product_id is null`;
     // heartbeat_due: the last observation is on an earlier Almaty calendar day (or there is none), so every
@@ -107,21 +108,30 @@ export async function saveSnapshot(
         in_stock = excluded.in_stock, last_checked_at = now(),
         last_changed_at = case when ${changed} then now() else product_state.last_changed_at end`;
     await tx`delete from offers_current where product_id = ${productId}`;
-    for (const o of snap.offers) {
-      const [s] = await tx<{ id: number }[]>`
-        insert into sellers (marketplace_id, external_id, name, rating, reviews)
-        values ((select id from marketplaces where code = 'kaspi'), ${o.sellerId}, ${o.sellerName}, ${o.sellerRating}, ${o.sellerReviews})
+    // All sellers, offers and today's seller records in three statements, whatever the number of sellers: one
+    // statement per seller cost ~1 s a check from the runner (6 Nov 2026). A seller listed twice keeps its cheaper
+    // offer (offers come cheapest first), as the old per-row "least" did.
+    const offers = [...new Map([...snap.offers].reverse().map((o) => [o.sellerId, o])).values()].reverse();
+    if (offers.length) {
+      const sellers = await tx<{ id: number; external_id: string }[]>`
+        insert into sellers ${tx(offers.map((o) => ({
+          marketplace_id: marketplaceId, external_id: o.sellerId, name: o.sellerName, rating: o.sellerRating, reviews: o.sellerReviews,
+        })))}
         on conflict (marketplace_id, external_id) do update set name = excluded.name, rating = excluded.rating, reviews = excluded.reviews
-        returning id`;
-      // Today's rating and review count of the shop (migration 0016), the day's latest value.
-      if (o.sellerReviews != null || o.sellerRating != null) {
+        returning id, external_id`;
+      const idOf = new Map(sellers.map((x) => [x.external_id, x.id]));
+      await tx`insert into offers_current ${tx(offers.map((o) => ({
+        product_id: productId, seller_id: idOf.get(o.sellerId)!, price: o.price, delivery_duration: o.deliveryDuration,
+      })))}`;
+      // Today's rating and review count of each shop (migration 0016), the day's latest value.
+      const daily = offers.filter((o) => o.sellerReviews != null || o.sellerRating != null)
+        .map((o) => ({ seller_id: idOf.get(o.sellerId)!, rating: o.sellerRating, reviews: o.sellerReviews }));
+      if (daily.length) {
         await tx`insert into seller_daily (seller_id, day, rating, reviews)
-          values (${s!.id}, (now() at time zone 'Asia/Almaty')::date, ${o.sellerRating}, ${o.sellerReviews})
+          select x.seller_id, (now() at time zone 'Asia/Almaty')::date, x.rating, x.reviews
+          from jsonb_to_recordset(${JSON.stringify(daily)}::jsonb) as x(seller_id bigint, rating real, reviews integer)
           on conflict (seller_id, day) do update set rating = excluded.rating, reviews = excluded.reviews`;
       }
-      await tx`insert into offers_current (product_id, seller_id, price, delivery_duration)
-               values (${productId}, ${s!.id}, ${o.price}, ${o.deliveryDuration})
-               on conflict (product_id, seller_id) do update set price = least(offers_current.price, excluded.price)`;
     }
     await tx`insert into collection_schedule (product_id) values (${productId}) on conflict do nothing`;
     return { productId, priceChanged: !prev || prev.current_min_price !== snap.minPrice, previousMin: prev?.current_min_price ?? null };

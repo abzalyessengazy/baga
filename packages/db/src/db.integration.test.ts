@@ -16,6 +16,8 @@ import { getShop, productSellers, saveShopFeedback } from "./shops";
 import type { ProductSnapshot } from "@baga/kaspi";
 
 const url = process.env.TEST_DATABASE_URL;
+/** saveSnapshot's statement budget (begin and commit included), independent of the number of sellers. */
+const SAVE_SNAPSHOT_STATEMENTS = 14;
 const dir = join(dirname(fileURLToPath(import.meta.url)), "..", "migrations");
 
 describe.skipIf(!url)("database (disposable Postgres)", () => {
@@ -194,6 +196,32 @@ describe.skipIf(!url)("database (disposable Postgres)", () => {
         from seller_daily d join sellers se on se.id = d.seller_id order by 1`;
       expect(rows.map((r) => [r.external_id, r.reviews])).toEqual([["m1", 104], ["m2", 30], ["m3", 0]]);
       expect(rows.every((r) => r.first_seen)).toBe(true);
+    });
+
+    it("writes a product in a fixed number of statements, however many sellers it has (6 Nov 2026: per-seller writes slowed the run 17%)", async () => {
+      let statements = 0;
+      const counted = postgres(url!, { max: 1, onnotice: () => {}, debug: () => { statements++; } });
+      const many = (n: number) => Array.from({ length: n }, (_, i) => offer(`s${i}`, 10_000 + i * 100, 4.8, 100 + i));
+      try {
+        await saveSnapshot(counted, snap("200000011", many(3)), null, null);
+        const three = statements;
+        statements = 0;
+        await saveSnapshot(counted, snap("200000012", many(30)), null, null);
+        expect(statements).toBe(three);
+        expect(statements).toBeLessThanOrEqual(SAVE_SNAPSHOT_STATEMENTS);
+      } finally {
+        await counted.end();
+      }
+      const [n] = await sql<{ offers: number; daily: number }[]>`
+        select (select count(*)::int from offers_current) as offers, (select count(*)::int from seller_daily) as daily`;
+      expect(n).toEqual({ offers: 33, daily: 30 }); // s0–s2 sold both products: one daily row each
+    });
+
+    it("keeps a seller's cheaper offer when Kaspi lists it twice", async () => {
+      await saveSnapshot(sql, snap("200000013", [offer("dup", 5_000, 4.9, 10), offer("x", 6_000, 4.9, 10), offer("dup", 7_000, 4.9, 10)]), null, null);
+      const rows = await sql<{ external_id: string; price: number }[]>`
+        select se.external_id, o.price from offers_current o join sellers se on se.id = o.seller_id order by o.price`;
+      expect(rows).toEqual([{ external_id: "dup", price: 5_000 }, { external_id: "x", price: 6_000 }]);
     });
 
     it("shows a shop with its products and the other sellers' prices", async () => {

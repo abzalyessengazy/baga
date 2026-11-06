@@ -48,6 +48,7 @@ async function main() {
   const wait = msUntilVisitWindow(new Date());
   if (wait > env.windowWaitMaxMs()) {
     console.log(JSON.stringify({ skipped: "outside collection window (04:05-08:30 UTC)", opensInMinutes: Math.round(wait / 60_000) }));
+    await cleanUp();
     await sendQueued(); // Telegram and email only, no Kaspi requests
     return;
   }
@@ -57,6 +58,8 @@ async function main() {
   }
 
   const [run] = await sql<{ id: number }[]>`insert into collection_runs (runner) values (${env.runner()}) returning id`;
+  await cleanUp();
+  await sendQueued(); // the full round once at the start: retries and asks left from yesterday go out first
   // A visitor's product that failed three times today gets three more tries tomorrow, for two weeks (3 Nov 2026:
   // a MacBook used up its tries on a parser bug fixed the same day and was never asked for again).
   await sql`update seed_queue set attempts = 0 where source = 'visitor' and status = 'pending' and attempts >= 3
@@ -351,7 +354,7 @@ async function afterSave(productId: number, externalId: string, price: number | 
     });
   }
   if (price !== null) await evaluateTrackings(productId, externalId, price, seller);
-  await sendQueued();
+  await sendAfterCheck();
 }
 
 /**
@@ -359,6 +362,7 @@ async function afterSave(productId: number, externalId: string, price: number | 
  * existed use it); email adds ":email". The unique key makes a duplicate impossible, even with overlapping runs.
  */
 async function queueNotification(sql: postgres.Sql | postgres.TransactionSql, t: { id: string; tg: boolean; mail: boolean }, type: "first_price" | "target_reached" | "bought_ask", price: number, key: string) {
+  if (t.tg || t.mail) newMessages = true;
   if (t.tg) await sql`insert into notifications (tracking_id, type, channel, price, idempotency_key)
     values (${t.id}, ${type}, 'telegram', ${price}, ${key}) on conflict (idempotency_key) do nothing`;
   if (t.mail) await sql`insert into notifications (tracking_id, type, channel, price, idempotency_key)
@@ -442,11 +446,28 @@ async function deliveryFailed(id: number, e: unknown) {
   console.error(`notification ${id}: ${e} → ${next.status === "queued" ? `retry in ${next.retryInMinutes} min` : "failed"}`);
 }
 
-async function sendQueued() {
-  await tidyDeliveries(sql);
-  await queueBoughtAsks();
+/**
+ * Sending. The full round (crash recovery and expiry, "Вы купили?" asks, retries due) runs at the start and end of a
+ * run and at most every FULL_SEND_EVERY_MS in between; after a check, messages go out at once only when that check
+ * queued one (newMessages). Running the full round after every check cost ~2 s a check on 6 Nov (database round
+ * trips from the runner), which the Kaspi pacing then had to wait for: 17% fewer checks.
+ */
+const FULL_SEND_EVERY_MS = 5 * 60_000;
+let lastFullSend = 0;
+let newMessages = false;
+async function sendQueued(full = true) {
+  if (full) {
+    await tidyDeliveries(sql);
+    await queueBoughtAsks();
+    lastFullSend = Date.now();
+  }
+  newMessages = false;
   await sendTelegramQueued();
   await sendEmailQueued();
+}
+async function sendAfterCheck() {
+  if (Date.now() - lastFullSend >= FULL_SEND_EVERY_MS) await sendQueued(true);
+  else if (newMessages) await sendQueued(false);
 }
 
 /**
@@ -485,6 +506,10 @@ async function queueBoughtAsks() {
       returning t.id, w.telegram_chat_id is not null as tg, w.email_confirmed_at is not null as mail`;
     for (const t of due) await queueNotification(tx, t, "bought_ask", 0, `${t.id}:bought`);
   });
+}
+
+/** Once a run: funnel events older than 180 days (as the privacy page says) and email limit rows older than 2 days. */
+async function cleanUp() {
   await sql`delete from events where at < now() - interval '180 days'`;
   await sql`delete from email_requests where at < now() - interval '2 days'`;
 }

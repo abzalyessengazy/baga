@@ -6,7 +6,12 @@ export interface AdminRun {
   checks: number; failed: number; aborted: string | null;
   /** Requests sent to Kaspi (migration 0017); null for older runs. */
   requests: number | null;
+  /** Seconds per request over the run so far (null without requests): ~11–12 s is the robots.txt pace. */
+  pace: number | null;
 }
+
+/** A run slower than this per request is losing checks to work between requests (6 Nov 2026: 13.8 s). */
+export const RUN_PACE_WARN_S = 13;
 export interface AdminCount { label: string; n: number }
 export interface AdminError { where: string; error: string; n: number; last: Date | null }
 
@@ -33,7 +38,8 @@ export async function getAdminHealth(sql: postgres.Sql): Promise<AdminHealth> {
     select r.id::int, r.runner, r.started_at as "startedAt", r.finished_at as "finishedAt",
            (select max(observed_at) from price_observations o where o.run_id = r.id) as "lastCheckAt",
            (select count(*)::int from price_observations o where o.run_id = r.id) as checks,
-           r.failed, r.aborted_reason as aborted, r.requests
+           r.failed, r.aborted_reason as aborted, r.requests,
+           case when r.requests > 20 then round((extract(epoch from coalesce(r.finished_at, now()) - r.started_at) / r.requests)::numeric, 1)::float end as pace
     from collection_runs r order by r.id desc limit 10`;
   const [today] = await sql<{ n: number }[]>`
     select count(*)::int as n from price_observations

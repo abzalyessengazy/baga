@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getTranslations, setRequestLocale } from "next-intl/server";
-import { getSql, getAdminHealth, getFunnel, recentFeedback, type AdminRun } from "@baga/db";
+import { getSql, getAdminHealth, getFunnel, recentFeedback, type AdminRun, RUN_PACE_WARN_S } from "@baga/db";
 import { isInVisitWindow } from "@baga/core";
 import { adminEnabled, isAdmin } from "@/lib/admin";
 
@@ -50,6 +50,9 @@ export default async function AdminPage({ params, searchParams }: Props) {
   const warnings = [
     ...(isInVisitWindow(new Date(), 15 * 60_000) && (!lastCheck || now - lastCheck.getTime() > LIVE_MS) ? [t("warnNoRun")] : []),
     ...(h.schedule.due > 50 ? [t("warnDue", { n: h.schedule.due })] : []),
+    // A slow run loses checks: something between requests takes too long (6 Nov 2026).
+    ...(h.runs.find((r) => r.pace !== null && (r.requests ?? 0) >= 100)?.pace! > RUN_PACE_WARN_S
+      ? [t("warnPace", { pace: h.runs.find((r) => r.pace !== null && (r.requests ?? 0) >= 100)!.pace!, max: RUN_PACE_WARN_S })] : []),
     ...(failedAlerts ? [t("warnAlerts", { n: failedAlerts })] : []),
     ...(h.people.noneWithTrackings ? [t("warnNoChannel", { n: h.people.noneWithTrackings })] : []),
     ...(h.errors.length ? [t("warnErrors", { n: h.errors.reduce((s, e) => s + e.n, 0) })] : []),
@@ -140,10 +143,10 @@ export default async function AdminPage({ params, searchParams }: Props) {
         <h2>{t("runs")}</h2>
         <div className="admin-scroll">
           <table className="admin-table">
-            <thead><tr><th>#</th><th>{t("started")}</th><th>{t("lastCheck")}</th><th>{t("requests")}</th><th>{t("checks")}</th><th>{t("failed")}</th><th>{t("state")}</th></tr></thead>
+            <thead><tr><th>#</th><th>{t("started")}</th><th>{t("lastCheck")}</th><th>{t("requests")}</th><th>{t("pace")}</th><th>{t("checks")}</th><th>{t("failed")}</th><th>{t("state")}</th></tr></thead>
             <tbody>
               {h.runs.map((r) => (
-                <tr key={r.id}><td>{r.id}</td><td>{at(r.startedAt)}</td><td>{at(r.lastCheckAt)}</td><td>{r.requests === null ? "—" : count(r.requests)}</td><td>{count(r.checks)}</td><td>{count(r.failed)}</td><td>{state(r)}</td></tr>
+                <tr key={r.id}><td>{r.id}</td><td>{at(r.startedAt)}</td><td>{at(r.lastCheckAt)}</td><td>{r.requests === null ? "—" : count(r.requests)}</td><td className={r.pace !== null && r.pace > RUN_PACE_WARN_S ? "is-warn" : undefined}>{r.pace === null ? "—" : `${r.pace} с`}</td><td>{count(r.checks)}</td><td>{count(r.failed)}</td><td>{state(r)}</td></tr>
               ))}
             </tbody>
           </table>

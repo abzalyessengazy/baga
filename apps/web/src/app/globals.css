@@ -765,3 +765,4 @@ p.chips { margin: 6px 0 0; }
   .z-totals .z-cell dt { min-height: 2.6em; }
   .z-shops .chip:not(:first-child) { display: none; }
 }
+.admin-table td.is-warn { color: var(--stamp-red); font-weight: 700; }
