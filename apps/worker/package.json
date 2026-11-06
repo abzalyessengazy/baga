@@ -10,7 +10,8 @@
     "telegram:webhook": "node --env-file-if-exists=../../.env --env-file-if-exists=../web/.env.local --import tsx src/telegram-webhook.ts",
     "typecheck": "tsc --noEmit",
     "probe": "node --env-file-if-exists=../../.env --import tsx src/probe.ts",
-    "probe:scale": "node --env-file-if-exists=../../.env --env-file-if-exists=../web/.env.local --import tsx src/probe-scale.ts"
+    "probe:scale": "node --env-file-if-exists=../../.env --env-file-if-exists=../web/.env.local --import tsx src/probe-scale.ts",
+    "probe:pairs": "node --env-file-if-exists=../../.env --env-file-if-exists=../web/.env.local --import tsx src/probe-pairs.ts"
   },
   "dependencies": {
     "@baga/core": "workspace:^",

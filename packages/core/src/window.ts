@@ -20,10 +20,22 @@ function minuteOfDayUtc(d: Date): number {
   return d.getUTCHours() * 60 + d.getUTCMinutes() + d.getUTCSeconds() / 60;
 }
 
+/**
+ * Days the collector stops early (UTC date → end minute), to leave the rest of Kaspi's Visit-time to a one-off
+ * probe: two clients at once would break the 10 s Crawl-delay. 7 Nov 2026: the list-vs-sellers test
+ * (probe:scale --set P) runs 08:01–08:44 UTC, so the collector ends at 08:00 UTC (13:00 Almaty).
+ */
+export const COLLECT_END_EXCEPTIONS_UTC: Readonly<Record<string, number>> = { "2026-11-07": 8 * 60 };
+
+/** Minute of the UTC day when the collection window closes on `now`'s day. */
+export function collectEndMinute(now: Date): number {
+  return COLLECT_END_EXCEPTIONS_UTC[now.toISOString().slice(0, 10)] ?? COLLECT_WINDOW_UTC.endMinute;
+}
+
 /** True while `now` is inside the collection window and at least `marginMs` remain before it closes. */
 export function isInVisitWindow(now: Date, marginMs = 0): boolean {
   const m = minuteOfDayUtc(now);
-  return m >= COLLECT_WINDOW_UTC.startMinute && m + marginMs / 60_000 < COLLECT_WINDOW_UTC.endMinute;
+  return m >= COLLECT_WINDOW_UTC.startMinute && m + marginMs / 60_000 < collectEndMinute(now);
 }
 
 /** Milliseconds until the collection window next opens (0 if it is open now). */
