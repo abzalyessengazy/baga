@@ -31,7 +31,21 @@ export const CATALOG = {
    * day (584 on 3 Nov 2026) over several days instead of spending ~600 requests at once a week later.
    */
   pageRefreshPerRun: 120,
+  /**
+   * The share of a run's requests kept for new products from the seed queue (DECISIONS.md, 2026-11-06 "A fixed share
+   * for new products"): on 6 Nov re-checks of the 972 daily products took the whole window and the catalog grew by
+   * 4. A quarter of ~1,330 requests is ~165 new products a day (2 requests each).
+   */
+  newShare: 0.25,
 } as const;
+
+/**
+ * Whether the collector adds a new product from the seed queue now: while new products have used less than
+ * CATALOG.newShare of the run's requests so far. Tracked products and visitor requests are served before either.
+ */
+export function newProductTurn(newRequests: number, allRequests: number): boolean {
+  return newRequests < CATALOG.newShare * allRequests;
+}
 
 /**
  * Whether a check also fetches the product page (title, image, Kaspi reviews). A product never fetched always

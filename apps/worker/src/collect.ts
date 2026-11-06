@@ -7,7 +7,7 @@
 import { createKaspiClient, buildSnapshot, KaspiHttpError, KaspiParseError, KaspiRequestRefused, canonicalProductUrl, parseKaspiUrl, queuedLinkUrl, variantLinkCode } from "@baga/kaspi";
 import { saveSnapshot, claimNotifications, startSend, markSent, markFailed, tidyDeliveries, connectionOptions, requestProduct, attachShortLinkTrackings, weekMovers } from "@baga/db";
 import {
-  evaluateAlert, priorityFor, INTERVAL_MINUTES, PRIORITY_ORDER, USER_INTEREST, CATALOG, SEED_MIN_PRICE, backoffMinutes, isSuspiciousJump, type TrackingAlertState,
+  evaluateAlert, priorityFor, newProductTurn, INTERVAL_MINUTES, PRIORITY_ORDER, USER_INTEREST, CATALOG, SEED_MIN_PRICE, backoffMinutes, isSuspiciousJump, type TrackingAlertState,
   KASPI_CRAWL_DELAY_MS, isInVisitWindow, needsPageRefresh, msUntilVisitWindow, targetForDrop, almatyDay, runningSale, type Priority,
 } from "@baga/core";
 import postgres from "postgres";
@@ -71,7 +71,8 @@ async function main() {
 
   // Order on every turn (DECISIONS.md, 2026-11-05 "What people want is checked first"): new products someone tracks,
   // then due tracked products (lane 0), then other products visitors pasted, then products people opened since their
-  // last check (lane 1), then catalog enrichment (lane 2), then seed rows. When there is nothing to do, poll for new visitor requests until the window closes.
+  // last check (lane 1), then catalog enrichment (lane 2), with new seed products taking a fixed share of the requests
+  // in between (growCatalog, DECISIONS.md 2026-11-06). When there is nothing to do, poll for new visitor requests.
   // Called before every product, so a visitor waits for at most one product in progress, not a whole chunk.
   async function serveVisitors(): Promise<boolean> {
     const links = await resolveShortLinks();
@@ -83,6 +84,22 @@ async function main() {
       if (await addQueued(q, runId)) seeded++;
     }
     return links > 0 || visitors.length > 0;
+  }
+
+  // New products get their share of the requests (newProductTurn), between re-checks, so re-checks can never take
+  // the whole window (6 Nov 2026: the catalog grew by 4). A due tracked product still goes first.
+  let newRequests = 0;
+  let seedsLeft = true;
+  async function growCatalog() {
+    while (seedsLeft && newProductTurn(newRequests, requests) && !breaker.openReason && inWindow()) {
+      if (await watchedDue()) return;
+      const [q] = await nextQueued("seed", tried);
+      if (!q) { seedsLeft = false; return; }
+      tried.add(q.external_id);
+      const before = requests;
+      if (await addQueued(q, runId)) seeded++;
+      newRequests += Math.max(1, requests - before);
+    }
   }
 
   // The request count is saved as the run goes, so a crashed or cancelled run keeps it.
@@ -101,6 +118,7 @@ async function main() {
         if (!breaker.openReason && inWindow()) await serveVisitors();
         if (breaker.openReason || !inWindow()) { await release(row.product_id); continue; }
         if (await checkProduct(row, runId)) changed++;
+        await growCatalog();
       }
       continue;
     }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { priorityFor, backoffMinutes, isSuspiciousJump, needsPageRefresh, queueLane, INTERVAL_MINUTES, CATALOG } from "./schedule";
+import { priorityFor, backoffMinutes, isSuspiciousJump, needsPageRefresh, queueLane, newProductTurn, INTERVAL_MINUTES, CATALOG } from "./schedule";
 import { VISIT_WINDOW_MINUTES } from "./window";
 import { formatTenge, toTenge } from "./money";
 
@@ -91,5 +91,20 @@ describe("queueLane", () => {
   it("leaves catalog products to their tier", () => {
     expect(queueLane(base)).toEqual({ lane: 2, due: false });
     expect(queueLane({ ...base, nextCheckAt: h(1) })).toEqual({ lane: 2, due: true });
+  });
+});
+
+describe("newProductTurn", () => {
+  it("keeps a quarter of the run's requests for new products, interleaved with re-checks", () => {
+    expect(newProductTurn(0, 0)).toBe(false); // nothing sent yet: re-checks start
+    expect(newProductTurn(0, 4)).toBe(true);
+    expect(newProductTurn(2, 8)).toBe(false); // exactly a quarter
+    expect(newProductTurn(2, 12)).toBe(true);
+    // Over a whole run of ~1,330 requests: about a quarter goes to new products.
+    let all = 0, fresh = 0;
+    while (all < 1_330) { if (newProductTurn(fresh, all)) { fresh += 2; all += 2; } else all += 1; }
+    expect(fresh / all).toBeGreaterThan(0.24);
+    expect(fresh / all).toBeLessThan(0.26);
+    expect(CATALOG.newShare).toBe(0.25);
   });
 });

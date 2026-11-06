@@ -203,6 +203,8 @@ describe.skipIf(!url)("database (disposable Postgres)", () => {
       const counted = postgres(url!, { max: 1, onnotice: () => {}, debug: () => { statements++; } });
       const many = (n: number) => Array.from({ length: n }, (_, i) => offer(`s${i}`, 10_000 + i * 100, 4.8, 100 + i));
       try {
+        await counted`select 1`; // a new connection looks up types once: not part of saveSnapshot
+        statements = 0;
         await saveSnapshot(counted, snap("200000011", many(3)), null, null);
         const three = statements;
         statements = 0;
