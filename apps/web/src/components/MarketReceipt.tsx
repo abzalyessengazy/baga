@@ -99,9 +99,7 @@ export function MarketReceipt() {
                   <div>
                     <p className="mk-pick-title">{name(m!.pick, locale)}</p>
                     <p className="mk-pick-price">{f(m!.pick.price)}</p>
-                    <p className="mk-pick-why">{m!.pick.kind === "drop"
-                      ? t("pickDrop", { pct: Math.abs(m!.pick.pct), ref: f(m!.pick.ref) })
-                      : t("pickSeller", { pct: Math.abs(m!.pick.pct), ref: f(m!.pick.ref), sellers: m!.pick.sellers })}</p>
+                    <p className="mk-pick-why">{t("pickDrop", { ref: f(m!.pick.ref) })}</p>
                     {m!.pick.note?.kind === "check" && <p className="chips"><PriceNoteChip note={m!.pick.note} bare /></p>}
                   </div>
                 </div>

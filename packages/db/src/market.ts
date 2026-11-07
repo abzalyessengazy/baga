@@ -9,13 +9,14 @@ export interface MarketSpread { externalId: string; title: string; titleKk: stri
 export interface MarketCategory { name: string; imageUrl: string | null; products: number; from: number; median: number; weekPct: number | null; compared: number }
 
 /**
- * The home page's find of the day, with the reason it was picked: the biggest week drop (rule W) or the product
- * whose cheapest seller is furthest below the median of its sellers' prices, whichever is bigger in percent.
+ * The home page's find of the day: the biggest week drop (rule W), the product's own price now against its highest
+ * daily low of the previous 7 days. Only history counts: the cheapest seller against the other sellers' median is not
+ * a find (7 Nov 2026: Soundcore Liberty 5 showed −53% against dear resellers while four shops asked the same 27 990 ₸).
  */
 export interface MarketPick {
-  kind: "drop" | "seller";
+  kind: "drop";
   externalId: string; title: string; titleKk: string | null; imageUrl: string | null;
-  /** The current lowest price, and what it is compared with: the week's high (drop) or the sellers' median (seller). */
+  /** The current lowest price, and what it is compared with: the week's highest daily low. */
   price: number; ref: number; pct: number; sellers: number;
   /** The cheapest offer far below the other sellers (priceNote): "check" adds "проверьте продавца". */
   note?: PriceNote;
@@ -47,11 +48,6 @@ export const MARKET_CONFIG = {
   lowsMinDays: 7,
   /** Seller spread: in-stock products with 2+ sellers checked in the last 3 days; cheap accessories are left out of the list. */
   spreadMinPrice: 5_000, spreadTop: 12,
-  /**
-   * The seller pick: a price where the gap means real money, and 4+ sellers (the cheapest against 3+ others, as
-   * SELLER_RULES.cheapOutlierMinOthers: with 2 others their "usual price" may just be two dear shops).
-   */
-  pickMinSellers: 4, pickMinPrice: 20_000,
   /** A category is listed from this many priced products; its week change needs this many with history. */
   categoryMin: 8, categoryCompared: 5, categoryTop: 8,
   deals: 12,
@@ -140,15 +136,7 @@ export async function getMarket(sql: postgres.Sql): Promise<Market> {
   const d = deals[0];
   const drop: MarketPick | null = d ? { kind: "drop", externalId: d.externalId, title: d.title, titleKk: d.titleKk,
     imageUrl: d.imageUrl, price: d.now, ref: d.was, pct: d.pct, sellers: d.offerCount } : null;
-  const [x] = await sql<Omit<MarketPick, "kind">[]>`
-    with x as (${offers})
-    select p.external_id as "externalId", p.title, p.title_kk as "titleKk", p.image_url as "imageUrl",
-           x.lo as price, x.med as ref, round((x.lo - x.med) * 100.0 / x.med)::int as pct, x.sellers
-    from x join products p on p.id = x.product_id
-    where x.sellers >= ${c.pickMinSellers} and x.lo >= ${c.pickMinPrice} and x.med > x.lo
-    order by (x.med - x.lo)::numeric / x.med desc limit 1`;
-  const seller: MarketPick | null = x ? { kind: "seller", ...x } : null;
-  const pick = drop && (!seller || Math.abs(drop.pct) >= Math.abs(seller.pct)) ? drop : seller;
+  const pick = drop;
   // The find of the day says what the seller table would say about its cheapest offer.
   if (pick) {
     const [o] = await sql<{ prices: number[]; rating: number | null; reviews: number | null }[]>`
