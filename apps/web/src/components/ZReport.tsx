@@ -1,5 +1,5 @@
 "use client";
-import { motion, useInView, useReducedMotion, animate } from "motion/react";
+import { motion, useInView, useReducedMotion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { formatTenge, shortTitle } from "@baga/core";
@@ -7,8 +7,6 @@ import type { Market } from "@baga/db";
 import { Link } from "@/i18n/navigation";
 import { loadMarket } from "@/lib/market";
 import { dayMonth, type DatesT } from "@/lib/dayMonth";
-import { CountChip } from "./SellerChips";
-import { StatIcon, type StatIconName } from "./StatIcon";
 
 type L = "ru" | "kk";
 type Drop = { externalId: string; title: string; titleKk: string | null; imageUrl: string | null; from: number; to: number; pct: number; at: string };
@@ -23,13 +21,6 @@ type Stats = {
   newest: Item[];
 };
 
-// Small numbers are shown only once they mean something (DECISIONS.md, 2026-11-02 "Real numbers on the home page").
-const SHOW_WATCHERS_FROM = 100;
-const SHOW_ALERTS_FROM = 50;
-
-const count = (n: number) => new Intl.NumberFormat("ru-RU").format(n);
-const almaty = (iso: string, opts: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat("ru-RU", { timeZone: "Asia/Almaty", ...opts }).format(new Date(iso));
-const hhmm = (iso: string) => almaty(iso, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 const dropTitle = (d: { title: string; titleKk: string | null }, locale: L) => shortTitle((locale === "kk" && d.titleKk) || d.title);
 
 /** A product's picture in a list row; an empty square keeps the rows aligned when there is none. */
@@ -42,65 +33,6 @@ function Thumb({ src }: { src: string | null }) {
 const ROWS = 5;
 const ROWS_TWO = 4;
 const ROWS_THREE = 3;
-
-/** Counts up to `to` once `go` turns true; shows the final number right away when motion is reduced. */
-function CountUp({ to, go }: { to: number; go: boolean }) {
-  const reduce = useReducedMotion();
-  const [n, setN] = useState(reduce ? to : 0);
-  useEffect(() => {
-    if (!go) return;
-    if (reduce) { setN(to); return; }
-    const c = animate(0, to, { duration: 1.1, ease: "easeOut", onUpdate: (v) => setN(Math.round(v)) });
-    return () => c.stop();
-  }, [go, to, reduce]);
-  return <>{count(n)}</>;
-}
-
-/* Totals: the Z-report head, stamped with the real time of the latest collector run. */
-function Totals({ s, shops }: { s: Stats & { lastRun: NonNullable<Stats["lastRun"]> }; shops?: Market["shops"] }) {
-  const td = useTranslations("dates") as unknown as DatesT;
-  const t = useTranslations("home");
-  const ref = useRef<HTMLDivElement>(null);
-  const reduce = useReducedMotion();
-  const go = useInView(ref, { once: true, amount: 0.4 }) || !!reduce;
-  // The whole catalog and the latest complete shift's changes (docs/STATS.md); the head names that shift's day.
-  const cells: [StatIconName, string, number, string][] = [
-    ["box", t("zProducts"), s.products, ""],
-    ["down", t("zDrops"), s.drops, "is-down"],
-    ["up", t("zRises"), s.rises, "is-up"],
-    ["store", t("zSellers"), s.sellers, ""],
-    ...(s.alertsSent >= SHOW_ALERTS_FROM ? [["box", t("zAlerts"), s.alertsSent, ""] as [StatIconName, string, number, string]] : []),
-    ...(s.watchers >= SHOW_WATCHERS_FROM ? [["box", t("zWatchers"), s.watchers, ""] as [StatIconName, string, number, string]] : []),
-  ];
-  const run = s.shiftRun ?? s.lastRun;
-  return (
-    <div className="slip z-totals" ref={ref}>
-      <div className="z-head">
-        <span className="z-name">BAĞA · {t("zHead")}</span>
-        <span className="z-shift">{t("zShift", { date: dayMonth(s.shiftDay ?? run.finishedAt, td), from: hhmm(run.startedAt), to: hhmm(run.finishedAt) })}</span>
-      </div>
-      <dl className="z-grid">
-        {cells.map(([icon, k, v, cls]) => (
-          <div key={k} className={`z-cell ${cls}`}><dt><StatIcon name={icon} />{k}</dt><dd><CountUp to={v} go={go} /></dd>
-            {/* Shops by Kaspi rating, the seller table's chips (packages/core/src/sellers.ts); the catalogue has the rest. */}
-            {icon === "store" && shops && (
-              <Link href="/shops" className="z-shops" aria-label={t("zShopsLink")}>
-                <CountChip kind="high" n={shops.high} label={t("zShopsHigh")} />
-                <CountChip kind="mixed" n={shops.mixed + shops.low} label={t("zShopsMixed")} />
-                <CountChip kind="few" n={shops.few + shops.none} label={t("zShopsUnknown")} />
-                <span className="z-shops-go">→</span>
-              </Link>
-            )}
-          </div>
-        ))}
-      </dl>
-      <motion.span className="stamp z-stamp" aria-hidden initial={reduce ? false : { scale: 1.8, opacity: 0, rotate: -16 }}
-        animate={go ? { scale: 1, opacity: 0.92, rotate: -7 } : {}} transition={{ type: "spring", stiffness: 500, damping: 18, delay: 1.2 }}>
-        {t("zStamp")}
-      </motion.span>
-    </div>
-  );
-}
 
 /* 2. Price moves (docs/STATS.md rules D and W): biggest drops or rises in percent, one line per product, the top line inked. */
 function MovesSlip({ moves, locale }: { moves: Stats["moves"]; locale: L }) {
@@ -176,24 +108,6 @@ function SpreadSlip({ rows, locale }: { rows: Market["spread"]["top"]; locale: L
   );
 }
 
-/* Categories: how many products we watch in each, the lowest and the median price, the week change once known. */
-function CategorySlip({ rows, locale }: { rows: Market["categories"]; locale: L }) {
-  const t = useTranslations("home");
-  return (
-    <div className="slip-screen">
-      {rows.slice(0, ROWS_THREE).map((c) => (
-        <Link key={c.name} href={`/explore?list=all&cat=${encodeURIComponent(c.name)}`} className="seller-row z-drop z-spread z-has-thumb">
-          <Thumb src={c.imageUrl} />
-          <span className="name">{c.name}<span className="z-sub">{t("catLine", { count: c.products, median: formatTenge(c.median, locale) })}
-            {c.weekPct !== null && ` · ${t("catWeek", { pct: `${c.weekPct > 0 ? "+" : ""}${c.weekPct}%` })}`}</span></span>
-          <span className="p">{t("catFrom", { price: formatTenge(c.from, locale) })}</span>
-        </Link>
-      ))}
-      <div className="z-foot"><Link href="/explore?list=all" className="z-all">{t("explore")} →</Link></div>
-    </div>
-  );
-}
-
 /* 3. The biggest drop: the old price, the new one, and a stamp with the difference. */
 function BestSlip({ d, locale }: { d: Drop; locale: L }) {
   const td = useTranslations("dates") as unknown as DatesT;
@@ -221,7 +135,8 @@ function BestSlip({ d, locale }: { d: Drop; locale: L }) {
 }
 
 /**
- * The home page Z-report: real platform numbers from /api/stats, drawn on the receipt slips. Nothing is shown
+ * The home page lists: real platform numbers from /api/stats, drawn on the receipt slips. The totals live once, on the
+ * "Kaspi today" receipt at the top (MarketReceipt); the method notes live on /explore, not here. Nothing is shown
  * until there is a finished collector run, and never sample numbers in its place.
  */
 export function ZReport() {
@@ -238,23 +153,20 @@ export function ZReport() {
   if (!s?.lastRun || !s.days.length) return null;
   const best = s.moves.week.drops[0];
   const slips = [
-    { title: t("movesTitle"), text: t("movesText"), el: <MovesSlip moves={s.moves} locale={locale} /> },
-    ...(m?.spread.top.length ? [{ title: t("spreadTitle"), text: t("spreadText"), el: <SpreadSlip rows={m.spread.top} locale={locale} /> }] : []),
-    ...(m?.categories.length ? [{ title: t("catsTitle"), text: t("catsText"), el: <CategorySlip rows={m.categories} locale={locale} /> }] : []),
-    ...(best ? [{ title: t("bestTitle"), text: t("bestText"), el: <BestSlip d={best} locale={locale} /> }] : []),
-    ...(s.mostTracked.length ? [{ title: t("trackedTitle"), text: t("trackedText"), el: <ListSlip items={s.mostTracked} locale={locale} /> }] : []),
-    ...(s.newest.length ? [{ title: t("newTitle"), text: t("newText"), el: <ListSlip items={s.newest} locale={locale} dated more="/explore?list=all&sort=new" /> }] : []),
+    { title: t("movesTitle"), el: <MovesSlip moves={s.moves} locale={locale} /> },
+    ...(m?.spread.top.length ? [{ title: t("spreadTitle"), el: <SpreadSlip rows={m.spread.top} locale={locale} /> }] : []),
+    ...(best ? [{ title: t("bestTitle"), el: <BestSlip d={best} locale={locale} /> }] : []),
+    ...(s.mostTracked.length ? [{ title: t("trackedTitle"), el: <ListSlip items={s.mostTracked} locale={locale} /> }] : []),
+    ...(s.newest.length ? [{ title: t("newTitle"), el: <ListSlip items={s.newest} locale={locale} dated more="/explore?list=all&sort=new" /> }] : []),
   ];
   return (
     <section className="wrap section">
       <h2 className="section-title">{t("zTitle")}</h2>
-      <p className="section-note">{t("zNote")}</p>
-      <Totals s={{ ...s, lastRun: s.lastRun }} shops={m?.shops} />
       <div className="z-slips" data-n={slips.length}>
         {slips.map((x) => (
           <article key={x.title} className="slip">
+            <div className="slip-caption"><h3>{x.title}</h3></div>
             {x.el}
-            <div className="slip-caption"><h3>{x.title}</h3><p>{x.text}</p></div>
           </article>
         ))}
       </div>

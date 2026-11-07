@@ -2,7 +2,7 @@ import "server-only";
 import { cache } from "react";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { getSql, getProductByExternalId, getDailyLows, getOffers, getQueuedRequest, requestProduct, isCollectorRunning, queueShortLink, getShortLink, type ShortLinkRow } from "@baga/db";
+import { getSql, getProductByExternalId, getDailyLows, getOffers, countWatching, getQueuedRequest, requestProduct, isCollectorRunning, queueShortLink, getShortLink, type ShortLinkRow } from "@baga/db";
 import { createKaspiClient, parseOffers, parseProductPage, buildSnapshot, KaspiHttpError, type ProductSnapshot } from "@baga/kaspi";
 import type { DailyLow } from "@baga/core";
 
@@ -23,6 +23,8 @@ export interface ProductView {
   history: DailyLow[]; // observed daily lows only
   observedSince: string; // ISO
   checkedAt: string; // ISO
+  /** People with an active tracking on this product now (0 without a database). */
+  watching: number;
 }
 
 /**
@@ -53,7 +55,7 @@ function fromSnapshot(s: ProductSnapshot): ProductView {
     externalId: s.externalId, title: s.title, imageUrl: s.imageUrl, categoryPath: s.categoryPath,
     kaspiUrl: `https://kaspi.kz/shop/p/-${s.externalId}/`, minPrice: s.minPrice, offerCount: s.offerCount,
     inStock: s.inStock, delisted: false, offers: s.offers.map((o) => ({ sellerId: o.sellerId, sellerName: o.sellerName, sellerRating: o.sellerRating, sellerReviews: o.sellerReviews, price: o.price, deliveryDuration: o.deliveryDuration })),
-    history: [], observedSince: s.fetchedAt, checkedAt: s.fetchedAt,
+    history: [], observedSince: s.fetchedAt, checkedAt: s.fetchedAt, watching: 0,
   };
 }
 
@@ -107,7 +109,7 @@ export const getProductView = cache(async function getProductView(externalId: st
     }
     // A view is marked by the browser's product_view beacon (/api/e), not by this render: crawlers and prefetches
     // would otherwise keep products on daily checks (DECISIONS.md, 2026-11-04).
-    const [history, offers] = await Promise.all([getDailyLows(sql, row.id), getOffers(sql, row.id)]);
+    const [history, offers, watching] = await Promise.all([getDailyLows(sql, row.id), getOffers(sql, row.id), countWatching(sql, row.id)]);
     return {
       ok: true,
       view: {
@@ -116,7 +118,7 @@ export const getProductView = cache(async function getProductView(externalId: st
         minPrice: row.delisted ? null : row.currentMinPrice, lastPrice: row.currentMinPrice,
         offerCount: row.delisted ? 0 : row.offerCount, inStock: row.inStock && !row.delisted, delisted: row.delisted,
         offers: row.delisted ? [] : offers,
-        history, observedSince: row.observedSince.toISOString(), checkedAt: (row.lastCheckedAt ?? row.observedSince).toISOString(),
+        history, observedSince: row.observedSince.toISOString(), checkedAt: (row.lastCheckedAt ?? row.observedSince).toISOString(), watching,
       },
     };
   }

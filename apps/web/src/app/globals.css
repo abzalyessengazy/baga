@@ -264,7 +264,9 @@ a { color: inherit; }
 .z-date { color: var(--ink-soft); margin-right: 8px; }
 .z-slips { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 28px; align-items: stretch; }
 .z-slips > .slip { grid-column: span 2; display: flex; flex-direction: column; min-width: 0; }
-.z-slips > .slip .slip-caption { flex: 1; }
+/* Home slips: the title on top, the list under it; lists stretch so a row of slips ends level. */
+.z-slips > .slip .slip-caption { flex: none; border-top: 0; border-bottom: 1.5px dashed var(--rule); padding: 18px 18px 12px; }
+.z-slips > .slip .slip-screen { flex: 1; }
 .z-slips[data-n="4"] > .slip, .z-slips[data-n="5"] > .slip:nth-child(n + 4), .z-slips[data-n="2"] > .slip { grid-column: span 3; }
 .z-slips[data-n="1"] > .slip { grid-column: span 6; }
 
@@ -387,27 +389,26 @@ a { color: inherit; }
 /* Analytics speak in the UI type, larger and with air; the receipt frame and labels stay mono. */
 .mk-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 4px 0 0; }
 .mk-stats dt { color: var(--ink-soft); font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.05em; }
-.mk-stats dd { margin: 6px 0 0; font-family: var(--font-ui); font-size: 2.25rem; font-weight: 800; letter-spacing: -0.03em; line-height: 1; font-variant-numeric: tabular-nums; }
+.mk-stats dd { margin: 6px 0 0; font-family: var(--font-ui); font-size: clamp(1.5rem, 7vw, 2.25rem); white-space: nowrap; font-weight: 800; letter-spacing: -0.03em; line-height: 1; font-variant-numeric: tabular-nums; }
 .mk-stats .is-down dd { color: var(--stamp); }
 .mk-stats .is-up dd { color: var(--stamp-red); }
-.mk-day { margin: 14px 0 0; color: var(--ink-soft); font-family: var(--font-ui); font-size: 0.875rem; line-height: 1.45; }
-.mk-day-n { font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.mk-day-n.is-down { color: var(--stamp); }
-.mk-day-n.is-up { color: var(--stamp-red); }
-.mk-note { margin: 14px 0 0; color: var(--ink-soft); font-family: var(--font-ui); font-size: 0.875rem; line-height: 1.45; }
-.mk-note.is-ink { color: var(--stamp); font-weight: 600; }
+/* One-line rows under the totals: a small mono label, then number + word pairs that wrap whole. */
+.mk-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin: 14px 0 0; padding-top: 12px;
+  border-top: 1px dashed color-mix(in srgb, var(--ink) 22%, transparent); font-family: var(--font-ui); font-size: 0.875rem; color: var(--ink-soft); }
+.mk-when { flex-basis: 100%; font-family: var(--font-receipt); font-size: 0.6875rem; letter-spacing: 0.06em; text-transform: uppercase; }
+.mk-pair { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.mk-n { font-weight: 800; font-size: 1rem; color: var(--ink); font-variant-numeric: tabular-nums; }
+.mk-n.is-down { color: var(--stamp); }
+.mk-n.is-up { color: var(--stamp-red); }
+.mk-shops { color: var(--ink-soft); text-decoration: none; }
+.mk-shops:hover .mk-go { transform: translateX(3px); }
+.mk-go { margin-left: auto; color: var(--stamp); font-weight: 700; transition: transform 0.15s; }
+.mk-spread { display: flex; align-items: center; gap: 14px; margin: 16px -10px 0; padding: 14px 16px; border-radius: 10px;
+  background: color-mix(in srgb, var(--stamp) 8%, var(--paper)); color: inherit; text-decoration: none; font-family: var(--font-ui); }
+.mk-spread:hover .mk-big-k { text-decoration: underline; }
+.mk-big { font-size: 2.5rem; font-weight: 800; letter-spacing: -0.04em; line-height: 1; color: var(--stamp); }
+.mk-big-k { font-size: 0.875rem; line-height: 1.35; color: var(--ink); }
 .mk-label { margin: 0 0 10px; font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--stamp); }
-.mk-spread { margin: 22px -10px 0; padding: 18px 16px 10px; border-radius: 10px; background: color-mix(in srgb, var(--stamp) 8%, var(--paper)); font-family: var(--font-ui); }
-.mk-big { margin: 0; font-size: 3.5rem; font-weight: 800; letter-spacing: -0.04em; line-height: 0.95; color: var(--stamp); }
-.mk-big-k { margin: 8px 0 0; font-size: 0.9375rem; line-height: 1.4; color: var(--ink); }
-.mk-strong { margin: 10px 0 0; font-size: 0.9375rem; line-height: 1.4; font-weight: 700; }
-.mk-rows { margin: 14px -6px 0; border-top: 1px solid color-mix(in srgb, var(--stamp) 18%, transparent); padding-top: 6px; }
-.mk-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 6px; border-radius: 6px; color: inherit; text-decoration: none; }
-.mk-row + .mk-row { border-top: 1px dashed color-mix(in srgb, var(--stamp) 18%, transparent); }
-.mk-row:hover { background: color-mix(in srgb, var(--stamp) 8%, transparent); }
-.mk-row-name { min-width: 0; font-size: 0.9375rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mk-row-name span { display: block; margin-top: 2px; font-family: var(--font-receipt); font-size: 0.75rem; font-weight: 400; color: var(--ink-soft); }
-.mk-row-v { font-weight: 800; font-size: 1rem; color: var(--stamp); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .mk-pick { position: relative; display: block; margin: 16px -10px 4px; padding: 16px; border-radius: 10px; border: 1.5px solid var(--stamp); color: inherit; text-decoration: none; font-family: var(--font-ui); }
 .mk-pick:hover .mk-pick-title { text-decoration: underline; }
 .mk-pick-body { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 14px; align-items: start; }
@@ -434,6 +435,9 @@ a { color: inherit; }
 /* ---------- product page ---------- */
 .product-grid { max-width: calc(720px + 2 * var(--gutter)); padding-block: 24px 200px; }
 .product-receipt { max-width: 720px; }
+.watching { display: inline-flex; align-items: center; gap: 6px; margin: 0 0 12px; padding: 4px 10px 4px 8px;
+  border-radius: 999px; background: var(--stamp); color: #fff; font-family: var(--font-mono); font-size: 0.75rem;
+  font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
 .product-head { display: grid; grid-template-columns: 72px 1fr; gap: 16px; align-items: center; }
 .product-head img { width: 72px; height: 72px; object-fit: contain; background: #fff; border-radius: 4px; }
 .product-title { font-family: var(--font-ui); font-size: var(--step-1); font-weight: 650; line-height: 1.3; margin: 0; }
@@ -494,6 +498,7 @@ a { color: inherit; }
   .highlights { grid-template-columns: 1fr; max-width: 440px; margin-inline: auto; }
   .z-slips { grid-template-columns: minmax(0, 1fr); max-width: 440px; margin-inline: auto; }
   .z-slips[data-n] > .slip:nth-child(n) { grid-column: auto; } /* beats the desktop spans, e.g. the 4th and 5th of five */
+  .z-slips .slip-screen { min-height: 0; } /* one column: no equal heights to keep, so no empty space */
   .highlights > :nth-child(n) { margin-top: 0; }
   .how, .trust { grid-template-columns: 1fr; }
   .how { max-width: 440px; margin-inline: auto; }
@@ -509,7 +514,6 @@ a { color: inherit; }
   .coupon-hint { max-width: none; }
   .tear-btn { top: 10px; bottom: auto; right: 18px; }
   .coupon-head span:last-child { visibility: hidden; }
-  .mk-row:nth-child(n + 3) { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -653,7 +657,6 @@ a { color: inherit; }
 .z-thumb { width: 32px; height: 32px; flex: none; object-fit: contain; background: #fff; border-radius: 4px; box-shadow: 0 0 0 1px color-mix(in srgb, var(--rule) 45%, transparent); }
 span.z-thumb { display: block; background: var(--paper-shade); box-shadow: none; }
 .seller-row.z-has-thumb { grid-template-columns: 32px minmax(0, 1fr) auto; gap: 10px; }
-.mk-row { grid-template-columns: 32px minmax(0, 1fr) auto; gap: 10px; }
 
 /* /explore: the whole catalog as lists, with search, category and sort. */
 .explore { padding-block: 48px 110px; max-width: 760px; }
@@ -689,7 +692,6 @@ span.z-thumb { display: block; background: var(--paper-shade); box-shadow: none;
   position: absolute; left: 0; right: 0; bottom: 0; margin: 0; padding: 18px 18px 12px; z-index: 1;
   background: linear-gradient(color-mix(in srgb, var(--paper) 0%, transparent), var(--paper) 45%);
 }
-.mk-day-row { display: block; margin-top: 2px; }
 /* The biggest drop of the week: the product's picture beside its name. */
 .z-best-head { display: flex; gap: 12px; align-items: center; margin-bottom: 14px; }
 .z-best-head .z-best-title { margin-bottom: 0; }
@@ -745,7 +747,6 @@ p.chips { margin: 6px 0 0; }
 .z-shops .chip { font-size: 0.75rem; }
 .z-shops-go { color: var(--stamp); font-weight: 700; font-size: 0.875rem; }
 .z-shops:hover .z-shops-go { transform: translateX(2px); }
-.mk-link { color: var(--stamp); font-weight: 600; }
 .shop-list .shop-item {
   display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "name n" "chips chips";
   gap: 4px 12px; padding: 10px 2px; color: inherit; text-decoration: none;

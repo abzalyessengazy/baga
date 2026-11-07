@@ -134,6 +134,15 @@ export default async function ProductPage({ params, searchParams }: Props) {
     <main className="wrap product-grid">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdHtml(jsonLd) }} />
       <article className="receipt product-receipt">
+        {/* People watching this product now: real active trackings, shown from the first one. */}
+        {v.watching > 0 && (
+          <p className="watching" aria-label={t("watching", { count: v.watching })}>
+            <svg viewBox="0 0 20 20" width="14" height="14" aria-hidden fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M1.8 10s3-5.5 8.2-5.5S18.2 10 18.2 10s-3 5.5-8.2 5.5S1.8 10 1.8 10Z" /><circle cx="10" cy="10" r="2.4" />
+            </svg>
+            {t("watching", { count: v.watching })}
+          </p>
+        )}
         <div className="product-head">
           {v.imageUrl ? <img src={v.imageUrl} alt="" width={72} height={72} /> : <span />}
           <div>

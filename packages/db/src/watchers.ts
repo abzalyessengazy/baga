@@ -245,3 +245,11 @@ export async function deleteWatcher(sql: postgres.Sql, watcherId: string): Promi
   const r = await sql`delete from watchers where id = ${watcherId}`;
   return r.count > 0;
 }
+
+/** How many people watch a product now: distinct owners of its active trackings (the product page's «N наблюдают»). */
+export async function countWatching(sql: postgres.Sql, productId: number): Promise<number> {
+  const [r] = await sql<{ n: number }[]>`
+    select count(distinct coalesce(watcher_id::text, user_id::text))::int as n
+    from trackings where product_id = ${productId} and status = 'active'`;
+  return r?.n ?? 0;
+}
