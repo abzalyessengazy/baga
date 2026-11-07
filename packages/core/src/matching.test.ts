@@ -75,5 +75,9 @@ describe("exact product matching (DECISIONS 2026-11-07)", () => {
     expect(bestCandidate("Наушники Huawei FreeBuds Pro 5 темно-серый", idx)).toBe("naushniki-vstavnye-huawei-freebuds-pro-5-grey-55038660-299005");
     expect(bestCandidate("Наушники Huawei FreeBuds Pro 5 белый", idx)).toBe("naushniki-vstavnye-huawei-freebuds-pro-5-white-55038661-299004");
     expect(bestCandidate("Наушники Huawei FreeBuds 6 белый", idx)).toBeNull();
+    // Only a white one exists: none for the exact rules, the white one as «похожий товар».
+    const one = storeIndex(["naushniki-besprovodnye-soundcore-liberty-5-a3957-white-298516"]);
+    expect(bestCandidate("Наушники Soundcore Liberty 5 синий", one)).toBeNull();
+    expect(bestCandidate("Наушники Soundcore Liberty 5 синий", one, true)).toBe("naushniki-besprovodnye-soundcore-liberty-5-a3957-white-298516");
   });
 });

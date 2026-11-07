@@ -12,7 +12,7 @@
 import postgres from "postgres";
 import { KASPI_VISIT_WINDOW_UTC, bestCandidate, looseCandidates, mismatch, storeIndex, storeTokens, kaspiColour } from "@baga/core";
 import {
-  connectionOptions, storeMarketplaceId, productsToMatch, productsSoldOnKaspiBy, productIdByExternal, exactTitleForSku, saveMatch, matchesToPrice, saveStorePrice,
+  connectionOptions, SIMILAR_REASONS, storeMarketplaceId, productsToMatch, productsSoldOnKaspiBy, productIdByExternal, exactTitleForSku, saveMatch, matchesToPrice, saveStorePrice,
   setMatchStatus, startStoreRun, finishStoreRun,
 } from "@baga/db";
 import { createTechnodomClient, TECHNODOM, TechnodomHttpError, TechnodomParseError, StoreRequestRefused, skuOf, type TechnodomProduct } from "@baga/stores";
@@ -123,7 +123,7 @@ async function main() {
       // 2b. Every other product: the strict matcher's one candidate.
       for (const t of todo) {
         if (pages >= STORE_RUN.matchPages) break;
-        const slug = bestCandidate(t.title, idx);
+        const slug = bestCandidate(t.title, idx, true);
         if (!slug) continue; // no record: looked at again offline next run, when the sitemap may have it
         pages++;
         const p = await page(slug);
@@ -139,7 +139,8 @@ async function main() {
         const saved = await saveMatch(sql, { productId: t.productId, marketplaceId: mid, sku: skuOf(slug), slug, title: p.title,
           method: exact ? "exact" : "strict", status: why ? "pending" : "confirmed", reason: why });
         matched++;
-        if (saved.status === "confirmed") await saveStorePrice(sql, saved.id, p);
+        // Confirmed, or pending only for its colour (shown as «похожий товар»): priced right away.
+        if (saved.status === "confirmed" || (why && (SIMILAR_REASONS as readonly string[]).includes(why))) await saveStorePrice(sql, saved.id, p);
         if (!exact) await linkOther(p, slug, t.externalId);
       }
     }

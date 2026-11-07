@@ -11,6 +11,12 @@ export const STORE_PRICES = {
   repriceAfterHours: 20,
 } as const;
 
+/**
+ * Pending pairs whose only doubt is the colour: same model and memory, so the page may show the store's item as
+ * «похожий товар» with its own name, never as the same product and never with «дешевле» (DECISIONS 2026-11-07).
+ */
+export const SIMILAR_REASONS = ["colour differs", "colourway unclear", "colour of the store's own Kaspi listing differs"] as const;
+
 export async function storeMarketplaceId(sql: postgres.Sql, code: string): Promise<number> {
   const [m] = await sql<{ id: number }[]>`select id from marketplaces where code = ${code}`;
   if (!m) throw new Error(`marketplace ${code} missing: apply migration 0018`);
@@ -92,7 +98,8 @@ export async function matchesToPrice(sql: postgres.Sql, marketplaceId: number, l
     select m.id as "matchId", m.store_slug as slug, m.store_sku as sku, m.store_title as title, p.title as "ourTitle"
     from store_matches m join products p on p.id = m.product_id
     left join lateral (select observed_at from store_prices sp where sp.match_id = m.id order by observed_at desc limit 1) last on true
-    where m.marketplace_id = ${marketplaceId} and m.status = 'confirmed' and p.status = 'active'
+    where m.marketplace_id = ${marketplaceId} and p.status = 'active'
+      and (m.status = 'confirmed' or (m.status = 'pending' and m.reason = any(${SIMILAR_REASONS as unknown as string[]})))
       and (last.observed_at is null or last.observed_at < now() - make_interval(hours => ${STORE_PRICES.repriceAfterHours}))
     order by (select count(*) from trackings t where t.product_id = p.id and t.status = 'active') desc,
              p.last_viewed_at desc nulls last, last.observed_at nulls first
@@ -132,17 +139,24 @@ export async function pendingMatches(sql: postgres.Sql, limit = 50): Promise<Pen
     where m.status = 'pending' order by m.created_at limit ${limit}`;
 }
 
-/** What a product page shows: each store's latest price for its confirmed item, fresh and in stock only. */
-export interface StoreOffer { store: string; name: string; url: string; title: string | null; price: number; oldPrice: number | null; observedAt: Date }
+/**
+ * What a product page shows: each store's latest price, fresh and in stock only. `exact`: the confirmed item, the same
+ * product. `similar`: a colour-only doubt, shown apart with the store's own name; only when that store has no exact one.
+ */
+export interface StoreOffer { store: string; name: string; url: string; title: string | null; price: number; oldPrice: number | null; observedAt: Date; kind: "exact" | "similar" }
 export async function storeOffers(sql: postgres.Sql, productId: number): Promise<StoreOffer[]> {
-  return sql<StoreOffer[]>`
+  const rows = await sql<StoreOffer[]>`
     select mk.code as store, mk.name, mk.base_url || '/p/' || m.store_slug as url, m.store_title as title,
-           sp.price, sp.old_price as "oldPrice", sp.observed_at as "observedAt"
+           sp.price, sp.old_price as "oldPrice", sp.observed_at as "observedAt",
+           case when m.status = 'confirmed' then 'exact' else 'similar' end as kind
     from store_matches m join marketplaces mk on mk.id = m.marketplace_id
     join lateral (select price, old_price, in_stock, observed_at from store_prices where match_id = m.id order by observed_at desc limit 1) sp on true
-    where m.product_id = ${productId} and m.status = 'confirmed' and sp.in_stock and sp.price is not null
+    where m.product_id = ${productId} and sp.in_stock and sp.price is not null
+      and (m.status = 'confirmed' or (m.status = 'pending' and m.reason = any(${SIMILAR_REASONS as unknown as string[]})))
       and sp.observed_at > now() - make_interval(hours => ${STORE_PRICES.showMaxAgeHours})
-    order by sp.price`;
+    order by (m.status = 'confirmed') desc, sp.price`;
+  const exactStores = new Set(rows.filter((r) => r.kind === "exact").map((r) => r.store));
+  return rows.filter((r) => r.kind === "exact" || !exactStores.has(r.store));
 }
 
 export async function startStoreRun(sql: postgres.Sql, marketplaceId: number): Promise<number> {

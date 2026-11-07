@@ -446,6 +446,9 @@ a { color: inherit; }
 .elsewhere-price { font-weight: 800; font-variant-numeric: tabular-nums; text-align: right; }
 .elsewhere-diff { grid-column: 2; text-align: right; font-size: 0.8125rem; color: var(--ink-soft); }
 .elsewhere-meta { grid-row: 2; grid-column: 1; font-size: 0.8125rem; color: var(--ink-soft); }
+.elsewhere-similar-label { margin: 10px 0 0; font-size: 0.75rem; color: var(--ink-soft); font-family: var(--font-receipt); text-transform: uppercase; letter-spacing: 0.06em; }
+.elsewhere-row.is-similar { color: var(--ink-soft); }
+.elsewhere-row.is-similar .elsewhere-name { font-weight: 500; }
 .elsewhere-row.is-cheaper .elsewhere-price, .elsewhere-row.is-cheaper .elsewhere-diff { color: var(--stamp); font-weight: 700; }
 .product-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 0 14px; }
 .btn-kaspi { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; padding: 7px 14px; border-radius: 999px;

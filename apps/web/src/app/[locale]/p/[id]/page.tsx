@@ -192,7 +192,7 @@ export default async function ProductPage({ params, searchParams }: Props) {
         {v.elsewhere.length > 0 && v.minPrice !== null && (
           <section className="elsewhere" aria-label={t("elsewhereTitle")}>
             <h2 className="elsewhere-title">{t("elsewhereTitle")}</h2>
-            {v.elsewhere.map((o) => {
+            {v.elsewhere.filter((o) => o.kind === "exact").map((o) => {
               const d = o.price - v.minPrice!;
               return (
                 <a key={o.store} className={`elsewhere-row${d < 0 ? " is-cheaper" : ""}`} href={o.url} target="_blank" rel="nofollow noopener noreferrer">
@@ -203,7 +203,21 @@ export default async function ProductPage({ params, searchParams }: Props) {
                 </a>
               );
             })}
-            <p className="note">{t("elsewhereNote")}</p>
+            {/* Same model and memory, only the colour differs or is unclear: the store's own name, no «дешевле». */}
+            {v.elsewhere.some((o) => o.kind === "similar") && (
+              <>
+                <p className="elsewhere-similar-label">{t("elsewhereSimilar")}</p>
+                {v.elsewhere.filter((o) => o.kind === "similar").map((o) => (
+                  <a key={`s${o.store}`} className="elsewhere-row is-similar" href={o.url} target="_blank" rel="nofollow noopener noreferrer">
+                    <span className="elsewhere-name">{o.name}: «{o.title}» ↗</span>
+                    <span className="elsewhere-price">{f(o.price)}</span>
+                    <span className="elsewhere-meta">{t("elsewhereChecked", { time: fmtTime(new Date(o.observedAt).toISOString(), td) })}</span>
+                  </a>
+                ))}
+                <p className="note">{t("elsewhereSimilarNote")}</p>
+              </>
+            )}
+            {v.elsewhere.some((o) => o.kind === "exact") && <p className="note">{t("elsewhereNote")}</p>}
           </section>
         )}
         <div className="barcode" aria-hidden />

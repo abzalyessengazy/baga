@@ -289,5 +289,18 @@ describe.skipIf(!url)("database (disposable Postgres)", () => {
       await sql`update store_prices set in_stock = true, observed_at = now() - interval '3 days'`;
       expect(await storeOffers(sql, p)).toEqual([]); // too old to show
     });
+
+    it("shows a colour-only pair as similar, never other doubts, and never next to an exact item of the same store", async () => {
+      const mid = await storeMarketplaceId(sql, "technodom");
+      const p = await product("300000003");
+      const colour = await saveMatch(sql, { productId: p, marketplaceId: mid, sku: "21", slug: "item-21", title: "Item White", method: "strict", status: "pending", reason: "colour differs" });
+      const memory = await saveMatch(sql, { productId: p, marketplaceId: mid, sku: "22", slug: "item-22", title: "Item 6/128", method: "strict", status: "pending", reason: "ram differs" });
+      for (const id of [colour.id, memory.id]) await saveStorePrice(sql, id, { price: 30_000, oldPrice: null, inStock: true });
+      expect((await storeOffers(sql, p)).map((o) => [o.kind, o.title])).toEqual([["similar", "Item White"]]);
+      expect((await matchesToPrice(sql, mid, 10)).map((m) => m.sku)).toEqual([]); // both priced today; the memory one never
+      const exact = await saveMatch(sql, { productId: p, marketplaceId: mid, sku: "23", slug: "item-23", title: "Item", method: "exact", status: "confirmed" });
+      await saveStorePrice(sql, exact.id, { price: 31_000, oldPrice: null, inStock: true });
+      expect((await storeOffers(sql, p)).map((o) => o.kind)).toEqual(["exact"]);
+    });
   });
 });

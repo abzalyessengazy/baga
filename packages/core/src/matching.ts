@@ -129,17 +129,24 @@ export function mismatch(kaspiTitle: string, store: string[], storeTitle?: strin
 export interface StoreIndex { items: { slug: string; tokens: Set<string> }[] }
 export const storeIndex = (slugs: string[]): StoreIndex => ({ items: slugs.map((s) => ({ slug: s, tokens: new Set(s.split("-")) })) });
 
-/** The best store item for a Kaspi title by its address alone (the fewest extra tokens), or null. */
-export function bestCandidate(kaspiTitle: string, index: StoreIndex): string | null {
+/** Mismatches that are only about colour: the same model and memory, shown at most as «похожий товар». */
+export const COLOUR_ONLY = new Set(["colour differs", "colourway unclear"]);
+
+/**
+ * The best store item for a Kaspi title by its address alone (the fewest extra tokens), or null. With `colourOnly`,
+ * when no item passes every rule, the best one whose only problem is the colour (to be shown as «похожий товар»).
+ */
+export function bestCandidate(kaspiTitle: string, index: StoreIndex, colourOnly = false): string | null {
   const tok = titleTokens(kaspiTitle);
   if (tok.length < 2) return null;
-  let best: { slug: string; size: number } | null = null;
+  let best: { slug: string; size: number } | null = null, similar: { slug: string; size: number } | null = null;
   for (const it of index.items) {
     if (!tok.every((x) => it.tokens.has(x))) continue; // cheap pre-filter before the full rules
-    if (mismatch(kaspiTitle, [...it.tokens])) continue;
-    if (!best || it.tokens.size < best.size) best = { slug: it.slug, size: it.tokens.size };
+    const why = mismatch(kaspiTitle, [...it.tokens]);
+    if (!why) { if (!best || it.tokens.size < best.size) best = { slug: it.slug, size: it.tokens.size }; }
+    else if (colourOnly && COLOUR_ONLY.has(why) && (!similar || it.tokens.size < similar.size)) similar = { slug: it.slug, size: it.tokens.size };
   }
-  return best?.slug ?? null;
+  return best?.slug ?? similar?.slug ?? null;
 }
 
 /**
