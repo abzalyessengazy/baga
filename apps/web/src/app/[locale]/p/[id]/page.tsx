@@ -168,6 +168,26 @@ export default async function ProductPage({ params, searchParams }: Props) {
           {v.offerCount > 0 && <span className="total-sub">{tr("from", { count: v.offerCount })}</span>}
           {earlierLow !== null && <span className="total-sub total-earlier">{t("earlierToday", { price: f(earlierLow) })}</span>}
         </div>
+        {/* Other stores at a glance, under the price (DECISIONS 2026-11-07): a plain name chip, never the store's logo;
+            the exact item first, else the similar one; the details and the store link are in the block below. */}
+        {v.minPrice !== null && v.elsewhere.length > 0 && (() => {
+          const o = v.elsewhere.find((x) => x.kind === "exact") ?? v.elsewhere[0]!;
+          const d = o.price - v.minPrice;
+          const cls = o.kind === "similar" ? "is-similar" : d < 0 ? "is-cheaper" : "";
+          return (
+            <a href="#elsewhere" className={`store-glance ${cls}`}>
+              <span className="store-chip">
+                <svg viewBox="0 0 20 20" width="13" height="13" aria-hidden fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 8.5 4.5 3.5h11L17 8.5M3.5 8.5v8h13v-8M3 8.5h14M8 16.5v-4h4v4" />
+                </svg>
+                {o.name}
+              </span>
+              <span className="store-glance-price">{o.kind === "similar" ? t("glanceSimilar", { price: f(o.price) }) : f(o.price)}</span>
+              {o.kind === "exact" && <span className="store-glance-diff">{d < 0 ? t("elsewhereCheaper", { amount: f(-d) }) : d > 0 ? t("elsewhereDearer", { amount: f(d) }) : t("elsewhereSame")}</span>}
+              <span aria-hidden className="store-glance-go">↓</span>
+            </a>
+          );
+        })()}
         {verdict && (
           <>
             <div className="verdict-line">
@@ -190,7 +210,7 @@ export default async function ProductPage({ params, searchParams }: Props) {
         <p className="note">{t("nationalPrice")}</p>
         {/* Other stores, exact matches only (DECISIONS.md, 2026-11-07): the store's own price, never adjusted. */}
         {v.elsewhere.length > 0 && v.minPrice !== null && (
-          <section className="elsewhere" aria-label={t("elsewhereTitle")}>
+          <section className="elsewhere" id="elsewhere" aria-label={t("elsewhereTitle")}>
             <h2 className="elsewhere-title">{t("elsewhereTitle")}</h2>
             {v.elsewhere.filter((o) => o.kind === "exact").map((o) => {
               const d = o.price - v.minPrice!;
