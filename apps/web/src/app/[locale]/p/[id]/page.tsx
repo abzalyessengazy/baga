@@ -134,7 +134,8 @@ export default async function ProductPage({ params, searchParams }: Props) {
     <main className="wrap product-grid">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdHtml(jsonLd) }} />
       <article className="receipt product-receipt">
-        {/* People watching this product now: real active trackings, shown from the first one. */}
+        {/* Top row: people watching (real active trackings, from the first one) and the way to Kaspi. */}
+        <div className="product-top">
         {v.watching > 0 && (
           <p className="watching" aria-label={t("watching", { count: v.watching })}>
             <svg viewBox="0 0 20 20" width="14" height="14" aria-hidden fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -143,6 +144,8 @@ export default async function ProductPage({ params, searchParams }: Props) {
             {t("watching", { count: v.watching })}
           </p>
         )}
+          <a className="btn-kaspi" href={`/go/${v.externalId}`} rel="noopener">{t("openOnKaspi")} ↗</a>
+        </div>
         <div className="product-head">
           {v.imageUrl ? <img src={v.imageUrl} alt="" width={72} height={72} /> : <span />}
           <div>
@@ -185,7 +188,6 @@ export default async function ProductPage({ params, searchParams }: Props) {
           : <p className="verdict-text">{v.delisted ? t("delisted") : t("outOfStock")}</p>}
         {v.offerCount > shown.length && <p className="note">{t("moreSellers", { count: v.offerCount - shown.length })}</p>}
         <p className="note">{t("nationalPrice")}</p>
-        <a className="kaspi-link" href={`/go/${v.externalId}`} rel="noopener">{t("openOnKaspi")}</a>
         <div className="barcode" aria-hidden />
       </article>
       {/* Nothing to track on a delisted product: no alert can ever fire. */}

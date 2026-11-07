@@ -11,6 +11,7 @@
   --rule: #b9bcc2;
   --stamp: #4b3fd1;
   --stamp-red: #c23b2c;
+  --kaspi: #f14635; /* Kaspi's brand red: only the «Открыть на Kaspi» button */
   /* Caution amber: only for "check this seller" signals (low Kaspi rating, a price far below the others). */
   --caution: #8a5300;
   --caution-bg: #fbecc8;
@@ -435,7 +436,12 @@ a { color: inherit; }
 /* ---------- product page ---------- */
 .product-grid { max-width: calc(720px + 2 * var(--gutter)); padding-block: 24px 200px; }
 .product-receipt { max-width: 720px; }
-.watching { display: inline-flex; align-items: center; gap: 6px; margin: 0 0 12px; padding: 4px 10px 4px 8px;
+.product-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 0 14px; }
+.btn-kaspi { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; padding: 7px 14px; border-radius: 999px;
+  background: var(--kaspi); color: #fff; font-family: var(--font-ui); font-size: 0.875rem; font-weight: 700; text-decoration: none; white-space: nowrap; }
+.btn-kaspi:hover { background: color-mix(in srgb, var(--kaspi) 88%, #000); }
+.btn-kaspi:focus-visible { outline: 2px solid var(--kaspi); outline-offset: 2px; }
+.watching { display: inline-flex; align-items: center; gap: 6px; margin: 0; padding: 4px 10px 4px 8px;
   border-radius: 999px; background: var(--stamp); color: #fff; font-family: var(--font-mono); font-size: 0.75rem;
   font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
 .product-head { display: grid; grid-template-columns: 72px 1fr; gap: 16px; align-items: center; }

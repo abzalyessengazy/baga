@@ -156,7 +156,7 @@ export function ZReport() {
     { title: t("movesTitle"), el: <MovesSlip moves={s.moves} locale={locale} /> },
     ...(m?.spread.top.length ? [{ title: t("spreadTitle"), el: <SpreadSlip rows={m.spread.top} locale={locale} /> }] : []),
     ...(best ? [{ title: t("bestTitle"), el: <BestSlip d={best} locale={locale} /> }] : []),
-    ...(s.mostTracked.length ? [{ title: t("trackedTitle"), el: <ListSlip items={s.mostTracked} locale={locale} /> }] : []),
+    ...(s.mostTracked.length ? [{ title: t("trackedTitle"), el: <ListSlip items={s.mostTracked} locale={locale} more="/explore?list=all&sort=tracked" /> }] : []),
     ...(s.newest.length ? [{ title: t("newTitle"), el: <ListSlip items={s.newest} locale={locale} dated more="/explore?list=all&sort=new" /> }] : []),
   ];
   return (

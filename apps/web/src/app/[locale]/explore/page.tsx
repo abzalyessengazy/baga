@@ -58,7 +58,7 @@ export default async function ExplorePage({ params, searchParams }: Props) {
   };
   // Sorts that make sense for this list.
   const sorts: ExploreSort[] = list === "drops" || list === "rises" ? ["change", "cheap", "dear", "popular", "new"]
-    : list === "spread" ? ["spread", "cheap", "dear", "popular", "new"] : ["popular", "cheap", "dear", "new", "spread"];
+    : list === "spread" ? ["spread", "cheap", "dear", "popular", "new"] : ["popular", "tracked", "cheap", "dear", "new", "spread"];
 
   return (
     <main className="wrap explore">

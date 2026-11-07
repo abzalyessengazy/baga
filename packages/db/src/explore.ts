@@ -12,7 +12,7 @@ import { likePattern } from "./like";
  * Only observed prices; nothing is estimated.
  */
 export type ExploreList = "drops" | "rises" | "spread" | "all";
-export type ExploreSort = "change" | "spread" | "cheap" | "dear" | "popular" | "new";
+export type ExploreSort = "change" | "spread" | "cheap" | "dear" | "popular" | "new" | "tracked";
 
 export interface ExploreItem {
   externalId: string; title: string; titleKk: string | null; imageUrl: string | null; category: string | null;
@@ -32,7 +32,7 @@ export interface ExploreResult {
 
 export const EXPLORE = { perPage: 30, maxPage: 200, categories: 60, spreadMinPrice: 5_000 } as const;
 export const EXPLORE_LISTS: ExploreList[] = ["drops", "rises", "spread", "all"];
-export const EXPLORE_SORTS: ExploreSort[] = ["change", "spread", "cheap", "dear", "popular", "new"];
+export const EXPLORE_SORTS: ExploreSort[] = ["change", "spread", "cheap", "dear", "popular", "new", "tracked"];
 /** The default order of each list. */
 export const EXPLORE_DEFAULT_SORT: Record<ExploreList, ExploreSort> = { drops: "change", rises: "change", spread: "spread", all: "popular" };
 
@@ -57,13 +57,18 @@ export async function exploreCatalog(sql: postgres.Sql, x: ExploreQuery): Promis
     o as (
       select product_id, min(price)::int as lo, max(price)::int as hi, count(*)::int as n
       from offers_current group by 1),
+    -- People with an active tracking (the «tracked» order: the home page's «Чаще всего отслеживают» in full).
+    w as (
+      select product_id, count(distinct coalesce(watcher_id::text, user_id::text))::int as n
+      from trackings where status = 'active' and product_id is not null group by 1),
     b as (
       select p.external_id, p.title, p.title_kk, p.image_url, p.first_seen_at, coalesce(p.kaspi_reviews, 0) as reviews,
              p.category_path[array_length(p.category_path, 1)] as category,
              s.current_min_price as price, coalesce(s.offer_count, 0) as offer_count,
              ${list === "drops" ? sql`pr.high` : list === "rises" ? sql`pr.low` : sql`null::int`} as was,
-             case when o.n >= 2 then o.lo end as lo, case when o.n >= 2 then o.hi end as hi
+             case when o.n >= 2 then o.lo end as lo, case when o.n >= 2 then o.hi end as hi, coalesce(w.n, 0) as watchers
       from products p join product_state s on s.product_id = p.id
+      left join w on w.product_id = p.id
       left join prior pr on pr.product_id = p.id
       left join o on o.product_id = p.id, today
       where p.status = 'active' and s.current_min_price is not null
@@ -83,6 +88,7 @@ export async function exploreCatalog(sql: postgres.Sql, x: ExploreQuery): Promis
     dear: sql`price desc`,
     popular: sql`reviews desc, offer_count desc`,
     new: sql`first_seen_at desc`,
+    tracked: sql`watchers desc, reviews desc`,
   }[sort];
   const cat = x.category ? sql`where category = ${x.category}` : sql``;
 
