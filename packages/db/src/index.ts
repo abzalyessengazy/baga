@@ -11,3 +11,4 @@ export * from "./market";
 export * from "./explore";
 export * from "./delivery";
 export * from "./shops";
+export * from "./stores";

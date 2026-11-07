@@ -13,6 +13,7 @@ import { claimNotifications, markFailed, markSent, startSend, tidyDeliveries } f
 import { requestWatcherEmail, EMAIL_REQUEST_LIMITS } from "./watchers";
 import { saveSnapshot } from "./queries";
 import { getShop, productSellers, saveShopFeedback } from "./shops";
+import { decideMatch, matchesToPrice, saveMatch, saveStorePrice, storeMarketplaceId, storeOffers } from "./stores";
 import type { ProductSnapshot } from "@baga/kaspi";
 
 const url = process.env.TEST_DATABASE_URL;
@@ -49,7 +50,7 @@ describe.skipIf(!url)("database (disposable Postgres)", () => {
   afterAll(async () => { await sql?.end(); });
 
   beforeEach(async () => {
-    await sql`truncate notifications, trackings, email_requests, watchers, seller_feedback, seller_daily, offers_current,
+    await sql`truncate store_prices, store_matches, store_runs, notifications, trackings, email_requests, watchers, seller_feedback, seller_daily, offers_current,
       sellers, price_observations, product_state, collection_schedule, products restart identity cascade`;
   });
 
@@ -253,6 +254,40 @@ describe.skipIf(!url)("database (disposable Postgres)", () => {
       expect(rows).toEqual([{ seller_id: null, outcome: "ok" }]);
       await saveShopFeedback(sql, { code: "c".repeat(20) }, "m1", "not_delivered");
       expect((await getShop(sql, "m1"))!.feedback).toMatchObject({ n: 1, not_delivered: 1, ok: 0 });
+    });
+  });
+
+  describe("other stores (migration 0018)", () => {
+    async function product(externalId: string) {
+      await saveSnapshot(sql, { marketplace: "kaspi", externalId, title: `Product ${externalId}`, imageUrl: null, categoryPath: ["Cat"], reviews: null, rating: null,
+        offers: [{ sellerId: "m1", sellerName: "Shop", sellerRating: 4.9, sellerReviews: 100, price: 50_000, deliveryDuration: null, preorderDays: 0 }],
+        minPrice: 50_000, offerCount: 1, inStock: true, fetchedAt: new Date().toISOString() }, null, null);
+      return (await sql<{ id: number }[]>`select id from products where external_id = ${externalId}`)[0]!.id;
+    }
+
+    it("keeps one confirmed item per product; a second one waits for the owner", async () => {
+      const mid = await storeMarketplaceId(sql, "technodom");
+      const p = await product("300000001");
+      const a = await saveMatch(sql, { productId: p, marketplaceId: mid, sku: "1", slug: "item-1", title: "Item", method: "exact", status: "confirmed" });
+      const b = await saveMatch(sql, { productId: p, marketplaceId: mid, sku: "2", slug: "item-2", title: "Item 2", method: "strict", status: "confirmed" });
+      expect([a.status, b.status]).toEqual(["confirmed", "pending"]);
+      expect(await decideMatch(sql, b.id, true)).toBe(true); // the owner picks the second: the first is replaced
+      const rows = await sql<{ store_sku: string; status: string; method: string }[]>`select store_sku, status, method from store_matches order by store_sku`;
+      expect(rows).toEqual([{ store_sku: "1", status: "rejected", method: "exact" }, { store_sku: "2", status: "confirmed", method: "manual" }]);
+    });
+
+    it("shows only fresh, in-stock prices of confirmed items, and prices each match once a day", async () => {
+      const mid = await storeMarketplaceId(sql, "technodom");
+      const p = await product("300000002");
+      const m = await saveMatch(sql, { productId: p, marketplaceId: mid, sku: "9", slug: "item-9", title: "Item 9", method: "exact", status: "confirmed" });
+      expect(await matchesToPrice(sql, mid, 10)).toHaveLength(1);
+      await saveStorePrice(sql, m.id, { price: 45_990, oldPrice: 49_990, inStock: true });
+      expect(await matchesToPrice(sql, mid, 10)).toHaveLength(0); // priced today
+      expect((await storeOffers(sql, p)).map((o) => [o.store, o.price])).toEqual([["technodom", 45_990]]);
+      await saveStorePrice(sql, m.id, { price: 45_990, oldPrice: null, inStock: false });
+      expect(await storeOffers(sql, p)).toEqual([]); // out of stock now
+      await sql`update store_prices set in_stock = true, observed_at = now() - interval '3 days'`;
+      expect(await storeOffers(sql, p)).toEqual([]); // too old to show
     });
   });
 });

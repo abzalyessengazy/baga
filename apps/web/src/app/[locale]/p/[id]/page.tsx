@@ -188,6 +188,24 @@ export default async function ProductPage({ params, searchParams }: Props) {
           : <p className="verdict-text">{v.delisted ? t("delisted") : t("outOfStock")}</p>}
         {v.offerCount > shown.length && <p className="note">{t("moreSellers", { count: v.offerCount - shown.length })}</p>}
         <p className="note">{t("nationalPrice")}</p>
+        {/* Other stores, exact matches only (DECISIONS.md, 2026-11-07): the store's own price, never adjusted. */}
+        {v.elsewhere.length > 0 && v.minPrice !== null && (
+          <section className="elsewhere" aria-label={t("elsewhereTitle")}>
+            <h2 className="elsewhere-title">{t("elsewhereTitle")}</h2>
+            {v.elsewhere.map((o) => {
+              const d = o.price - v.minPrice!;
+              return (
+                <a key={o.store} className={`elsewhere-row${d < 0 ? " is-cheaper" : ""}`} href={o.url} target="_blank" rel="nofollow noopener noreferrer">
+                  <span className="elsewhere-name">{o.name} ↗</span>
+                  <span className="elsewhere-price">{f(o.price)}</span>
+                  <span className="elsewhere-diff">{d < 0 ? t("elsewhereCheaper", { amount: f(-d) }) : d > 0 ? t("elsewhereDearer", { amount: f(d) }) : t("elsewhereSame")}</span>
+                  <span className="elsewhere-meta">{t("elsewhereChecked", { time: fmtTime(new Date(o.observedAt).toISOString(), td) })}</span>
+                </a>
+              );
+            })}
+            <p className="note">{t("elsewhereNote")}</p>
+          </section>
+        )}
         <div className="barcode" aria-hidden />
       </article>
       {/* Nothing to track on a delisted product: no alert can ever fire. */}

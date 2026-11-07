@@ -11,13 +11,15 @@
     "typecheck": "tsc --noEmit",
     "probe": "node --env-file-if-exists=../../.env --import tsx src/probe.ts",
     "probe:scale": "node --env-file-if-exists=../../.env --env-file-if-exists=../web/.env.local --import tsx src/probe-scale.ts",
-    "probe:pairs": "node --env-file-if-exists=../../.env --env-file-if-exists=../web/.env.local --import tsx src/probe-pairs.ts"
+    "probe:pairs": "node --env-file-if-exists=../../.env --env-file-if-exists=../web/.env.local --import tsx src/probe-pairs.ts",
+    "stores": "node --env-file-if-exists=../../.env --import tsx src/stores.ts"
   },
   "dependencies": {
     "@baga/core": "workspace:^",
     "@baga/db": "workspace:^",
     "@baga/kaspi": "workspace:^",
-    "postgres": "^3.4.5"
+    "postgres": "^3.4.5",
+    "@baga/stores": "workspace:^"
   },
   "devDependencies": {
     "tsx": "^4.19.2"

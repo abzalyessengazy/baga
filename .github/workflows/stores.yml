@@ -1,0 +1,24 @@
+name: Store prices
+on:
+  # Other stores' prices for exactly matched products (DECISIONS.md, 2026-11-07 "Technodom as a second price
+  # source"; CLAUDE.md rule 6a). After Kaspi's Visit-time (ends 08:45 UTC), so never at the same time as a Kaspi
+  # request: the worker sends requests only 08:46-12:00 UTC (13:46-17:00 Almaty) and exits without any otherwise.
+  # GitHub may start scheduled runs late; the later triggers are backups (a run with nothing due ends in seconds).
+  schedule:
+    - cron: "50 8 * * *"
+    - cron: "30 9,10 * * *"
+  workflow_dispatch:
+concurrency: { group: stores, cancel-in-progress: false }
+jobs:
+  stores:
+    runs-on: ubuntu-latest
+    timeout-minutes: 200
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @baga/worker stores
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}

@@ -72,6 +72,9 @@ importers:
       '@baga/kaspi':
         specifier: workspace:^
         version: link:../../packages/kaspi
+      '@baga/stores':
+        specifier: workspace:^
+        version: link:../../packages/stores
       postgres:
         specifier: ^3.4.5
         version: 3.4.9
@@ -106,6 +109,8 @@ importers:
       zod:
         specifier: ^3.25.76
         version: 3.25.76
+
+  packages/stores: {}
 
 packages:
 

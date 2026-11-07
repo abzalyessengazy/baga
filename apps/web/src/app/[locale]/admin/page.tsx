@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getTranslations, setRequestLocale } from "next-intl/server";
-import { getSql, getAdminHealth, getFunnel, recentFeedback, type AdminRun, RUN_PACE_WARN_S } from "@baga/db";
+import { getSql, getAdminHealth, getFunnel, recentFeedback, pendingMatches, latestStoreRuns, type AdminRun, RUN_PACE_WARN_S } from "@baga/db";
 import { isInVisitWindow } from "@baga/core";
 import { adminEnabled, isAdmin } from "@/lib/admin";
 
@@ -38,7 +38,9 @@ export default async function AdminPage({ params, searchParams }: Props) {
   }
   const sql = getSql();
   if (!sql) notFound();
-  const [h, feedback, funnel] = await Promise.all([getAdminHealth(sql), recentFeedback(sql), getFunnel(sql, 7).catch(() => null)]);
+  const [h, feedback, funnel, pending, storeRuns] = await Promise.all([getAdminHealth(sql), recentFeedback(sql), getFunnel(sql, 7).catch(() => null),
+    // Before migration 0018 the store tables do not exist.
+    pendingMatches(sql).catch(() => []), latestStoreRuns(sql).catch(() => [])]);
   const now = Date.now();
   const state = (r: AdminRun) =>
     r.aborted ? t("runAborted", { reason: r.aborted })
@@ -180,6 +182,35 @@ export default async function AdminPage({ params, searchParams }: Props) {
                 <strong>{at(f.createdAt)}</strong>
                 {f.externalId && <> · <a href={`/${locale}/p/${f.externalId}`}>{f.title ?? f.externalId}</a></>}
                 <br /><span style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{f.text}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {/* Other stores (DECISIONS.md, 2026-11-07): the latest runs, and pairs the matcher was unsure of. */}
+      <section className="receipt admin-card">
+        <h2>{t("storesTitle")}</h2>
+        {storeRuns.length === 0 ? <p className="admin-muted">{t("empty")}</p> : (
+          <ul className="admin-list">
+            {storeRuns.map((r) => (
+              <li key={r.startedAt.toISOString()}>{r.store} · {at(r.startedAt)} · {t("storesRun", { requests: r.requests, priced: r.priced, matched: r.matched, failed: r.failed })}
+                {r.aborted && <> · <strong>{r.aborted}</strong></>}</li>
+            ))}
+          </ul>
+        )}
+        <h3>{t("matchPending", { n: pending.length })}</h3>
+        {pending.length === 0 ? <p className="admin-muted">{t("empty")}</p> : (
+          <ul className="admin-list">
+            {pending.map((m) => (
+              <li key={m.id}>
+                <a href={`/${locale}/p/${m.externalId}`}>{m.ourTitle}</a>{m.kaspiPrice !== null && ` · ${count(m.kaspiPrice)} ₸`}<br />
+                ↔ <a href={m.url} target="_blank" rel="noopener noreferrer">{m.storeTitle ?? m.url}</a>{m.reason && <> · <code>{m.reason}</code></>}
+                <form method="post" action="/api/admin/match" className="admin-match">
+                  <input type="hidden" name="id" value={m.id} /><input type="hidden" name="l" value={locale} />
+                  <button type="submit" name="d" value="yes" className="btn">{t("matchConfirm")}</button>
+                  <button type="submit" name="d" value="no" className="btn btn-ghost">{t("matchReject")}</button>
+                </form>
               </li>
             ))}
           </ul>
