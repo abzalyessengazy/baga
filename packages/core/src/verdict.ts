@@ -6,7 +6,7 @@ export interface DailyLow {
   price: Tenge;
 }
 
-export type VerdictKind = "insufficient" | "low" | "typical" | "high";
+export type VerdictKind = "insufficient" | "low" | "typical" | "high" | "stable";
 
 export interface Verdict {
   kind: VerdictKind;
@@ -23,13 +23,27 @@ export interface Verdict {
   cheaperThanShare: number | null;
   /** % above the median, for "high". */
   aboveMedianPct: number | null;
+  /** "low": today is the lowest price of the window (or within lowTolerancePct of it). */
+  atLow: boolean;
 }
 
+/**
+ * 7 Nov 2026 (owner): the stamp said «Мало данных» on every product because it waited for 14 days. Now it speaks
+ * from 3 observed days, always naming how many days it is based on, and describes only the past (CLAUDE.md rule 2):
+ * stable (the whole window within ±stablePct), low (at the window's lowest, or at/below the 20th percentile),
+ * high (above the 70th percentile and highMinPct+ above the median), else typical.
+ */
 export const VERDICT_CONFIG = {
-  minObservedDays: 14,
+  minObservedDays: 3,
   windowDays: 60,
   lowPercentile: 0.2,
   highPercentile: 0.7,
+  /** Every observed day within this % of the window's lowest: «Цена стабильна». */
+  stablePct: 2,
+  /** Within this % of the window's lowest still counts as the low. */
+  lowTolerancePct: 1,
+  /** "high" needs at least this % above the median (a 70th percentile a few tenge above it is no news). */
+  highMinPct: 3,
 } as const;
 
 export function percentile(sorted: number[], p: number): number {
@@ -61,6 +75,7 @@ export function computeVerdict(history: DailyLow[], current: Tenge, cfg = VERDIC
     typicalHigh: null,
     cheaperThanShare: null,
     aboveMedianPct: null,
+    atLow: false,
   };
   if (window.length === 0) return base;
 
@@ -81,8 +96,12 @@ export function computeVerdict(history: DailyLow[], current: Tenge, cfg = VERDIC
   base.cheaperThanShare = prices.filter((p) => p > current).length / prices.length;
   base.aboveMedianPct = median > 0 ? Math.round(((current - median) / median) * 100) : 0;
 
-  if (current <= pLow) base.kind = "low";
-  else if (current > pHigh) base.kind = "high";
+  const lowest = Math.min(base.min, current);
+  const highest = Math.max(base.max, current);
+  base.atLow = current <= base.min * (1 + cfg.lowTolerancePct / 100);
+  if (highest <= lowest * (1 + cfg.stablePct / 100)) base.kind = "stable";
+  else if (base.atLow || current <= pLow) base.kind = "low";
+  else if (current > pHigh && current >= median * (1 + cfg.highMinPct / 100)) base.kind = "high";
   else base.kind = "typical";
   return base;
 }

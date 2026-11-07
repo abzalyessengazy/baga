@@ -12,12 +12,26 @@ describe("percentile", () => {
 });
 
 describe("computeVerdict", () => {
-  it("is insufficient under 14 observed days but still reports the min", () => {
-    const v = computeVerdict(series([500, 480, 490]), 490);
+  it("is insufficient under 3 observed days but still reports the min", () => {
+    const v = computeVerdict(series([500, 480]), 490);
     expect(v.kind).toBe("insufficient");
     expect(v.min).toBe(480);
     expect(v.minDay).toBe("2026-09-02");
-    expect(v.observedDays).toBe(3);
+    expect(v.observedDays).toBe(2);
+  });
+
+  it("speaks from 3 days: at the lowest is a good price, far above the usual is high", () => {
+    expect(computeVerdict(series([159_990, 175_000, 180_000]), 159_990)).toMatchObject({ kind: "low", atLow: true });
+    expect(computeVerdict(series([160_000, 160_000, 165_000, 200_000]), 200_000).kind).toBe("high");
+  });
+
+  it("calls a price stable when every day stays within 2%", () => {
+    expect(computeVerdict(series([69_890, 69_990, 70_500, 69_890, 70_000]), 70_100).kind).toBe("stable");
+    expect(computeVerdict(series([69_890, 69_990, 75_000]), 70_100).kind).not.toBe("stable");
+  });
+
+  it("is not high a few tenge above the median", () => {
+    expect(computeVerdict(series([100_000, 100_000, 100_000, 100_100, 120_000, 90_000]), 100_200).kind).toBe("typical");
   });
 
   it("is empty-safe", () => {
@@ -44,5 +58,6 @@ describe("computeVerdict", () => {
     const v = computeVerdict(old, 1000);
     expect(v.windowDays).toBe(60);
     expect(v.min).toBe(1000);
+    expect(v.kind).toBe("stable"); // the old 100s are outside the window
   });
 });

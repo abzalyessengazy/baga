@@ -102,8 +102,12 @@ export default async function ProductPage({ params, searchParams }: Props) {
       ? verdict.min !== null && verdict.observedDays > 1
         ? tv("insufficientText", { days: verdict.observedDays, min: f(verdict.min) })
         : tv("insufficientEmpty")
+      : verdict.kind === "stable"
+        ? tv("stableText", { days: verdict.windowDays, min: f(Math.min(verdict.min!, verdict.current)), max: f(Math.max(verdict.max!, verdict.current)) })
       : verdict.kind === "low"
-        ? tv("lowText", { share: Math.round((verdict.cheaperThanShare ?? 0) * 100), days: verdict.windowDays })
+        ? verdict.atLow
+          ? tv("lowestText", { days: verdict.windowDays })
+          : tv("lowText", { share: Math.round((verdict.cheaperThanShare ?? 0) * 100), days: verdict.windowDays })
         : verdict.kind === "typical"
           ? tv("typicalText", { low: f(verdict.typicalLow!), high: f(verdict.typicalHigh!) })
           : tv("highText", { pct: verdict.aboveMedianPct ?? 0, min: f(verdict.min!), date: fmtDate(verdict.minDay!, locale) });

@@ -163,6 +163,7 @@ a { color: inherit; }
 }
 .stamp.is-high { color: var(--stamp-red); }
 .stamp.is-insufficient { color: var(--ink-soft); }
+.stamp.is-stable { color: var(--ink); }
 .stamp-sample {
   position: absolute; top: 20px; right: 16px; font-size: 1.05rem; transform: rotate(9deg);
   border-width: 3px; padding: 3px 12px; pointer-events: none;

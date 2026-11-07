@@ -78,14 +78,17 @@
   },
   "verdict": {
     "insufficient": "Мало данных",
-    "low": "Низкая цена",
+    "low": "Хорошая цена",
     "typical": "Обычная цена",
-    "high": "Высокая цена",
+    "high": "Дороже обычного",
     "insufficientText": "Наблюдаем {days, plural, one {# день} few {# дня} many {# дней} other {# дня}}. Минимум за это время: {min}.",
     "insufficientEmpty": "Только начали наблюдать. Чтобы оценить цену, нужно больше дней наблюдений.",
     "lowText": "Дешевле, чем в {share}% дней за последние {days, plural, one {# день} few {# дня} many {# дней} other {# дня}}.",
     "typicalText": "Обычно стоит от {low} до {high}.",
-    "highText": "Дороже обычного на {pct}%. Минимум был {min} ({date})."
+    "highText": "Дороже обычного на {pct}%. Минимум был {min} ({date}).",
+    "stable": "Цена стабильна",
+    "lowestText": "Самая низкая цена за {days, plural, one {# день} few {# дня} many {# дней} other {# дня}} наблюдений.",
+    "stableText": "{days, plural, one {# день} few {# дня} many {# дней} other {# дня}} цена почти не менялась: от {min} до {max}."
   },
   "product": {
     "openOnKaspi": "Открыть на Kaspi",
