@@ -10,9 +10,9 @@
  * By hand: `pnpm --filter @baga/worker stores --now` (any time outside Kaspi's Visit-time).
  */
 import postgres from "postgres";
-import { KASPI_VISIT_WINDOW_UTC, bestCandidate, mismatch, storeIndex, storeTokens, kaspiColour } from "@baga/core";
+import { KASPI_VISIT_WINDOW_UTC, bestCandidate, looseCandidates, mismatch, storeIndex, storeTokens, kaspiColour } from "@baga/core";
 import {
-  connectionOptions, storeMarketplaceId, productsToMatch, productIdByExternal, exactTitleForSku, saveMatch, matchesToPrice, saveStorePrice,
+  connectionOptions, storeMarketplaceId, productsToMatch, productsSoldOnKaspiBy, productIdByExternal, exactTitleForSku, saveMatch, matchesToPrice, saveStorePrice,
   setMatchStatus, startStoreRun, finishStoreRun,
 } from "@baga/db";
 import { createTechnodomClient, TECHNODOM, TechnodomHttpError, TechnodomParseError, StoreRequestRefused, skuOf, type TechnodomProduct } from "@baga/stores";
@@ -89,11 +89,38 @@ async function main() {
     }
 
     // 2. New matches.
+    const sold = await productsSoldOnKaspiBy(sql, mid, TECHNODOM.kaspiMerchantId);
     const todo = await productsToMatch(sql, mid);
-    if (todo.length) {
+    let pages = 0;
+    if (todo.length || sold.length) {
       const items = await td.fetchProductSitemap();
       const idx = storeIndex(items.map((i) => i.slug));
-      let pages = 0;
+      /** Technodom's page links to another of our Kaspi listings: that one is an exact match. */
+      const linkOther = async (p: TechnodomProduct, slug: string, notId: string) => {
+        if (!p.kaspiId || p.kaspiId === notId) return;
+        const other = await productIdByExternal(sql, p.kaspiId);
+        if (!other) return;
+        const o = await saveMatch(sql, { productId: other.id, marketplaceId: mid, sku: skuOf(slug), slug, title: p.title, method: "exact", status: "confirmed" });
+        if (o.status === "confirmed") await saveStorePrice(sql, o.id, p);
+      };
+      // 2a. Products Technodom itself sells on Kaspi: up to 3 loose candidates each, accepted only by Technodom's own
+      // Kaspi link (exact). Every candidate looked at is recorded, so it is never fetched again.
+      for (const t of sold) {
+        for (const slug of looseCandidates(t.title, idx, 3)) {
+          if (pages >= STORE_RUN.matchPages) break;
+          pages++;
+          const p = await page(slug);
+          if (!p || p === "gone") continue;
+          const exact = p.kaspiId === t.externalId;
+          const saved = await saveMatch(sql, { productId: t.productId, marketplaceId: mid, sku: skuOf(slug), slug, title: p.title,
+            method: "exact", status: exact ? "confirmed" : "rejected", reason: exact ? null : `links to Kaspi ${p.kaspiId ?? "nothing"}` });
+          matched++;
+          if (saved.status === "confirmed") await saveStorePrice(sql, saved.id, p);
+          await linkOther(p, slug, t.externalId);
+          if (exact) break;
+        }
+      }
+      // 2b. Every other product: the strict matcher's one candidate.
       for (const t of todo) {
         if (pages >= STORE_RUN.matchPages) break;
         const slug = bestCandidate(t.title, idx);
@@ -113,14 +140,7 @@ async function main() {
           method: exact ? "exact" : "strict", status: why ? "pending" : "confirmed", reason: why });
         matched++;
         if (saved.status === "confirmed") await saveStorePrice(sql, saved.id, p);
-        // Technodom links to another Kaspi listing we also check: that one is an exact match too.
-        if (p.kaspiId && !exact) {
-          const other = await productIdByExternal(sql, p.kaspiId);
-          if (other) {
-            const o = await saveMatch(sql, { productId: other.id, marketplaceId: mid, sku: skuOf(slug), slug, title: p.title, method: "exact", status: "confirmed" });
-            if (o.status === "confirmed") await saveStorePrice(sql, o.id, p);
-          }
-        }
+        if (!exact) await linkOther(p, slug, t.externalId);
       }
     }
   } catch (e) {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bestCandidate, kaspiColour, mismatch, storeIndex, storeTokens, titleMemory } from "./matching";
+import { bestCandidate, kaspiColour, looseCandidates, mismatch, storeIndex, storeTokens, titleMemory } from "./matching";
 
 // Real pairs from the 7 Nov 2026 Technodom test requests (Kaspi title, Technodom address, Technodom title).
 const same = (kaspi: string, slug: string, title?: string) => expect(mismatch(kaspi, storeTokens(slug, title))).toBeNull();
@@ -55,6 +55,16 @@ describe("exact product matching (DECISIONS 2026-11-07)", () => {
     expect(titleMemory("Смартфон Samsung Galaxy A07S 4 ГБ/64 ГБ черный")).toEqual({ ram: 4, storage: 64 });
     expect(titleMemory("Смартфон Apple iPhone 17 Pro Max 2Tb темно-синий")).toEqual({ ram: null, storage: 2048 });
     expect(titleMemory("Чайник Kitfort КТ-641")).toEqual({ ram: null, storage: null });
+  });
+  it("ranks loose candidates, strict-compatible ones first", () => {
+    const idx = storeIndex([
+      "smartfon-samsung-galaxy-s26-12256gb6350-belyj-sm-s942bzwcskz-297245",
+      "smartfon-samsung-galaxy-s26-12512gb6350-sirenevyj-sm-s942blvdskz-297250",
+      "televizor-samsung-65-ue65m70hauxce-mini-led-300563",
+    ]);
+    expect(looseCandidates("Телевизор Samsung UE65M70HAUXCE 165 см черный", idx)[0]).toBe("televizor-samsung-65-ue65m70hauxce-mini-led-300563");
+    expect(looseCandidates("Смартфон Samsung Galaxy S26 12 ГБ/512 ГБ сиреневый", idx)).toContain("smartfon-samsung-galaxy-s26-12512gb6350-sirenevyj-sm-s942blvdskz-297250");
+    expect(looseCandidates("Apple iPhone прозрачный", idx)).toEqual([]);
   });
   it("finds the closest address offline", () => {
     const idx = storeIndex([

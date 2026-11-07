@@ -141,3 +141,20 @@ export function bestCandidate(kaspiTitle: string, index: StoreIndex): string | n
   }
   return best?.slug ?? null;
 }
+
+/**
+ * Loose candidates for a product the store is known to sell (it is a seller of it on Kaspi): ranked by shared
+ * tokens, model tokens weigh double, and items passing every strict rule first. Only for pages whose own Kaspi link
+ * then decides (exact): a loose candidate is never accepted on its name.
+ */
+export function looseCandidates(kaspiTitle: string, index: StoreIndex, n = 3): string[] {
+  const tok = titleTokens(kaspiTitle);
+  const model = tok.filter((x) => /\d/.test(x));
+  if (!model.length) return [];
+  return index.items
+    .map((it) => ({ it, hit: tok.filter((x) => it.tokens.has(x)).length, m: model.filter((x) => it.tokens.has(x)).length }))
+    .filter((c) => c.m > 0 && c.hit >= 2)
+    .map((c) => ({ slug: c.it.slug, score: c.hit + c.m + (mismatch(kaspiTitle, [...c.it.tokens]) ? 0 : 10), size: c.it.tokens.size }))
+    .sort((a, b) => b.score - a.score || a.size - b.size)
+    .slice(0, n).map((c) => c.slug);
+}

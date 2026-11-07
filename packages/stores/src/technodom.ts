@@ -9,6 +9,8 @@ export const TECHNODOM = {
   base: "https://www.technodom.kz",
   productSitemap: "https://www.technodom.kz/products-server-sitemap.xml",
   productUrl: (slug: string) => `https://www.technodom.kz/p/${slug}`,
+  /** Technodom's own shop on Kaspi (merchant id), seen in its pages' Kaspi links. */
+  kaspiMerchantId: "18430177",
 } as const;
 
 export class TechnodomHttpError extends Error {

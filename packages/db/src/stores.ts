@@ -37,6 +37,20 @@ export async function exactTitleForSku(sql: postgres.Sql, marketplaceId: number,
   return r?.title ?? null;
 }
 
+/**
+ * Products the store itself sells on Kaspi (its Kaspi shop is among the current sellers) that have no match row yet:
+ * its own site almost surely has them, and its page's Kaspi link can confirm the pair exactly.
+ */
+export async function productsSoldOnKaspiBy(sql: postgres.Sql, marketplaceId: number, kaspiMerchantId: string) {
+  return sql<{ productId: number; externalId: string; title: string }[]>`
+    select p.id as "productId", p.external_id as "externalId", p.title
+    from products p
+    where p.status = 'active'
+      and exists (select 1 from offers_current o join sellers se on se.id = o.seller_id where o.product_id = p.id and se.external_id = ${kaspiMerchantId})
+      and not exists (select 1 from store_matches m where m.product_id = p.id and m.marketplace_id = ${marketplaceId})
+    order by (select count(*) from trackings t where t.product_id = p.id and t.status = 'active') desc, p.last_viewed_at desc nulls last`;
+}
+
 /** Our product id for a Kaspi external id (the store's Kaspi link may point at another of our products). */
 export async function productIdByExternal(sql: postgres.Sql, externalId: string): Promise<{ id: number; title: string } | null> {
   const [p] = await sql<{ id: number; title: string }[]>`select id, title from products where external_id = ${externalId} and status = 'active'`;
