@@ -29,6 +29,14 @@ export async function productsToMatch(sql: postgres.Sql, marketplaceId: number) 
     order by 4 desc, p.last_viewed_at desc nulls last, 5 desc`;
 }
 
+/** The Kaspi title of the product a store item is exactly matched to (by the store's own Kaspi link), or null. */
+export async function exactTitleForSku(sql: postgres.Sql, marketplaceId: number, sku: string): Promise<string | null> {
+  const [r] = await sql<{ title: string }[]>`
+    select p.title from store_matches m join products p on p.id = m.product_id
+    where m.marketplace_id = ${marketplaceId} and m.store_sku = ${sku} and m.method = 'exact' and m.status = 'confirmed' limit 1`;
+  return r?.title ?? null;
+}
+
 /** Our product id for a Kaspi external id (the store's Kaspi link may point at another of our products). */
 export async function productIdByExternal(sql: postgres.Sql, externalId: string): Promise<{ id: number; title: string } | null> {
   const [p] = await sql<{ id: number; title: string }[]>`select id, title from products where external_id = ${externalId} and status = 'active'`;

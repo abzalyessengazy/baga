@@ -7,11 +7,12 @@
  *      packages/core/src/matching.ts); its page decides: exact (Technodom's Kaspi link is our product), strict (every
  *      rule holds on Technodom's own title) or pending for the owner on /admin.
  * One request at a time, ≥11 s apart, honest User-Agent; the first 403/429 stops the run (its own circuit breaker).
+ * By hand: `pnpm --filter @baga/worker stores --now` (any time outside Kaspi's Visit-time).
  */
 import postgres from "postgres";
-import { KASPI_VISIT_WINDOW_UTC, bestCandidate, mismatch, storeIndex, storeTokens } from "@baga/core";
+import { KASPI_VISIT_WINDOW_UTC, bestCandidate, mismatch, storeIndex, storeTokens, kaspiColour } from "@baga/core";
 import {
-  connectionOptions, storeMarketplaceId, productsToMatch, productIdByExternal, saveMatch, matchesToPrice, saveStorePrice,
+  connectionOptions, storeMarketplaceId, productsToMatch, productIdByExternal, exactTitleForSku, saveMatch, matchesToPrice, saveStorePrice,
   setMatchStatus, startStoreRun, finishStoreRun,
 } from "@baga/db";
 import { createTechnodomClient, TECHNODOM, TechnodomHttpError, TechnodomParseError, StoreRequestRefused, skuOf, type TechnodomProduct } from "@baga/stores";
@@ -30,7 +31,10 @@ export const STORE_RUN = {
 } as const;
 
 const minute = (d = new Date()) => d.getUTCHours() * 60 + d.getUTCMinutes() + d.getUTCSeconds() / 60;
-const inWindow = () => minute() >= STORE_RUN.startMinute && minute() < STORE_RUN.endMinute - 1;
+// `--now`: a run started by hand outside the daily window, still never during Kaspi's Visit-time (+ a minute either side).
+const manual = process.argv.includes("--now");
+const inKaspiTime = () => minute() >= KASPI_VISIT_WINDOW_UTC.startMinute - 1 && minute() <= KASPI_VISIT_WINDOW_UTC.endMinute;
+const inWindow = () => (manual ? !inKaspiTime() : minute() >= STORE_RUN.startMinute && minute() < STORE_RUN.endMinute - 1);
 const norm = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
 
 const sql = postgres(env.databaseUrl(), { max: 2, ...connectionOptions(env.databaseUrl()) });
@@ -77,7 +81,7 @@ async function main() {
       // The address now shows another item, or a renamed one that no longer passes the rules: back to the owner.
       if (p.sku !== m.sku) { await setMatchStatus(sql, m.matchId, "pending", `item changed to ${p.sku}`); continue; }
       if (m.title && norm(p.title) !== norm(m.title)) {
-        const why = mismatch(m.ourTitle, storeTokens(m.slug, p.title));
+        const why = mismatch(m.ourTitle, storeTokens(m.slug, p.title), p.title);
         if (why) { await setMatchStatus(sql, m.matchId, "pending", `title changed: ${why}`); continue; }
       }
       await saveStorePrice(sql, m.matchId, p);
@@ -98,7 +102,13 @@ async function main() {
         const p = await page(slug);
         if (!p || p === "gone") continue;
         const exact = p.kaspiId === t.externalId;
-        const why = exact ? null : mismatch(t.title, storeTokens(slug, p.title));
+        let why = exact ? null : mismatch(t.title, storeTokens(slug, p.title), p.title);
+        // The store links this item to another Kaspi listing in another colour: not ours (7 Nov: a purple V12 vs the yellow one).
+        if (!why && !exact) {
+          const linked = await exactTitleForSku(sql, mid, skuOf(slug));
+          const a = kaspiColour(t.title), b = linked ? kaspiColour(linked) : null;
+          if (a !== null && b !== null && a !== b) why = "colour of the store's own Kaspi listing differs";
+        }
         const saved = await saveMatch(sql, { productId: t.productId, marketplaceId: mid, sku: skuOf(slug), slug, title: p.title,
           method: exact ? "exact" : "strict", status: why ? "pending" : "confirmed", reason: why });
         matched++;

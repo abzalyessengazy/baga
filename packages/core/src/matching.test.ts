@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bestCandidate, mismatch, storeIndex, storeTokens, titleMemory } from "./matching";
+import { bestCandidate, kaspiColour, mismatch, storeIndex, storeTokens, titleMemory } from "./matching";
 
 // Real pairs from the 7 Nov 2026 Technodom test requests (Kaspi title, Technodom address, Technodom title).
 const same = (kaspi: string, slug: string, title?: string) => expect(mismatch(kaspi, storeTokens(slug, title))).toBeNull();
@@ -15,8 +15,21 @@ describe("exact product matching (DECISIONS 2026-11-07)", () => {
     same("Холодильник BEKO B5RCNO373W белый", "holodilnik-beko-b5rcno373w-296478", "Холодильник Beko B5RCNO373W"); // no colour on the store side
     same("Игровая приставка Nintendo Switch 2 + Mario Kart World", "igrovaya-konsol-nintendo-switch-2-bundled-game-mario-kart-world-300181");
   });
-  it("rejects another colour (the Liberty 5 that started it all)", () => {
+  it("rejects another colour (the Liberty 5 that started it all), also when the store writes it in Russian", () => {
     differ("Наушники Soundcore Liberty 5 синий", "naushniki-besprovodnye-soundcore-liberty-5-a3957-white-298516");
+    expect(mismatch("Dyson Airstrait HT01 + кейс и коврик фен-выпрямитель оранжевый",
+      storeTokens("vypryamitel-dyson-airstrait-ht01-rozovaya-keramika-301000", "Выпрямитель Dyson Airstrait HT01 розовая керамика"),
+      "Выпрямитель Dyson Airstrait HT01 розовая керамика")).not.toBeNull();
+    expect(mismatch("Наушники Samsung Galaxy Buds3 белый", storeTokens("naushniki-samsung-galaxy-buds3-9", "Наушники Samsung Galaxy Buds3 серые"),
+      "Наушники Samsung Galaxy Buds3 серые")).toBe("colour differs");
+  });
+  it("leaves a named colourway to the owner", () => {
+    expect(mismatch("Dyson Airstrait HT01 с ковриком фен-выпрямитель черный", storeTokens("vypryamitel-dyson-airstrait-ht01-nikelmed-281623",
+      "Выпрямитель для волос Dyson Airstrait HT01 никель/медь"), "Выпрямитель для волос Dyson Airstrait HT01 никель/медь")).toBe("colourway unclear");
+  });
+  it("ignores a Latin letter hidden in a Russian word", () => {
+    expect(mismatch("Робот-пылесос DREAME L50 Ultra белый", storeTokens("robot-pylecos-dreame-l50-ultra-298513", "Робот-пылеcос Dreame L50 Ultra"),
+      "Робот-пылеcос Dreame L50 Ultra")).toBeNull();
   });
   it("rejects a bigger or newer variant", () => {
     differ("Смартфон Apple iPhone 17 Pro 256Gb темно-синий + подарок", "smartfon-gsm-apple-iphone-17-pro-max-12-256gb-6-9-48-deep-blue-293878");
@@ -32,6 +45,11 @@ describe("exact product matching (DECISIONS 2026-11-07)", () => {
   });
   it("rejects a title without a model number (a case is not a phone)", () => {
     differ("Apple iPhone прозрачный", "smartfon-apple-iphone-16-128gb-teal-284607");
+  });
+  it("tells two-colour titles apart", () => {
+    expect(kaspiColour("Пылесос Dyson V12 Detect Slim Absolute фиолетовый, серебристый"))
+      .not.toBe(kaspiColour("Пылесос Dyson V12 Detect Slim Absolute SV46 желтый, серебристый"));
+    expect(kaspiColour("Чайник Kitfort КТ-641")).toBeNull();
   });
   it("reads memory from Kaspi titles", () => {
     expect(titleMemory("Смартфон Samsung Galaxy A07S 4 ГБ/64 ГБ черный")).toEqual({ ram: 4, storage: 64 });

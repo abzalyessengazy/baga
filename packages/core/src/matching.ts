@@ -19,7 +19,7 @@ const COLORS: [RegExp, string[]][] = [
   [/бел/, ["white", "belyy", "belyi", "belaya", "belyj", "cloud"]],
   [/темно-сер|тёмно-сер/, ["grey", "gray", "graphite", "space"]],
   [/серебрист/, ["silver", "serebristyy"]],
-  [/сер(ый|ая|ое|ые)\b/, ["grey", "gray", "seryy", "seryi"]],
+  [/сер(ый|ая|ое|ые)(?![а-яё])/, ["grey", "gray", "seryy", "seryi"]],
   [/золот/, ["gold", "zolotistyy"]],
   [/розов/, ["pink", "rozovyy", "rose"]],
   [/зелен|зелён/, ["green", "zelenyy", "zelenaya"]],
@@ -38,6 +38,15 @@ const STORE_COLOR_WORDS = new Set(
 );
 const VARIANTS = new Set(["pro", "max", "plus", "ultra", "mini", "lite", "fe", "air", "neo", "edge", "slim", "absolute", "mix",
   "x", "s", "e", "c", "se", "prime", "nfc", "play", "go", "2", "3", "4", "5", "ii", "iii"]);
+
+const COLOURWAY = /никел|медь|медн|яшм|патин|топаз|керамик|бронз|фукси|прусск|nickel|copper|jasper|patina|topaz|ceramic|bronze/;
+
+/** Every colour a Kaspi title states ("желтый, серебристый" → two), as a key; null when it states none. */
+export function kaspiColour(title: string): string | null {
+  const low = title.toLowerCase();
+  const all = COLORS.flatMap(([re], i) => (re.test(low) ? [i] : []));
+  return all.length ? all.join(",") : null;
+}
 
 export interface Memory { ram: number | null; storage: number | null }
 
@@ -74,13 +83,15 @@ export function titleTokens(title: string): string[] {
 
 /** Tokens of a store item: its address (slug) and, when known, its own title (Latin words, "6/128GB" kept whole). */
 export function storeTokens(slug: string, title?: string | null): string[] {
-  const fromTitle = (title ?? "").toLowerCase().replace(/[а-яёәғқңөұүһі]+/g, " ").split(/[^a-z0-9/]+/)
+  // Words with any Cyrillic letter go whole: "Пылеcос" written with a Latin "c" must not leave a token "c".
+  const fromTitle = (title ?? "").toLowerCase().split(/\s+/).filter((w) => !/[а-яёәғқңөұүһі]/.test(w)).join(" ").split(/[^a-z0-9/]+/)
     .flatMap((x) => (/^\d{1,2}\/\d{2,4}gb$/.test(x) ? [x] : x.split("/"))).filter(Boolean);
   return [...slug.toLowerCase().split("-"), ...fromTitle];
 }
 
-/** Why a Kaspi title and a store item are not the same product, or null when every rule holds. */
-export function mismatch(kaspiTitle: string, store: string[]): string | null {
+/** Why a Kaspi title and a store item are not the same product, or null when every rule holds. `storeTitle`: the
+ * store's own title, for colours it writes only in Russian (7 Nov: «Airstrait HT01 розовая керамика» vs «оранжевый»). */
+export function mismatch(kaspiTitle: string, store: string[], storeTitle?: string | null): string | null {
   const tok = titleTokens(kaspiTitle);
   if (tok.length < 2) return "too few model tokens";
   if (!tok.some((x) => /\d/.test(x))) return "no model number";
@@ -106,6 +117,11 @@ export function mismatch(kaspiTitle: string, store: string[]): string | null {
   const colour = COLORS.find(([re]) => re.test(low));
   const storeHasColour = [...set].some((x) => STORE_COLOR_WORDS.has(x));
   if (colour && storeHasColour && !colour[1].some((v) => v.split("-").every((p) => set.has(p)))) return "colour differs";
+  const ru = (storeTitle ?? "").toLowerCase();
+  // A named colourway («никель/медь», «пурпурная яшма», «патина/топаз») cannot be compared with a plain colour: the owner decides.
+  if (colour && COLOURWAY.test(ru)) return "colourway unclear";
+  const storeRu = COLORS.find(([re]) => re.test(ru));
+  if (colour && storeRu && colour !== storeRu) return "colour differs";
   return null;
 }
 
