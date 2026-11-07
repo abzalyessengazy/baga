@@ -22,10 +22,11 @@ function minuteOfDayUtc(d: Date): number {
 
 /**
  * Days the collector stops early (UTC date → end minute), to leave the rest of Kaspi's Visit-time to a one-off
- * probe: two clients at once would break the 10 s Crawl-delay. 7 Nov 2026: the list-vs-sellers test
- * (probe:scale --set P) runs 08:01–08:44 UTC, so the collector ends at 08:00 UTC (13:00 Almaty).
+ * probe: two clients at once would break the 10 s Crawl-delay. 8 Nov 2026: the list-vs-sellers test
+ * (probe:pairs, a step after the collector in .github/workflows/collect.yml) runs 08:01–08:43 UTC, so the collector
+ * ends at 08:00 UTC (13:00 Almaty). (Planned for 7 Nov from a Mac that was asleep: it never ran.)
  */
-export const COLLECT_END_EXCEPTIONS_UTC: Readonly<Record<string, number>> = { "2026-11-07": 8 * 60 };
+export const COLLECT_END_EXCEPTIONS_UTC: Readonly<Record<string, number>> = { "2026-11-08": 8 * 60 };
 
 /** Minute of the UTC day when the collection window closes on `now`'s day. */
 export function collectEndMinute(now: Date): number {

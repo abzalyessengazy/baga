@@ -38,3 +38,15 @@ jobs:
           SITE_URL: ${{ vars.SITE_URL || secrets.SITE_URL || 'https://bagaapp.com' }} # 3 Nov 2026: it was saved as a secret; links fell back to localhost
           HEALTHCHECK_URL: ${{ secrets.HEALTHCHECK_URL }}
           COLLECT_RUNNER: github-actions
+      # One-off, 8 Nov 2026 only: Kaspi list price vs cheapest seller, live pairs (apps/worker/src/probe-pairs.ts).
+      # The collector stops at 08:00 UTC that day (COLLECT_END_EXCEPTIONS_UTC), so this runs alone, 08:01-08:43 UTC,
+      # with the same spacing, User-Agent and stop-on-403/429 rules. Exits without requests at any other time.
+      - name: List test (8 Nov only)
+        if: ${{ !cancelled() }}
+        run: '[ "$(date -u +%F)" = "2026-11-08" ] && pnpm --filter @baga/worker probe:pairs --wait || echo "not the test day"'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      - name: List test responses
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with: { name: list-test, path: /tmp/kaspi-P*, if-no-files-found: ignore, retention-days: 14 }

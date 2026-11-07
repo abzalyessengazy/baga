@@ -13,6 +13,7 @@
  *      Each pair: list price, Kaspi's chosen shop (bestMerchant) and big chains (majorMerchants) vs the cheapest seller.
  *
  *   pnpm --filter @baga/worker probe:pairs           (in the window; --dry prints the plan)
+ *   ... probe:pairs --wait                           (CI, after the collector: waits up to 15 min for the start)
  * Output: tmpdir/kaspi-P.jsonl (one line per request) and a summary.
  */
 import { appendFileSync, writeFileSync } from "node:fs";
@@ -47,6 +48,11 @@ if (process.argv.includes("--dry")) {
   console.log(SIZE_TRIES.map((x) => listUrl("Smartphones", 0, x)).join("\n"));
   console.log(CATEGORIES.map((c) => listUrl(c, 0)).join("\n"));
   process.exit(0);
+}
+if (process.argv.includes("--wait") && minuteNow() < startMinute && startMinute - minuteNow() <= 15) {
+  const ms = Math.ceil((startMinute - minuteNow()) * 60_000) + 5_000;
+  console.log(`waiting ${Math.round(ms / 1000)} s for UTC minute ${startMinute}`);
+  await new Promise((r) => setTimeout(r, ms));
 }
 if (minuteNow() < startMinute || minuteNow() >= LAST_START_MINUTE) {
   console.log(`Run between UTC minute ${startMinute} and ${LAST_START_MINUTE} (after the collector, inside Kaspi's Visit-time).`);
@@ -148,6 +154,13 @@ console.log(JSON.stringify({
     chosen: p.bestMerchant, chosenPrice: p.bestPrice, chosenRank: p.bestRank, major: p.major.includes(p.bestMerchant ?? "-"), sellers: p.sellers, lagS: p.lagS })),
 }, null, 1));
 writeFileSync(join(tmpdir(), "kaspi-P-pairs.json"), JSON.stringify(pairs, null, 1));
+// In GitHub Actions: the summary as one annotation (readable on the run page without signing in) and the step summary.
+if (process.env.GITHUB_ACTIONS) {
+  const line = `pairs ${pairs.length}, list = cheapest ${same.length} (${pct(same.length)}), within 0.1% ${near.length}, list higher ${higher.length} (${pct(higher.length)}), list lower ${lower.length}; chosen shop is cheapest ${pairs.filter((p) => p.bestIsCheapest).length}; higher with a big chain chosen ${higher.filter((p) => p.bestMerchant && p.major.includes(p.bestMerchant)).length}; requests ${count}; stopped ${stopped}; page size ${JSON.stringify(sizes)}`;
+  const worst = [...higher, ...lower].slice(0, 25).map((p) => `${p.id} list ${p.listPrice} cheapest ${p.cheapest} chosen#${p.bestRank ?? "-"}${p.major.includes(p.bestMerchant ?? "-") ? " major" : ""}`).join("; ");
+  console.log(`::notice title=List vs cheapest seller::${(line + (worst ? ` | ${worst}` : "")).replace(/%/g, "%25").replace(/\n/g, "%0A")}`);
+  if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, `### List vs cheapest seller\n\n${line}\n\n${worst}\n`);
+}
 
 // Free extra: list prices vs the collector's checks from the last hour (read-only).
 const sql = getSql();
