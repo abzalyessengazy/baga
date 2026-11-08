@@ -24,7 +24,7 @@ export interface AdminHealth {
   errors: AdminError[];
   notifications: { channel: string; type: string; status: string; n: number; clicked: number; last: Date | null }[];
   people: {
-    watchers: number; new24h: number; new7d: number; telegram: number; emailConfirmed: number; emailPending: number;
+    watchers: number; new24h: number; new7d: number; visits24h: number; visits7d: number; telegram: number; emailConfirmed: number; emailPending: number;
     both: number; none: number; noneWithTrackings: number;
   };
   trackings: { total: number; active: number; products: number; byPreset: number; pctWaiting: number; waiting: number };
@@ -77,7 +77,10 @@ export async function getAdminHealth(sql: postgres.Sql): Promise<AdminHealth> {
       count(*) filter (where telegram_chat_id is not null and email_confirmed_at is not null)::int as both,
       count(*) filter (where telegram_chat_id is null and email_confirmed_at is null)::int as none,
       count(*) filter (where telegram_chat_id is null and email_confirmed_at is null
-        and exists (select 1 from trackings t where t.watcher_id = w.id and t.status = 'active'))::int as "noneWithTrackings"
+        and exists (select 1 from trackings t where t.watcher_id = w.id and t.status = 'active'))::int as "noneWithTrackings",
+      -- Site visits (one per browser tab, events table) next to the accounts: the block counts people who track.
+      (select count(distinct sid) from events where name = 'visit' and at > now() - interval '1 day')::int as "visits24h",
+      (select count(distinct sid) from events where name = 'visit' and at > now() - interval '7 days')::int as "visits7d"
     from watchers w`;
   const [trackings] = await sql<AdminHealth["trackings"][]>`
     select count(*)::int as total, count(*) filter (where status = 'active')::int as active,

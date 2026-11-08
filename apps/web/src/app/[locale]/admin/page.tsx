@@ -80,7 +80,8 @@ export default async function AdminPage({ params, searchParams }: Props) {
         </section>
         <section className="receipt admin-card">
           <h2>{t("people")}</h2>
-          {kv([[t("watchers"), h.people.watchers], [t("new24h"), h.people.new24h], [t("new7d"), h.people.new7d],
+          {kv([[t("visits24h"), h.people.visits24h], [t("visits7d"), h.people.visits7d],
+            [t("watchers"), h.people.watchers], [t("new24h"), h.people.new24h], [t("new7d"), h.people.new7d],
             [t("telegram"), h.people.telegram], [t("emailConfirmed"), h.people.emailConfirmed], [t("emailPending"), h.people.emailPending],
             [t("both"), h.people.both], [t("none"), h.people.none]])}
         </section>

@@ -16,6 +16,7 @@ export const STORE_PRICES = {
  * «похожий товар» with its own name, never as the same product and never with «дешевле» (DECISIONS 2026-11-07).
  */
 export const SIMILAR_REASONS = ["colour differs", "colourway unclear", "colour of the store's own Kaspi listing differs"] as const;
+export const isSimilarReason = (why: string | null | undefined) => !!why && (SIMILAR_REASONS as readonly string[]).includes(why);
 
 export async function storeMarketplaceId(sql: postgres.Sql, code: string): Promise<number> {
   const [m] = await sql<{ id: number }[]>`select id from marketplaces where code = ${code}`;
@@ -129,6 +130,7 @@ export async function decideMatch(sql: postgres.Sql, matchId: number, confirm: b
   });
 }
 
+/** Pairs the owner decides on /admin. Colour-only pairs are not asked: they are shown as «похожий» on their own. */
 export interface PendingMatch { id: number; ourTitle: string; externalId: string; storeTitle: string | null; url: string; reason: string | null; kaspiPrice: number | null }
 export async function pendingMatches(sql: postgres.Sql, limit = 50): Promise<PendingMatch[]> {
   return sql<PendingMatch[]>`
@@ -136,7 +138,8 @@ export async function pendingMatches(sql: postgres.Sql, limit = 50): Promise<Pen
            mk.base_url || '/p/' || m.store_slug as url, m.reason, s.current_min_price as "kaspiPrice"
     from store_matches m join products p on p.id = m.product_id join marketplaces mk on mk.id = m.marketplace_id
     left join product_state s on s.product_id = p.id
-    where m.status = 'pending' order by m.created_at limit ${limit}`;
+    where m.status = 'pending' and not (coalesce(m.reason, '') = any(${SIMILAR_REASONS as unknown as string[]}))
+    order by m.created_at limit ${limit}`;
 }
 
 /**

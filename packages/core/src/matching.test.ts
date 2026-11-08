@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bestCandidate, kaspiColour, looseCandidates, mismatch, storeIndex, storeTokens, titleMemory } from "./matching";
+import { bestCandidate, kaspiColour, looseCandidates, mismatch, storeIndex, storeTokens, titleMemory, titleTokens } from "./matching";
 
 // Real pairs from the 7 Nov 2026 Technodom test requests (Kaspi title, Technodom address, Technodom title).
 const same = (kaspi: string, slug: string, title?: string) => expect(mismatch(kaspi, storeTokens(slug, title))).toBeNull();
@@ -37,6 +37,17 @@ describe("exact product matching (DECISIONS 2026-11-07)", () => {
     differ("Пылесос DREAME H13 Pro черный", "vertikalniy-moyuschiy-pylesos-dreame-h13-pro-plus-mix-292096");
     differ("Наушники Logitech G Pro X Lightspeed черный", "igrovaya-garnitura-logitech-g-pro-x-2-lightspeed-wireless-magenta-981-001275-275913");
     differ("Наушники Xiaomi Buds 6 белый", "naushniki-xiaomi-redmi-buds-6-play-white-284054");
+  });
+  it("reads a stuck \"+\" as the Plus variant (8 Nov owner reviews)", () => {
+    expect(mismatch("Смартфон REDMI Note 14 Pro+ 5G 12 ГБ/512 ГБ голубой + подарок",
+      storeTokens("smartfon-redmi-note-14-pro-5g-512gb-coral-green-1", "Смартфон Redmi Note 14 Pro 5G 512Gb Coral Green"),
+      "Смартфон Redmi Note 14 Pro 5G 512Gb Coral Green")).toBe("model differs");
+    expect(mismatch("Смартфон Samsung Galaxy S25 12 ГБ/256 ГБ зеленый + подарок",
+      storeTokens("smartfon-samsung-galaxy-s25-12-256-6-7-50-navy-1", "Смартфон Samsung Galaxy S25+ 12/256/6.7/50, RDU Navy (SM-S936BDB2SKZ)"),
+      "Смартфон Samsung Galaxy S25+ 12/256/6.7/50, RDU Navy (SM-S936BDB2SKZ)")).toBe("variant plus");
+    // "+ подарок" and "Straight+Wavy" are not a variant.
+    expect(titleTokens("Смартфон Apple iPhone 17 8 ГБ/256 ГБ черный + подарок")).not.toContain("plus");
+    expect(storeTokens("x-1", "Стайлер Dyson Airwrap Straight+Wavy HS09")).not.toContain("plus");
   });
   it("rejects other memory, trusting the store's title over its address", () => {
     differ("Смартфон Samsung Galaxy A26 8 ГБ/128 ГБ черный", "smartfon-gsm-samsung-galaxy-a26-8-128-6-7-50-black-sm-a266bzkdskz-289288",

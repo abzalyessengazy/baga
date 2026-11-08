@@ -5,14 +5,14 @@
  *   1. Prices: confirmed matches whose last price is 20 h+ old, people's products first (one page each).
  *   2. Matching: Kaspi products never checked against Technodom get a candidate from the product sitemap (offline,
  *      packages/core/src/matching.ts); its page decides: exact (Technodom's Kaspi link is our product), strict (every
- *      rule holds on Technodom's own title) or pending for the owner on /admin.
+ *      rule holds on Technodom's own title), «похожий» when only the colour differs, else rejected (another product).
  * One request at a time, ≥11 s apart, honest User-Agent; the first 403/429 stops the run (its own circuit breaker).
  * By hand: `pnpm --filter @baga/worker stores --now` (any time outside Kaspi's Visit-time).
  */
 import postgres from "postgres";
 import { KASPI_VISIT_WINDOW_UTC, bestCandidate, looseCandidates, mismatch, storeIndex, storeTokens, kaspiColour } from "@baga/core";
 import {
-  connectionOptions, SIMILAR_REASONS, storeMarketplaceId, productsToMatch, productsSoldOnKaspiBy, productIdByExternal, exactTitleForSku, saveMatch, matchesToPrice, saveStorePrice,
+  connectionOptions, isSimilarReason, storeMarketplaceId, productsToMatch, productsSoldOnKaspiBy, productIdByExternal, exactTitleForSku, saveMatch, matchesToPrice, saveStorePrice,
   setMatchStatus, startStoreRun, finishStoreRun,
 } from "@baga/db";
 import { createTechnodomClient, TECHNODOM, TechnodomHttpError, TechnodomParseError, StoreRequestRefused, skuOf, type TechnodomProduct } from "@baga/stores";
@@ -78,11 +78,13 @@ async function main() {
       const p = await page(m.slug);
       if (p === "gone") { await setMatchStatus(sql, m.matchId, "rejected", "page gone"); continue; }
       if (!p) continue;
-      // The address now shows another item, or a renamed one that no longer passes the rules: back to the owner.
-      if (p.sku !== m.sku) { await setMatchStatus(sql, m.matchId, "pending", `item changed to ${p.sku}`); continue; }
+      // The address now shows another item: out. A renamed one is judged again by the same rules (8 Nov owner rule):
+      // only the colour differs → «похожий»; anything else (memory, variant, model) → another product.
+      if (p.sku !== m.sku) { await setMatchStatus(sql, m.matchId, "rejected", `item changed to ${p.sku}`); continue; }
       if (m.title && norm(p.title) !== norm(m.title)) {
         const why = mismatch(m.ourTitle, storeTokens(m.slug, p.title), p.title);
-        if (why) { await setMatchStatus(sql, m.matchId, "pending", `title changed: ${why}`); continue; }
+        if (why && !isSimilarReason(why)) { await setMatchStatus(sql, m.matchId, "rejected", why); continue; }
+        if (why) await setMatchStatus(sql, m.matchId, "pending", why);
       }
       await saveStorePrice(sql, m.matchId, p);
       priced++;
@@ -137,10 +139,11 @@ async function main() {
           if (a !== null && b !== null && a !== b) why = "colour of the store's own Kaspi listing differs";
         }
         const saved = await saveMatch(sql, { productId: t.productId, marketplaceId: mid, sku: skuOf(slug), slug, title: p.title,
-          method: exact ? "exact" : "strict", status: why ? "pending" : "confirmed", reason: why });
+          method: exact ? "exact" : "strict", status: !why ? "confirmed" : isSimilarReason(why) ? "pending" : "rejected", reason: why });
         matched++;
-        // Confirmed, or pending only for its colour (shown as «похожий товар»): priced right away.
-        if (saved.status === "confirmed" || (why && (SIMILAR_REASONS as readonly string[]).includes(why))) await saveStorePrice(sql, saved.id, p);
+        // Confirmed, or only the colour differs (shown as «похожий · другой цвет», never asked of the owner): priced
+        // right away. Any other difference (memory, variant, model) is another product: rejected, never shown.
+        if (saved.status === "confirmed" || (why && isSimilarReason(why))) await saveStorePrice(sql, saved.id, p);
         if (!exact) await linkOther(p, slug, t.externalId);
       }
     }

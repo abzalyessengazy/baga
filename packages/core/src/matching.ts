@@ -77,14 +77,20 @@ export function tokensMemory(tokens: string[]): Memory {
 /** Lower-case Latin/number tokens of a Kaspi title, without memory sizes and the screen size in cm ("191 см"). */
 export function titleTokens(title: string): string[] {
   const cm = /\b(\d{2,3})\s*см\b/.exec(title)?.[1];
-  return title.toLowerCase().replace(/\d+\s*(гб|gb|тб|tb)/g, " ").replace(/[а-яёәғқңөұүһі]+/g, " ")
+  return plusWord(title.toLowerCase()).replace(/\d+\s*(гб|gb|тб|tb)/g, " ").replace(/[а-яёәғқңөұүһі]+/g, " ")
     .split(/[^a-z0-9]+/).filter((x) => x && x !== cm && (x.length > 1 || /\d/.test(x) || VARIANTS.has(x)));
 }
+
+/**
+ * A "+" stuck to a model ("Pro+", "S25+") is the Plus variant (8 Nov: «Note 14 Pro+» had passed as «Note 14 Pro», «S25»
+ * as «S25+»). A loose "+ подарок" and "Straight+Wavy" (a word follows) are not.
+ */
+const plusWord = (s: string) => s.replace(/([a-z0-9])\+(?![a-z0-9])/g, "$1 plus");
 
 /** Tokens of a store item: its address (slug) and, when known, its own title (Latin words, "6/128GB" kept whole). */
 export function storeTokens(slug: string, title?: string | null): string[] {
   // Words with any Cyrillic letter go whole: "Пылеcос" written with a Latin "c" must not leave a token "c".
-  const fromTitle = (title ?? "").toLowerCase().split(/\s+/).filter((w) => !/[а-яёәғқңөұүһі]/.test(w)).join(" ").split(/[^a-z0-9/]+/)
+  const fromTitle = plusWord((title ?? "").toLowerCase()).split(/\s+/).filter((w) => !/[а-яёәғқңөұүһі]/.test(w)).join(" ").split(/[^a-z0-9/]+/)
     .flatMap((x) => (/^\d{1,2}\/\d{2,4}gb$/.test(x) ? [x] : x.split("/"))).filter(Boolean);
   return [...slug.toLowerCase().split("-"), ...fromTitle];
 }
