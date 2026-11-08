@@ -5,6 +5,16 @@ import { dayMoves, weekMovers, type Mover } from "./movers";
 export interface StatsDay { day: string; checks: number; drops: number }
 /** A price move by rule D or W (docs/STATS.md): from the earlier daily low to the current one. */
 export interface StatsMove { externalId: string; title: string; titleKk: string | null; imageUrl: string | null; from: number; to: number; pct: number; at: Date }
+/**
+ * A product a person brought to BAĞA (8 Nov owner rule: «Новые в BAĞA» shows these first, even 1–2 a day, before the
+ * collector's catalog additions): not a catalog seed, and a visitor opened its page before we first collected it,
+ * or tracked it within a day. (Rare-category seeds below their price floor are not seeds either, but nobody asked
+ * for them.) Uses the alias `p` for products.
+ */
+export const addedByPerson = (sql: postgres.Sql) => sql`(not p.is_seed and (
+  exists (select 1 from events e where e.external_id = p.external_id and e.at <= p.first_seen_at)
+  or exists (select 1 from trackings t where t.product_id = p.id and t.created_at <= p.first_seen_at + interval '1 day')))`;
+
 /** A product in a plain list (most tracked, newest). */
 export interface StatsProduct { externalId: string; title: string; titleKk: string | null; imageUrl: string | null; price: number | null; at: Date }
 export interface StatsMoves { drops: StatsMove[]; rises: StatsMove[] }
@@ -83,7 +93,7 @@ export async function getPlatformStats(sql: postgres.Sql, dayCount = 14, listCou
     select p.external_id, p.title, p.title_kk, p.image_url, s.current_min_price as price, p.first_seen_at as at
     from products p join product_state s on s.product_id = p.id
     where p.status = 'active' and s.current_min_price is not null
-    order by p.first_seen_at desc limit ${listCount}`;
+    order by ${addedByPerson(sql)} desc, p.first_seen_at desc limit ${listCount}`;
   return {
     products: totals!.products,
     sellers: totals!.sellers,

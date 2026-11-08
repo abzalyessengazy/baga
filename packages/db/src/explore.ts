@@ -1,6 +1,7 @@
 import type postgres from "postgres";
 import { MOVE_MIN_PCT } from "@baga/core";
 import { likePattern } from "./like";
+import { addedByPerson } from "./stats";
 
 /**
  * The catalog browser (/explore): every product we watch, as one of four lists, with search, a category filter,
@@ -66,7 +67,8 @@ export async function exploreCatalog(sql: postgres.Sql, x: ExploreQuery): Promis
              p.category_path[array_length(p.category_path, 1)] as category,
              s.current_min_price as price, coalesce(s.offer_count, 0) as offer_count,
              ${list === "drops" ? sql`pr.high` : list === "rises" ? sql`pr.low` : sql`null::int`} as was,
-             case when o.n >= 2 then o.lo end as lo, case when o.n >= 2 then o.hi end as hi, coalesce(w.n, 0) as watchers
+             case when o.n >= 2 then o.lo end as lo, case when o.n >= 2 then o.hi end as hi, coalesce(w.n, 0) as watchers,
+             ${sort === "new" ? addedByPerson(sql) : sql`false`} as by_person
       from products p join product_state s on s.product_id = p.id
       left join w on w.product_id = p.id
       left join prior pr on pr.product_id = p.id
@@ -87,7 +89,7 @@ export async function exploreCatalog(sql: postgres.Sql, x: ExploreQuery): Promis
     cheap: sql`price asc`,
     dear: sql`price desc`,
     popular: sql`reviews desc, offer_count desc`,
-    new: sql`first_seen_at desc`,
+    new: sql`by_person desc, first_seen_at desc`,
     tracked: sql`watchers desc, reviews desc`,
   }[sort];
   const cat = x.category ? sql`where category = ${x.category}` : sql``;
