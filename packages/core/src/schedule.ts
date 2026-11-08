@@ -35,13 +35,30 @@ export const CATALOG = {
    * The share of a run's requests kept for new products from the seed queue (DECISIONS.md, 2026-11-06 "A fixed share
    * for new products"): on 6 Nov re-checks of the 972 daily products took the whole window and the catalog grew by
    * 4. A quarter of ~1,330 requests is ~165 new products a day (2 requests each).
+   * 0 since 8 Nov 2026 (the owner's rule "no daily gaps first"): with a quarter for new products, ~1 in 5 catalog
+   * products missed a day. New products now come only once every due product is checked (the collector's fallback).
    */
-  newShare: 0.25,
+  newShare: 0,
+  /**
+   * A product nobody tracks or opened lately whose price has not moved is checked every third day instead of daily
+   * (8 Nov 2026, the owner's go): STABLE.minDays observed days in the last STABLE.days, all within STABLE.pct of
+   * each other (the verdict's «Цена стабильна» band). Any move puts it back on daily checks.
+   */
 } as const;
+
+export const STABLE = { days: 7, minDays: 3, pct: 2 } as const;
+
+/** Whether daily lows (the last STABLE.days days, observed days only) say the price is stable. */
+export function isStablePrice(lows: number[]): boolean {
+  if (lows.length < STABLE.minDays) return false;
+  const lo = Math.min(...lows), hi = Math.max(...lows);
+  return lo > 0 && hi <= lo * (1 + STABLE.pct / 100);
+}
 
 /**
  * Whether the collector adds a new product from the seed queue now: while new products have used less than
- * CATALOG.newShare of the run's requests so far. Tracked products and visitor requests are served before either.
+ * CATALOG.newShare of the run's requests so far (0: never between re-checks, only once nothing is due).
+ * Tracked products and visitor requests are served before either.
  */
 export function newProductTurn(newRequests: number, allRequests: number): boolean {
   return newRequests < CATALOG.newShare * allRequests;
@@ -66,11 +83,13 @@ export function priorityFor(p: {
   lastViewedDaysAgo: number | null;
   /** Seed products with more Kaspi reviews than this one (0 while its reviews are unknown); omitted = top. */
   seedRank?: number;
+  /** isStablePrice of its recent daily lows: a catalog product nobody watches is then checked every third day. */
+  stable?: boolean;
 }): Priority {
   if (p.activeTrackings > 0 && p.minDistanceToTargetPct !== null && p.minDistanceToTargetPct <= 10) return "hot";
   if (p.activeTrackings > 0) return "tracked";
   if (p.lastViewedDaysAgo !== null && p.lastViewedDaysAgo <= 14) return "seed";
-  if (p.isSeed) return (p.seedRank ?? 0) < CATALOG.dailyTop ? "seed" : "catalog";
+  if (p.isSeed) return (p.seedRank ?? 0) < CATALOG.dailyTop && !p.stable ? "seed" : "catalog";
   return "cold";
 }
 

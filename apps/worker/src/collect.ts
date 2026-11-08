@@ -7,7 +7,7 @@
 import { createKaspiClient, buildSnapshot, KaspiHttpError, KaspiParseError, KaspiRequestRefused, canonicalProductUrl, parseKaspiUrl, queuedLinkUrl, variantLinkCode } from "@baga/kaspi";
 import { saveSnapshot, claimNotifications, startSend, markSent, markFailed, tidyDeliveries, connectionOptions, requestProduct, attachShortLinkTrackings, weekMovers } from "@baga/db";
 import {
-  evaluateAlert, priorityFor, newProductTurn, INTERVAL_MINUTES, PRIORITY_ORDER, USER_INTEREST, CATALOG, SEED_MIN_PRICE, backoffMinutes, isSuspiciousJump, type TrackingAlertState,
+  evaluateAlert, priorityFor, newProductTurn, isStablePrice, STABLE, INTERVAL_MINUTES, PRIORITY_ORDER, USER_INTEREST, CATALOG, SEED_MIN_PRICE, backoffMinutes, isSuspiciousJump, type TrackingAlertState,
   KASPI_CRAWL_DELAY_MS, isInVisitWindow, needsPageRefresh, msUntilVisitWindow, targetForDrop, almatyDay, runningSale, type Priority,
 } from "@baga/core";
 import postgres from "postgres";
@@ -331,9 +331,16 @@ async function reschedule(productId: number, minPrice: number | null) {
                and ((coalesce(os.current_min_price, 0) >= ${premium}) > x.top
                  or ((coalesce(os.current_min_price, 0) >= ${premium}) = x.top and o.kaspi_reviews > x.kaspi_reviews))) end as seed_rank
     from x`;
+  // Daily lows of the last STABLE.days days (this check included): a catalog product whose price has not moved
+  // is checked every third day (8 Nov 2026), freeing ~300 requests a day for daily checks of everything else.
+  const lows = await sql<{ p: number }[]>`
+    select min(min_price)::int as p from price_observations
+    where product_id = ${productId} and min_price is not null and observed_at > now() - make_interval(days => ${STABLE.days})
+    group by (observed_at at time zone 'Asia/Almaty')::date`;
   const priority = priorityFor({
     activeTrackings: t?.n ?? 0, minDistanceToTargetPct: minPrice === null ? null : (t?.dist ?? null),
     isSeed: p?.is_seed ?? false, lastViewedDaysAgo: p?.viewed_days ?? null, seedRank: p?.seed_rank ?? 0,
+    stable: isStablePrice(lows.map((r) => r.p)),
   });
   const minutes = INTERVAL_MINUTES[priority];
   await sql`update collection_schedule set priority = ${priority}, interval_minutes = ${minutes}, fail_count = 0,

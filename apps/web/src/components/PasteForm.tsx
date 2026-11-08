@@ -72,11 +72,34 @@ export const PasteForm = forwardRef<HTMLInputElement>(function PasteForm(_, ref)
   const [canPaste, setCanPaste] = useState(false);
   useEffect(() => setCanPaste(typeof navigator !== "undefined" && !!navigator.clipboard?.readText), []);
 
-  /** Reads the clipboard on tap; a Kaspi link is checked right away, anything else just lands in the field. */
+  const [clipFailed, setClipFailed] = useState(false);
+  /**
+   * Reads the clipboard on tap; a Kaspi link is checked right away, anything else just lands in the field.
+   * Phones (8 Nov): Kaspi's app «Поделиться → Скопировать» puts the link on the clipboard as a URL, which iOS
+   * readText() returns as "" — so read() first and take text/plain or text/uri-list, in ONE call (each call shows
+   * the system «Вставить» bubble; that confirmation is the phone's own and cannot be skipped). If nothing comes
+   * back, the field gets focus and the hint says how to paste by hand.
+   */
+  async function readClipboard(): Promise<string> {
+    const c = navigator.clipboard;
+    if (typeof c.read === "function") {
+      try {
+        for (const item of await c.read()) {
+          for (const type of ["text/plain", "text/uri-list"]) {
+            if (!item.types.includes(type)) continue;
+            const text = (await (await item.getType(type)).text()).split(/\r?\n/).find((l) => l.trim() && !l.startsWith("#"))?.trim();
+            if (text) return text;
+          }
+        }
+        return "";
+      } catch { /* denied, or read() refused this content: try readText */ }
+    }
+    try { return (await c.readText()).trim(); } catch { return ""; }
+  }
   async function pasteFromClipboard() {
-    let text = "";
-    try { text = (await navigator.clipboard.readText()).trim(); } catch { /* denied or empty: focus the field instead */ }
-    if (!text) { inputRef.current?.focus(); return; }
+    const text = await readClipboard();
+    if (!text) { setClipFailed(true); inputRef.current?.focus(); return; }
+    setClipFailed(false);
     setValue(text); write(text); setError(null); setArmed(true);
     if (looksLikeLink(text)) void check(text);
     else inputRef.current?.focus();
@@ -163,7 +186,7 @@ export const PasteForm = forwardRef<HTMLInputElement>(function PasteForm(_, ref)
         <button className="btn" type="submit" disabled={busy}>{busy ? t("checking") : t("pasteButton")}</button>
       </div>
       <p id={`${id}-msg`} className={error ? "paste-error" : "paste-hint"} role={error ? "alert" : undefined}>
-        {error ? te(error) : t("pasteHint")}
+        {error ? te(error) : clipFailed && !value ? t("pasteManual") : t("pasteHint")}
       </p>
       {showSearch && (
         <div id={`${id}-results`} className="search-panel" aria-live="polite">

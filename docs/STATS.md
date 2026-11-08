@@ -31,11 +31,12 @@ days since the first observation); the shift's changes are one line under it.
 
 ## Rule D: the shift against the previous day (`dayMoves`, `packages/db/src/movers.ts`)
 
-For each active product with a daily low on the shift: compare it with the product's previous daily low (the most
-recent earlier day it was seen in stock, however long ago).
+For each active product with a daily low on the shift: compare it with the product's daily low of the day before.
+A product not seen in stock the day before is not compared (8 Nov 2026: a TV checked on 6 and 8 Nov showed a two-day
+change as today's drop; such a change cannot be dated, so it appears only in the week lists, rule W).
 
 - **Checked**: active products with a check on the shift day (in stock or not).
-- **Compared**: of those, products with a daily low on the shift and on an earlier day.
+- **Compared**: of those, products with a daily low on the shift and on the day before.
 - **Cheaper / dearer**: compared products whose change is a Change down / up. **Same** = compared − cheaper − dearer.
 
 Used by: "Kaspi сегодня" (checked, ↓, ↑, compared), the Z-report totals (checked in the shift, price changed,

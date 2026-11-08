@@ -12,6 +12,7 @@ import { DELIVERY } from "@baga/core";
 import { claimNotifications, markFailed, markSent, startSend, tidyDeliveries } from "./delivery";
 import { requestWatcherEmail, EMAIL_REQUEST_LIMITS } from "./watchers";
 import { saveSnapshot } from "./queries";
+import { dayMoves } from "./movers";
 import { getShop, productSellers, saveShopFeedback } from "./shops";
 import { decideMatch, matchesToPrice, saveMatch, saveStorePrice, storeMarketplaceId, storeOffers } from "./stores";
 import type { ProductSnapshot } from "@baga/kaspi";
@@ -254,6 +255,24 @@ describe.skipIf(!url)("database (disposable Postgres)", () => {
       expect(rows).toEqual([{ seller_id: null, outcome: "ok" }]);
       await saveShopFeedback(sql, { code: "c".repeat(20) }, "m1", "not_delivered");
       expect((await getShop(sql, "m1"))!.feedback).toMatchObject({ n: 1, not_delivered: 1, ok: 0 });
+    });
+  });
+
+  describe("day moves (docs/STATS.md rule D)", () => {
+    it("compares with the day before only: a change across a missed day is not today's move (8 Nov 2026)", async () => {
+      const day = (back: number) => new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate() - back, 5));
+      const add = async (externalId: string, obs: [number, number][]) => {
+        const [p] = await sql<{ id: number }[]>`insert into products (marketplace_id, external_id, title)
+          values ((select id from marketplaces where code = 'kaspi'), ${externalId}, ${externalId}) returning id`;
+        for (const [back, price] of obs) await sql`insert into price_observations (product_id, observed_at, min_price, offer_count, in_stock)
+          values (${p!.id}, ${day(back)}, ${price}, 1, true)`;
+      };
+      await add("200000001", [[3, 400_000], [1, 320_000]]); // checked 3 days ago and on the shift, missed in between
+      await add("200000002", [[2, 400_000], [1, 320_000]]); // checked the day before the shift
+      const m = await dayMoves(sql, new Date(day(1).getTime() + 6 * 3_600_000)); // after that shift ended
+      expect(m.down.map((x) => x.externalId)).toEqual(["200000002"]);
+      expect(m.compared).toBe(1);
+      expect(m.checked).toBe(2);
     });
   });
 

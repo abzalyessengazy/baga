@@ -49,15 +49,15 @@ export interface DayMoves {
   day: string | null;
   /** Products with a successful check that day (in stock or not). */
   checked: number;
-  /** Of those, products in stock that day with a daily low on an earlier day too. */
+  /** Of those, products in stock that day with a daily low on the day before too. */
   compared: number;
   /** Cheaper / dearer than their previous daily low by MOVE_MIN_PCT or more; biggest percent first. */
   down: Mover[]; up: Mover[];
 }
 
 /**
- * Rule D (docs/STATS.md): the latest shift's daily low of each product against its previous daily low (the most
- * recent earlier day it was seen in stock). Used by "Kaspi сегодня", the Z-report totals and its "day" lists.
+ * Rule D (docs/STATS.md): the latest shift's daily low of each product against its daily low of the day before
+ * (a product not seen in stock the day before is not compared). Used by "Kaspi сегодня", the Z-report totals and its "day" lists.
  */
 export async function dayMoves(sql: postgres.Sql, now = new Date()): Promise<DayMoves> {
   // The latest complete shift (docs/STATS.md): a run still in progress is not a day yet. Every checked product has an
@@ -83,7 +83,9 @@ export async function dayMoves(sql: postgres.Sql, now = new Date()): Promise<Day
     select p.external_id as "externalId", p.title, p.title_kk as "titleKk", p.image_url as "imageUrl",
            a.p as now, b.p as was, round((a.p - b.p) * 100.0 / b.p)::int as pct,
            coalesce(s.offer_count, 0) as "offerCount", s.last_checked_at as "checkedAt"
-    from r a join r b on b.product_id = a.product_id and b.rn = 2
+    -- The previous day only (8 Nov owner rule): a product missed yesterday has no "today" move; a change across a gap
+    -- (6 Nov → 8 Nov) cannot be dated, so it shows only in the week lists.
+    from r a join r b on b.product_id = a.product_id and b.rn = 2 and b.day = a.day - 1
     join products p on p.id = a.product_id left join product_state s on s.product_id = a.product_id
     where a.rn = 1 and a.day = ${head.day}::date and p.status = 'active'`;
   const by = (dir: -1 | 1) => rows.filter((m) => moveDirection(m.was, m.now) === dir)

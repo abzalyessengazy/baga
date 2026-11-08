@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { priorityFor, backoffMinutes, isSuspiciousJump, needsPageRefresh, queueLane, newProductTurn, INTERVAL_MINUTES, CATALOG } from "./schedule";
+import { priorityFor, backoffMinutes, isSuspiciousJump, needsPageRefresh, queueLane, newProductTurn, isStablePrice, INTERVAL_MINUTES, CATALOG } from "./schedule";
 import { VISIT_WINDOW_MINUTES } from "./window";
 import { formatTenge, toTenge } from "./money";
 
@@ -95,16 +95,23 @@ describe("queueLane", () => {
 });
 
 describe("newProductTurn", () => {
-  it("keeps a quarter of the run's requests for new products, interleaved with re-checks", () => {
-    expect(newProductTurn(0, 0)).toBe(false); // nothing sent yet: re-checks start
-    expect(newProductTurn(0, 4)).toBe(true);
-    expect(newProductTurn(2, 8)).toBe(false); // exactly a quarter
-    expect(newProductTurn(2, 12)).toBe(true);
-    // Over a whole run of ~1,330 requests: about a quarter goes to new products.
-    let all = 0, fresh = 0;
-    while (all < 1_330) { if (newProductTurn(fresh, all)) { fresh += 2; all += 2; } else all += 1; }
-    expect(fresh / all).toBeGreaterThan(0.24);
-    expect(fresh / all).toBeLessThan(0.26);
-    expect(CATALOG.newShare).toBe(0.25);
+  it("never adds new products between re-checks since 8 Nov (no daily gaps first): only once nothing is due", () => {
+    expect(newProductTurn(0, 0)).toBe(false);
+    expect(newProductTurn(0, 4)).toBe(false);
+    expect(newProductTurn(0, 1300)).toBe(false);
+  });
+});
+
+describe("stable prices are checked every third day (8 Nov 2026)", () => {
+  it("needs 3 observed days within 2%", () => {
+    expect(isStablePrice([100_000, 101_000, 100_500])).toBe(true);
+    expect(isStablePrice([100_000, 100_000])).toBe(false); // too few days
+    expect(isStablePrice([100_000, 103_000, 100_000])).toBe(false); // a 3% move
+  });
+  it("only for catalog products nobody tracks or opened lately", () => {
+    expect(priorityFor({ activeTrackings: 0, minDistanceToTargetPct: null, isSeed: true, lastViewedDaysAgo: null, seedRank: 5, stable: true })).toBe("catalog");
+    expect(priorityFor({ activeTrackings: 0, minDistanceToTargetPct: null, isSeed: true, lastViewedDaysAgo: null, seedRank: 5, stable: false })).toBe("seed");
+    expect(priorityFor({ activeTrackings: 0, minDistanceToTargetPct: null, isSeed: true, lastViewedDaysAgo: 2, seedRank: 5, stable: true })).toBe("seed");
+    expect(priorityFor({ activeTrackings: 1, minDistanceToTargetPct: null, isSeed: true, lastViewedDaysAgo: null, seedRank: 5, stable: true })).toBe("tracked");
   });
 });
