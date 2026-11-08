@@ -74,27 +74,12 @@ export const PasteForm = forwardRef<HTMLInputElement>(function PasteForm(_, ref)
 
   const [clipFailed, setClipFailed] = useState(false);
   /**
-   * Reads the clipboard on tap; a Kaspi link is checked right away, anything else just lands in the field.
-   * Phones (8 Nov): Kaspi's app «Поделиться → Скопировать» puts the link on the clipboard as a URL, which iOS
-   * readText() returns as "" — so read() first and take text/plain or text/uri-list, in ONE call (each call shows
-   * the system «Вставить» bubble; that confirmation is the phone's own and cannot be skipped). If nothing comes
-   * back, the field gets focus and the hint says how to paste by hand.
+   * Reads the clipboard on tap with readText() only: one call, one system «Вставить» bubble on phones (the phone's
+   * own privacy check; it cannot be skipped). 8 Nov: a read()-first version was slow on iPhone and, when it found no
+   * text, its readText() fallback showed a second bubble and the check no longer started by itself. Reverted.
    */
   async function readClipboard(): Promise<string> {
-    const c = navigator.clipboard;
-    if (typeof c.read === "function") {
-      try {
-        for (const item of await c.read()) {
-          for (const type of ["text/plain", "text/uri-list"]) {
-            if (!item.types.includes(type)) continue;
-            const text = (await (await item.getType(type)).text()).split(/\r?\n/).find((l) => l.trim() && !l.startsWith("#"))?.trim();
-            if (text) return text;
-          }
-        }
-        return "";
-      } catch { /* denied, or read() refused this content: try readText */ }
-    }
-    try { return (await c.readText()).trim(); } catch { return ""; }
+    try { return (await navigator.clipboard.readText()).trim(); } catch { return ""; }
   }
   async function pasteFromClipboard() {
     const text = await readClipboard();
