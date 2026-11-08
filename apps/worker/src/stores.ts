@@ -1,8 +1,9 @@
 /**
  * Other stores' prices for exactly matched Kaspi products (DECISIONS.md, 2026-11-07; CLAUDE.md rule 6a). Technodom
  * only for now. Runs after Kaspi's Visit-time has closed, so it never shares a minute with a Kaspi request:
- * 08:46–12:00 UTC (13:46–17:00 Almaty), started by .github/workflows/stores.yml.
- *   1. Prices: confirmed matches whose last price is 20 h+ old, people's products first (one page each).
+ * 08:46–18:00 UTC (13:46–23:00 Almaty; Technodom sets no Visit-time, 8 Nov: wide so a late GitHub start still runs),
+ * started by .github/workflows/stores.yml (cron-job.org dispatch, GitHub's own schedule as backup).
+ *   1. Prices: confirmed matches whose last price is 12 h+ old, people's products first (one page each).
  *   2. Matching: Kaspi products never checked against Technodom get a candidate from the product sitemap (offline,
  *      packages/core/src/matching.ts); its page decides: exact (Technodom's Kaspi link is our product), strict (every
  *      rule holds on Technodom's own title), «похожий» when only the colour differs, else rejected (another product).
@@ -20,9 +21,9 @@ import { env } from "./env";
 import { CircuitBreaker } from "./breaker";
 
 export const STORE_RUN = {
-  /** Minutes of the UTC day: from right after Kaspi's Visit-time to 12:00 UTC. */
+  /** Minutes of the UTC day: from right after Kaspi's Visit-time to 18:00 UTC (23:00 Almaty). */
   startMinute: KASPI_VISIT_WINDOW_UTC.endMinute + 1,
-  endMinute: 12 * 60,
+  endMinute: 18 * 60,
   spacingMs: 11_000,
   jitterMs: 2_000,
   prices: 500,
@@ -41,7 +42,7 @@ const sql = postgres(env.databaseUrl(), { max: 2, ...connectionOptions(env.datab
 
 async function main() {
   if (!inWindow()) {
-    console.log(JSON.stringify({ skipped: "outside the store window (08:46-12:00 UTC)" }));
+    console.log(JSON.stringify({ skipped: "outside the store window (08:46-18:00 UTC)" }));
     return;
   }
   const mid = await storeMarketplaceId(sql, TECHNODOM.code);

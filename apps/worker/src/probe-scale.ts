@@ -10,6 +10,8 @@
  *   pnpm --filter @baga/worker probe:scale --list     print the experiments, no requests
  *   pnpm --filter @baga/worker probe:scale --only E2,E4
  *   pnpm --filter @baga/worker probe:scale --set L    the follow-up on the JSON list (6 Nov): L1–L7
+ *   pnpm --filter @baga/worker probe:scale --set C    what else the list can do (9 Nov, the owner's go): C1–C14
+ *   --wait   started early by collect.yml: waits for 08:31 UTC (only if started after 08:15)
  */
 import { writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -98,7 +100,13 @@ const listingFound = (body: string): Found => {
     ? `; ${items.length} items, out of stock: ${items.filter((i) => !i.stock).length}, categories: ${[...new Set(items.map((i) => i.categoryCodes?.[0]))].join(" | ")}`
     : "";
   const keys = Object.entries(v as object).filter(([, x]) => !Array.isArray(x)).map(([k, x]) => `${k}=${JSON.stringify(x).slice(0, 60)}`);
-  return { prices: jsonPrices(v), note: `JSON, top-level keys: ${Object.keys(v as object).join(", ")}${extra}${keys.length ? `; other fields: ${keys.join(", ")}` : ""}` };
+  // What one item carries (rating, reviews, sellers count, image…), and the order of prices (does a sort work?).
+  const first = Array.isArray(items) && items[0] ? Object.entries(items[0] as object).map(([k, x]) => `${k}:${JSON.stringify(x).slice(0, 40)}`).join(" ") : "";
+  const order = Array.isArray(items) ? items.map((i) => Math.round((i as { unitPrice?: number }).unitPrice ?? -1)).join(",") : "";
+  const ids12 = Array.isArray(items) ? items.map((i) => i.id).join(",") : "";
+  const arrays = Object.entries(v as object).filter(([k, x]) => Array.isArray(x) && k !== "data").map(([k, x]) => `${k}[${(x as unknown[]).length}]=${JSON.stringify((x as unknown[])[0] ?? null).slice(0, 160)}`);
+  return { prices: jsonPrices(v), note: `JSON, top-level keys: ${Object.keys(v as object).join(", ")}${extra}${keys.length ? `; other fields: ${keys.join(", ")}` : ""}`
+    + `${arrays.length ? `; other lists: ${arrays.join(" ; ")}` : ""}; prices in order: ${order}; ids: ${ids12}${first ? `; first item: ${first}` : ""}` };
 };
 const listReq = (code: string, page = 0, extra = "") => () => ({
   url: listingJson(`:category:${code}`, page, extra),
@@ -186,13 +194,53 @@ EXPERIMENTS.push(
   { id: "L7", question: "Depth: smartphones page 60 (items 721–732) — does it still answer?", request: listReq("Smartphones", 60), read: listingFound },
 );
 
+// What else the list can do (9 Nov 2026, the owner's go after the 8 Nov list test): sorting (price low to high would
+// make the shown price the cheapest one more often), brand and price filters, totals and the category tree (facets),
+// how deep pages go, and what one item carries. Smartphones is the baseline; every guess is one request.
+const listQ = (q: string, page = 0, sort = "relevance", ref = "smartphones") => () => ({
+  url: `https://kaspi.kz/yml/product-view/pl/results?page=${page}&q=${encodeURIComponent(q)}&text&sort=${sort}&qs&c=${CITY}`,
+  init: { headers: { Accept: "application/json, text/*", Referer: `https://kaspi.kz/shop/c/${ref}/` } },
+});
+const robotsDisallows = (r: Map<string, Result>) => {
+  const b = r.get("C1");
+  if (!b || b.status !== 200) return "robots.txt not read";
+  return /^Disallow:\s*\/yml\b/m.test(b.body) ? "robots.txt disallows /yml/" : null;
+};
+EXPERIMENTS.push(
+  { id: "C1", question: "robots.txt today: every Disallow, Crawl-delay and Visit-time.", request: () => ({ url: "https://kaspi.kz/robots.txt", init: { headers: { Accept: "text/plain" } } }),
+    read: (b) => ({ prices: new Map(), note: b.split("\n").filter((l) => /^(User-agent|Disallow|Allow|Crawl-delay|Visit-time|Sitemap)/i.test(l.trim())).map((l) => l.trim()).join(" | ") }) },
+  { id: "C2", question: "Baseline: smartphones, relevance, page 0: fields of an item, totals, facets.", when: robotsDisallows, request: listQ(":category:Smartphones"), read: listingFound },
+  { id: "C3", question: "Sort price-asc: cheapest products first?", when: robotsDisallows, request: listQ(":category:Smartphones", 0, "price-asc"), read: listingFound },
+  { id: "C4", question: "Sort price-desc.", when: robotsDisallows, request: listQ(":category:Smartphones", 0, "price-desc"), read: listingFound },
+  { id: "C5", question: "Sort popularity.", when: robotsDisallows, request: listQ(":category:Smartphones", 0, "popularity"), read: listingFound },
+  { id: "C6", question: "Sort rating.", when: robotsDisallows, request: listQ(":category:Smartphones", 0, "rating"), read: listingFound },
+  { id: "C7", question: "Sort by newest (\"new\").", when: robotsDisallows, request: listQ(":category:Smartphones", 0, "new"), read: listingFound },
+  { id: "C8", question: "Brand filter, form 1: :category:Smartphones:manufacturerName:Samsung.", when: robotsDisallows, request: listQ(":category:Smartphones:manufacturerName:Samsung"), read: listingFound },
+  { id: "C9", question: "Brand filter, form 2: :manufacturerName:Apple:category:Smartphones.", when: robotsDisallows, request: listQ(":manufacturerName:Apple:category:Smartphones"), read: listingFound },
+  { id: "C10", question: "Price filter: :category:Smartphones:price:400000 - 600000 (a guess at the facet form).", when: robotsDisallows, request: listQ(":category:Smartphones:price:400000 - 600000"), read: listingFound },
+  { id: "C11", question: "The whole catalog: :category:Categories (total count, top-level categories as facets?).", when: robotsDisallows, request: listQ(":category:Categories", 0, "relevance", "categories"), read: listingFound },
+  { id: "C12", question: "Another big category: TVs (code TV_Audio guess; the item categoryCodes in C2 tell the real form).", when: robotsDisallows, request: listQ(":category:TV_Audio", 0, "relevance", "tv_audio"), read: listingFound },
+  { id: "C13", question: "Depth: smartphones page 150 (items 1801–1812).", when: robotsDisallows, request: listQ(":category:Smartphones", 150), read: listingFound },
+  { id: "C14", question: "Same as C2 again: is the order stable between two requests a few minutes apart?", when: robotsDisallows, request: listQ(":category:Smartphones"), read: listingFound },
+);
+
 if (process.argv.includes("--list")) {
   for (const e of EXPERIMENTS) console.log(`${e.id}  ${e.question}\n    ${e.request().url}`);
   process.exit(0);
 }
 
-const now = new Date();
-const minutes = now.getUTCHours() * 60 + now.getUTCMinutes();
+const utcMinute = () => { const d = new Date(); return d.getUTCHours() * 60 + d.getUTCMinutes(); };
+if (process.argv.includes("--wait") && utcMinute() >= 8 * 60 + 15 && utcMinute() < 8 * 60 + 31) {
+  const d = new Date(); d.setUTCHours(8, 31, 0, 0);
+  console.log(`Waiting for 08:31 UTC (${Math.round((d.getTime() - Date.now()) / 1000)} s): the collector's last request is before 08:30.`);
+  await new Promise((r) => setTimeout(r, d.getTime() - Date.now()));
+}
+// collect.yml can start a queued second run as the first ends (~08:43): with --wait, only a start by 08:32 probes.
+if (process.argv.includes("--wait") && utcMinute() > 8 * 60 + 32) {
+  console.log("Started after 08:32 UTC: another run already had the probe's minutes. No requests.");
+  process.exit(0);
+}
+const minutes = utcMinute();
 if ((minutes < 8 * 60 + 31 || minutes > 8 * 60 + 43) && !process.argv.includes("--in-window")) {
   console.log("Run between 08:31 and 08:43 UTC (13:31-13:43 Almaty), after the collector's last request and inside Kaspi's Visit-time. --list shows the experiments.");
   process.exit(0);
@@ -212,6 +260,8 @@ for (const e of run) {
   }
   const wait = last + KASPI_CRAWL_DELAY_MS - Date.now();
   if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+  // Never past 08:43 UTC: Kaspi's Visit-time ends at 08:45.
+  if (utcMinute() > 8 * 60 + 43 && !process.argv.includes("--in-window")) { console.log(`\nStopped at ${e.id}: 08:43 UTC reached.`); break; }
   const { url, init } = e.request();
   const t0 = Date.now();
   last = t0;
@@ -236,6 +286,12 @@ for (const e of run) {
   }
 }
 console.log(`\nResponses saved as ${join(tmpdir(), `kaspi-${set}*.txt`)}`);
+// In GitHub Actions: one annotation with every result, readable without a login (job logs are not).
+if (process.env.GITHUB_ACTIONS) {
+  const esc = (x: string) => x.replace(/%/g, "%25").replace(/\r/g, "%0D").replace(/\n/g, "%0A");
+  const lines = [...results].map(([id, r]) => `${id} ${r.status} ${r.bytes}b: ${r.found.note.slice(0, 1400)}`);
+  console.log(`::notice title=Kaspi probe ${set}::${esc(lines.join("\n").slice(0, 60_000))}`);
+}
 
 const e6 = results.get("E6")?.found.prices.get(B);
 const e7 = results.get("E7")?.found.prices.get(B);

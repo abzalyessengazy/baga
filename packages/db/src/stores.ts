@@ -7,8 +7,9 @@ import type postgres from "postgres";
 export const STORE_PRICES = {
   /** A store price older than this is not shown (a missed day must not show yesterday's price as today's). */
   showMaxAgeHours: 48,
-  /** A confirmed match is priced again once its last price is this old. */
-  repriceAfterHours: 20,
+  /** A match is priced again once its last price is this old: once a day, also when yesterday's run started late
+   * (the window is 13:46–23:00 Almaty), and never twice in one day's backup runs. */
+  repriceAfterHours: 12,
 } as const;
 
 /**
