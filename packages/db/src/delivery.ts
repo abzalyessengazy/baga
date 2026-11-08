@@ -19,7 +19,7 @@ export async function claimNotifications(sql: postgres.Sql, channel: DeliveryCha
     update notifications set status = 'sending', claimed_at = now(), send_started_at = null
     where id in (
       select n.id from notifications n join trackings t on t.id = n.tracking_id join watchers w on w.id = t.watcher_id
-      where n.status = 'queued' and n.channel = ${channel} and n.next_attempt_at <= now() and ${reachable}
+      where n.status = 'queued' and n.channel = ${channel} and n.next_attempt_at <= now() and ${reachable} and t.status <> 'removed'
         and n.created_at > now() - make_interval(hours => ${DELIVERY.maxAgeHours})
       order by n.created_at limit ${limit} for update of n skip locked)
     returning id`;

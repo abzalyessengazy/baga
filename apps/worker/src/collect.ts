@@ -358,7 +358,7 @@ async function afterSave(productId: number, externalId: string, price: number | 
   if (price !== null) {
     const pending = await sql<{ id: string; pct: number }[]>`
       select id, target_drop_pct as pct from trackings
-      where product_id = ${productId} and target_price is null and target_drop_pct is not null`;
+      where product_id = ${productId} and target_price is null and target_drop_pct is not null and status <> 'removed'`;
     for (const p of pending) {
       const target = targetForDrop(price, p.pct);
       if (target) await sql`update trackings set target_price = ${target} where id = ${p.id} and target_price is null`;

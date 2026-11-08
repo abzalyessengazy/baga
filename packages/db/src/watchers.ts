@@ -103,7 +103,8 @@ export async function upsertWatcherTracking(sql: postgres.Sql, watcherId: string
     select (select id from products where external_id = ${externalId}) as id,
            exists (select 1 from seed_queue where external_id = ${externalId} and status = 'pending') as queued`;
   if (!prod?.id && !prod?.queued) return { ok: false, reason: "unknown_product" };
-  const [existing] = await sql<{ id: string }[]>`select id from trackings where watcher_id = ${watcherId} and external_id = ${externalId}`;
+  // A removed tracking (history) does not count as one the watcher has: the limit applies when it is revived.
+  const [existing] = await sql<{ id: string }[]>`select id from trackings where watcher_id = ${watcherId} and external_id = ${externalId} and status <> 'removed'`;
   if (!existing) {
     const [n] = await sql<{ n: number }[]>`select count(*)::int as n from trackings where watcher_id = ${watcherId} and status in ('active', 'paused')`;
     if ((n?.n ?? 0) >= limit) return { ok: false, reason: "limit" };
@@ -112,7 +113,7 @@ export async function upsertWatcherTracking(sql: postgres.Sql, watcherId: string
     insert into trackings (watcher_id, external_id, product_id, target_price, target_drop_pct, status, first_price_sent_at)
     values (${watcherId}, ${externalId}, ${prod.id}, ${targetCols(target).price}, ${targetCols(target).pct}, 'active', ${prod.id ? new Date() : null})
     on conflict (watcher_id, external_id) where watcher_id is not null do update
-      set target_price = excluded.target_price, target_drop_pct = excluded.target_drop_pct, status = 'active', alert_state = 'armed', above_since = null,
+      set target_price = excluded.target_price, target_drop_pct = excluded.target_drop_pct, status = 'active', alert_state = 'armed', above_since = null, removed_at = null,
           -- A new target (or tracking again after "bought") may be asked "Вы купили?" again (migration 0011).
           bought = null, bought_at = null, bought_asked_at = null, bought_code = null
     returning id`;
@@ -126,9 +127,19 @@ export async function upsertWatcherTracking(sql: postgres.Sql, watcherId: string
   return { ok: true, trackingId: t!.id };
 }
 
+/**
+ * «Удалить» in «Мои товары» (migration 0019): the tracking is kept as history with status 'removed', hidden from the
+ * list, never alerted again; its queued messages are dropped. Tracking the product again revives the same row.
+ */
 export async function deleteWatcherTracking(sql: postgres.Sql, watcherId: string, trackingId: string): Promise<boolean> {
-  const r = await sql`delete from trackings where id = ${trackingId} and watcher_id = ${watcherId}`;
-  return r.count > 0;
+  return sql.begin(async (tx) => {
+    const r = await tx`update trackings set status = 'removed', removed_at = now()
+      where id = ${trackingId} and watcher_id = ${watcherId} and status <> 'removed'`;
+    if (!r.count) return false;
+    await tx`update notifications set status = 'failed', last_error = 'tracking removed by its owner'
+      where tracking_id = ${trackingId} and status = 'queued'`;
+    return true;
+  });
 }
 
 export async function getWatcherTracking(sql: postgres.Sql, watcherId: string, externalId: string) {

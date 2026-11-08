@@ -10,7 +10,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { DELIVERY } from "@baga/core";
 import { claimNotifications, markFailed, markSent, startSend, tidyDeliveries } from "./delivery";
-import { requestWatcherEmail, EMAIL_REQUEST_LIMITS } from "./watchers";
+import { requestWatcherEmail, EMAIL_REQUEST_LIMITS, deleteWatcherTracking, listWatched } from "./watchers";
 import { saveSnapshot } from "./queries";
 import { dayMoves } from "./movers";
 import { getShop, productSellers, saveShopFeedback } from "./shops";
@@ -255,6 +255,22 @@ describe.skipIf(!url)("database (disposable Postgres)", () => {
       expect(rows).toEqual([{ seller_id: null, outcome: "ok" }]);
       await saveShopFeedback(sql, { code: "c".repeat(20) }, "m1", "not_delivered");
       expect((await getShop(sql, "m1"))!.feedback).toMatchObject({ n: 1, not_delivered: 1, ok: 0 });
+    });
+  });
+
+  describe("removing a tracking (migration 0019)", () => {
+    it("keeps it as history, hides it, drops its queued messages and sends nothing more", async () => {
+      const w = await watcher({ chat: 42 });
+      const n = await notification(w, "telegram");
+      const [t] = await sql<{ id: string }[]>`select tracking_id as id from notifications where id = ${n}`;
+      expect(await deleteWatcherTracking(sql, w, t!.id)).toBe(true);
+      const [row] = await sql<{ status: string; removed_at: Date | null }[]>`select status, removed_at from trackings where id = ${t!.id}`;
+      expect(row!.status).toBe("removed");
+      expect(row!.removed_at).not.toBeNull();
+      expect(await status(n)).toBe("failed");
+      expect(await listWatched(sql, w)).toEqual([]);
+      expect(await claimNotifications(sql, "telegram")).toEqual([]);
+      expect(await deleteWatcherTracking(sql, w, t!.id)).toBe(false); // already removed
     });
   });
 

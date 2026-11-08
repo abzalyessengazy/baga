@@ -86,7 +86,7 @@ export async function getPlatformStats(sql: postgres.Sql, dayCount = 14, listCou
   const tracked = await sql<{ external_id: string; title: string; title_kk: string | null; image_url: string | null; price: number | null; at: Date }[]>`
     select p.external_id, p.title, p.title_kk, p.image_url, s.current_min_price as price, max(t.created_at) as at
     from trackings t join products p on p.id = t.product_id left join product_state s on s.product_id = p.id
-    where p.status = 'active'
+    where p.status = 'active' and t.status <> 'removed'
     group by p.id, s.current_min_price
     order by count(*) desc, max(t.created_at) desc limit ${listCount}`;
   const newest = await sql<{ external_id: string; title: string; title_kk: string | null; image_url: string | null; price: number | null; at: Date }[]>`

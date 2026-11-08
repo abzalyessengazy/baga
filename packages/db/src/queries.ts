@@ -198,7 +198,7 @@ export interface CatalogItem {
 
 /** How many people track a product: products others watch come first in "similar" and "popular" lists. */
 function watched(sql: postgres.Sql) {
-  return sql`(select count(*) from trackings t where t.product_id = p.id)`;
+  return sql`(select count(*) from trackings t where t.product_id = p.id and t.status <> 'removed')`;
 }
 
 function catalogSelect(sql: postgres.Sql) {
