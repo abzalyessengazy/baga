@@ -546,8 +546,7 @@
   },
   "sale": {
     "names": {
-      "kaspiJuma202611": "Kaspi Жұма",
-      "singlesDay2026": "Распродажа 11.11"
+      "kaspiJuma202611": "Kaspi Жұма"
     },
     "title": "{sale}: проверка по нашим наблюдениям",
     "during": "Во время акции: от {price}",

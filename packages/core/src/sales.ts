@@ -7,8 +7,9 @@ import type { Tenge } from "./money";
  */
 export interface SaleEvent { id: string; start: string; end: string | null }
 export const SALE_EVENTS: SaleEvent[] = [
-  { id: "kaspiJuma202611", start: "2026-11-05", end: "2026-11-07" },
-  { id: "singlesDay2026", start: "2026-11-11", end: "2026-11-11" },
+  // Kaspi Жұма, 5–8 Nov 2026 as Kaspi announced it (time.kz, 23 Oct); it was entered as ending on the 7th.
+  { id: "kaspiJuma202611", start: "2026-11-05", end: "2026-11-08" },
+  // Only Kaspi's own sales. "11.11" (removed 8 Nov) is Ozon's and AliExpress's, not announced by Kaspi.
 ];
 
 export const SALE_CONFIG = {
