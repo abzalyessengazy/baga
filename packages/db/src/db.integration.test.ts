@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 import { DELIVERY } from "@baga/core";
 import { claimNotifications, markFailed, markSent, startSend, tidyDeliveries } from "./delivery";
 import { requestWatcherEmail, EMAIL_REQUEST_LIMITS, deleteWatcherTracking, listWatched } from "./watchers";
-import { saveSnapshot } from "./queries";
+import { saveSnapshot, queueShortLink } from "./queries";
 import { dayMoves } from "./movers";
 import { requestManualCheck, finishManualCheck, queuedManualChecks, MANUAL_CHECKS } from "./manual";
 import { getShop, productSellers, saveShopFeedback } from "./shops";
@@ -52,7 +52,7 @@ describe.skipIf(!url)("database (disposable Postgres)", () => {
   afterAll(async () => { await sql?.end(); });
 
   beforeEach(async () => {
-    await sql`truncate manual_checks, store_prices, store_matches, store_runs, notifications, trackings, email_requests, watchers, seller_feedback, seller_daily, offers_current,
+    await sql`truncate short_link_queue, manual_checks, store_prices, store_matches, store_runs, notifications, trackings, email_requests, watchers, seller_feedback, seller_daily, offers_current,
       sellers, price_observations, product_state, collection_schedule, products restart identity cascade`;
   });
 
@@ -256,6 +256,14 @@ describe.skipIf(!url)("database (disposable Postgres)", () => {
       expect(rows).toEqual([{ seller_id: null, outcome: "ok" }]);
       await saveShopFeedback(sql, { code: "c".repeat(20) }, "m1", "not_delivered");
       expect((await getShop(sql, "m1"))!.feedback).toMatchObject({ n: 1, not_delivered: 1, ok: 0 });
+    });
+  });
+
+  describe("queued links (migration 0021)", () => {
+    it("takes a short link and a variant link (clothes, shoes), nothing else", async () => {
+      expect(await queueShortLink(sql, "BGBmhEPhiHA2Uc1", "/shop/BGBmhEPhiHA2Uc1")).toMatchObject({ status: "pending" });
+      expect(await queueShortLink(sql, "15956323b", "/shop/p/-15956323b/")).toMatchObject({ status: "pending" });
+      await expect(queueShortLink(sql, "x1234567", "/shop/p/../admin/")).rejects.toThrow();
     });
   });
 

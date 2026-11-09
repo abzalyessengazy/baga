@@ -291,6 +291,8 @@ EXPERIMENTS.push(
   { id: "Yc2", question: "Coat sellers with the numeric id", request: cityOffers("176841728", "almaty"), read: cityRead },
   { id: "Yc3", question: "Shoe page with the letter code (-15956323b)", request: variantPage("-15956323b"), read: variantRead },
   { id: "Yc4", question: "Shoe sellers with the letter code as the id", request: cityOffers("15956323b", "almaty"), read: cityRead },
+  { id: "Yc5", question: "The owner's coat short link from the phone (l.kaspi.kz/shop/BGBmhEPhiHA2Uc1): where it points (not followed)",
+    request: () => ({ url: "https://l.kaspi.kz/shop/BGBmhEPhiHA2Uc1", init: { headers: { Accept: "text/html" } } }), read: (b, s) => ({ prices: new Map(), note: `${s} ${b.slice(0, 200)}` }) },
 );
 
 if (process.argv.includes("--list")) {
