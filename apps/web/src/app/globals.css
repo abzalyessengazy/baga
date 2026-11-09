@@ -773,6 +773,8 @@ p.chips { margin: 6px 0 0; }
 .chip.is-few, .chip.is-none { border-color: var(--rule); color: var(--ink-faint); font-weight: 500; }
 .chip.is-fact { border-color: color-mix(in srgb, var(--stamp) 45%, transparent); color: var(--stamp); }
 .chip.is-dot { padding: 3px; }
+/* A retail chain's shop on Kaspi: neutral ink, no brand colour (a fact, not a rating). */
+.chip.is-chain { border-color: var(--ink-soft); color: var(--ink-soft); font-weight: 600; }
 .chip-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 10px 0 0; font-size: 0.75rem; color: var(--ink-soft); }
 .chip-legend-item { display: inline-flex; align-items: center; gap: 5px; }
 .chip-legend-src { flex-basis: 100%; color: var(--ink-faint); }

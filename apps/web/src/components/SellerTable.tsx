@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useTranslations } from "next-intl";
-import { byRating, type PriceNote } from "@baga/core";
+import { byRating, retailChain, type PriceNote } from "@baga/core";
 import { Link } from "@/i18n/navigation";
 import { SellerChip, PriceNoteChip, SellerLegend, chipKind, type LegendKind } from "@/components/SellerChips";
 
@@ -47,6 +47,8 @@ export function SellerTable({ rows, shown, ratedAt }: { rows: SellerRow[]; shown
                 <span className="chips">
                   <SellerChip rating={o.sellerRating} reviews={o.sellerReviews} />
                   {o.note && <PriceNoteChip note={o.note} />}
+                  {/* A retail chain's own shop on Kaspi (packages/core/src/chains.ts): a fact, not a rating. */}
+                  {retailChain(o.sellerId) && <span className="chip is-chain" title={ts("chainTitle", { chain: retailChain(o.sellerId)! })}>{ts("chain")}</span>}
                 </span>
               </td>
               <td className="col-delivery">{o.deliveryText}</td>
