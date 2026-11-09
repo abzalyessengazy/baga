@@ -235,11 +235,31 @@ const CITY_PRODUCTS: [string, string][] = [
   ["102017103", "Виусид саше (аптека; на 9 ноя нет в Алматы)"], ["101095688", "Виферон (аптека)"], ["102513315", "Подгузники Мама Знает (детские)"],
   ["100013906", "Philips фен-щётка (красота)"], ["166753901", "Сервиз VILLAGIO (дом)"], ["177318181", "iPhone 18 Pro (контроль: техника)"],
 ];
-const cityOffers = (id: string, city: string): Experiment["request"] => () => ({
+// The owner's city pages (9 Nov): kaspi.kz/shop/<city>/ (Astana is still "nur-sultan"). Y0x reads each page first and
+// takes the city code it carries (the most frequent 9-digit code ending in 0000); Almaty's page must give ours,
+// which checks the method. A code read there replaces the guess for that city's sellers requests below.
+const CITY_PAGES: Record<string, string> = { almaty: "almaty", astana: "nur-sultan", shymkent: "shymkent", atyrau: "atyrau" };
+const pageCityCode = (html: string): string | null => {
+  const n = new Map<string, number>();
+  for (const m of html.matchAll(/(?<!\d)(\d{5}0000)(?!\d)/g)) n.set(m[1]!, (n.get(m[1]!) ?? 0) + 1);
+  return [...n].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+};
+const cityCodes = new Map<string, string>();
+for (const [city, slug] of Object.entries(CITY_PAGES)) {
+  EXPERIMENTS.push({ id: `Y0${city}`, question: `City page kaspi.kz/shop/${slug}/: its city code`,
+    request: () => ({ url: `https://kaspi.kz/shop/${slug}/`, init: { headers: { Accept: "text/html" } } }),
+    read: (b) => {
+      const code = pageCityCode(b);
+      if (code) cityCodes.set(city, code);
+      const near = [...b.matchAll(/.{0,40}(?<!\d)\d{5}0000(?!\d).{0,40}/g)].slice(0, 3).map((m) => m[0].replace(/\s+/g, " ")).join(" | ");
+      return { prices: new Map(), note: `code ${code ?? "none"} (guess ${CITY_IDS[city]}); around: ${near.slice(0, 300)}` };
+    } });
+}
+const cityOffers = (id: string, cityName: string): Experiment["request"] => () => { const city = cityCodes.get(cityName) ?? CITY_IDS[cityName]!; return {
   url: `https://kaspi.kz/yml/offer-view/offers/${id}`,
   init: { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json, text/*", "X-KS-City": city, Referer: `https://kaspi.kz/shop/p/-${id}/?c=${city}` },
     body: JSON.stringify({ cityId: city, id, merchantUID: [], limit: 50, page: 0, sortOption: "PRICE", highRating: null, searchText: null, isExcellentMerchant: false, zoneId: [], installationId: "-1" }) },
-});
+}; };
 const cityRead = (b: string): Found => {
   const v = json(b) as { offers?: Array<{ merchantName?: string; merchantId?: string; price?: number }>; offersCount?: number; total?: number } | null;
   if (!v) return { prices: new Map(), note: `not JSON: ${b.slice(0, 120)}` };
@@ -250,10 +270,10 @@ const cityRead = (b: string): Found => {
 let y = 0;
 for (const [id, label] of CITY_PRODUCTS) {
   for (const city of ["almaty", "astana", "shymkent", "atyrau"]) {
-    EXPERIMENTS.push({ id: `Y${++y}`, question: `${label} · ${city}`, request: cityOffers(id, CITY_IDS[city]!), read: cityRead });
+    EXPERIMENTS.push({ id: `Y${++y}`, question: `${label} · ${city}`, request: cityOffers(id, city), read: cityRead });
   }
 }
-for (const id of ["102017103", "177318181"]) EXPERIMENTS.push({ id: `Y${++y}`, question: `${id} · Shymkent with the newer code 790000000`, request: cityOffers(id, CITY_IDS.shymkent2!), read: cityRead });
+for (const id of ["102017103", "177318181"]) EXPERIMENTS.push({ id: `Y${++y}`, question: `${id} · Shymkent with the other code 790000000`, request: cityOffers(id, "shymkent2"), read: cityRead });
 
 if (process.argv.includes("--list")) {
   for (const e of EXPERIMENTS) console.log(`${e.id}  ${e.question}\n    ${e.request().url}`);
