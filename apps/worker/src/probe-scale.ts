@@ -340,8 +340,15 @@ console.log(`\nResponses saved as ${join(tmpdir(), `kaspi-${set}*.txt`)}`);
 // In GitHub Actions: one annotation with every result, readable without a login (job logs are not).
 if (process.env.GITHUB_ACTIONS) {
   const esc = (x: string) => x.replace(/%/g, "%25").replace(/\r/g, "%0D").replace(/\n/g, "%0A");
-  const lines = [...results].map(([id, r]) => `${id} ${r.status} ${r.bytes}b: ${r.found.note.slice(0, 1400)}`);
-  console.log(`::notice title=Kaspi probe ${set}::${esc(lines.join("\n").slice(0, 60_000))}`);
+  // GitHub keeps ~4 KB of an annotation and 10 notices per step (9 Nov: one long notice was cut after 4 of 14):
+  // short lines, packed into up to 9 notices of ≤3,900 characters.
+  const lines = [...results].map(([id, r]) => `${id} ${r.status}: ${r.found.note.slice(0, set === "C" ? 600 : 300)}`);
+  const parts: string[] = [];
+  for (const l of lines) {
+    if (parts.length && parts[parts.length - 1]!.length + l.length + 1 <= 3_900) parts[parts.length - 1] += `\n${l}`;
+    else parts.push(l.slice(0, 3_900));
+  }
+  parts.slice(0, 9).forEach((p, i) => console.log(`::notice title=Kaspi probe ${set} ${i + 1}/${Math.min(parts.length, 9)}::${esc(p)}`));
 }
 
 const e6 = results.get("E6")?.found.prices.get(B);
