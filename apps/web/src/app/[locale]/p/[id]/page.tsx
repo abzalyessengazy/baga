@@ -168,7 +168,9 @@ export default async function ProductPage({ params, searchParams }: Props) {
         <hr className="rule" />
         <div className="total">
           <span className="total-label">{tr("total")}</span>
-          <span className="total-value">{v.delisted ? t("delisted") : v.minPrice !== null ? f(v.minPrice) : t("outOfStock")}</span>
+          <span className="total-value">{v.delisted ? t("delisted") : v.minPrice !== null ? f(v.minPrice) : t("outOfStockCity")}</span>
+          {/* We check with Almaty's city id; some goods (medicine) are sold only by local shops (9 Nov 2026). */}
+          {!v.delisted && v.minPrice === null && <span className="total-sub">{t("outOfStockCityNote")}</span>}
           {v.delisted && v.lastPrice != null && (
             <span className="total-sub total-earlier">{t("delistedText", { price: f(v.lastPrice), date: fmtDate(v.checkedAt, locale) })}</span>
           )}
@@ -212,7 +214,7 @@ export default async function ProductPage({ params, searchParams }: Props) {
         <h2 className="receipt-caption" style={{ fontSize: "inherit", fontWeight: 400, margin: "0 0 6px" }}>{t("sellersTitle")}</h2>
         {sellerRows.length > 0
           ? <SellerTable rows={sellerRows} shown={shown.length} ratedAt={dayMonth(v.checkedAt, td)} />
-          : <p className="verdict-text">{v.delisted ? t("delisted") : t("outOfStock")}</p>}
+          : <p className="verdict-text">{v.delisted ? t("delisted") : t("outOfStockCity")}</p>}
         {v.offerCount > shown.length && <p className="note">{t("moreSellers", { count: v.offerCount - shown.length })}</p>}
         <p className="note">{t("nationalPrice")}</p>
         {/* Other stores, exact matches only (DECISIONS.md, 2026-11-07): the store's own price, never adjusted. */}

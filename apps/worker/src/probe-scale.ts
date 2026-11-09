@@ -11,6 +11,7 @@
  *   pnpm --filter @baga/worker probe:scale --only E2,E4
  *   pnpm --filter @baga/worker probe:scale --set L    the follow-up on the JSON list (6 Nov): L1–L7
  *   pnpm --filter @baga/worker probe:scale --set C    what else the list can do (9 Nov, the owner's go): C1–C14
+ *   pnpm --filter @baga/worker probe:scale --set Y    which goods depend on the city (10 Nov, the owner's go): Y1–Y26
  *   --wait   started early by collect.yml: waits for 08:31 UTC (only if started after 08:15)
  */
 import { writeFileSync } from "node:fs";
@@ -223,6 +224,36 @@ EXPERIMENTS.push(
   { id: "C13", question: "Depth: smartphones page 150 (items 1801–1812).", when: robotsDisallows, request: listQ(":category:Smartphones", 150), read: listingFound },
   { id: "C14", question: "Same as C2 again: is the order stable between two requests a few minutes apart?", when: robotsDisallows, request: listQ(":category:Smartphones"), read: listingFound },
 );
+
+// Which goods depend on the city (10 Nov 2026): rule 7 ("one national price") was tested on 3 electronics products;
+// on 9 Nov a medicine (Виусид) was on sale in Atyrau and had no sellers in Almaty. The same sellers request for 6 of
+// our products in 4 cities: sellers, lowest price, and whether the sellers are the same. City ids: Almaty is ours;
+// Astana, Shymkent and Atyrau follow Kaspi's code form (KATO-like) and are checked by the answers themselves (an
+// unknown id should answer with no sellers or an error, also for the iPhone). Shymkent gets its newer code too.
+const CITY_IDS: Record<string, string> = { almaty: "750000000", astana: "710000000", shymkent: "511010000", shymkent2: "790000000", atyrau: "231010000" };
+const CITY_PRODUCTS: [string, string][] = [
+  ["102017103", "Виусид саше (аптека; на 9 ноя нет в Алматы)"], ["101095688", "Виферон (аптека)"], ["102513315", "Подгузники Мама Знает (детские)"],
+  ["100013906", "Philips фен-щётка (красота)"], ["166753901", "Сервиз VILLAGIO (дом)"], ["177318181", "iPhone 18 Pro (контроль: техника)"],
+];
+const cityOffers = (id: string, city: string): Experiment["request"] => () => ({
+  url: `https://kaspi.kz/yml/offer-view/offers/${id}`,
+  init: { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json, text/*", "X-KS-City": city, Referer: `https://kaspi.kz/shop/p/-${id}/?c=${city}` },
+    body: JSON.stringify({ cityId: city, id, merchantUID: [], limit: 50, page: 0, sortOption: "PRICE", highRating: null, searchText: null, isExcellentMerchant: false, zoneId: [], installationId: "-1" }) },
+});
+const cityRead = (b: string): Found => {
+  const v = json(b) as { offers?: Array<{ merchantName?: string; merchantId?: string; price?: number }>; offersCount?: number; total?: number } | null;
+  if (!v) return { prices: new Map(), note: `not JSON: ${b.slice(0, 120)}` };
+  const offers = v.offers ?? [];
+  const prices = offers.map((o) => o.price).filter((p): p is number => typeof p === "number");
+  return { prices: new Map(), note: `sellers ${offers.length}${v.offersCount !== undefined ? ` (count ${v.offersCount})` : ""}, lowest ${prices.length ? Math.min(...prices) : "-"}, first: ${offers.slice(0, 4).map((o) => `${o.merchantName ?? o.merchantId}:${o.price}`).join(", ")}` };
+};
+let y = 0;
+for (const [id, label] of CITY_PRODUCTS) {
+  for (const city of ["almaty", "astana", "shymkent", "atyrau"]) {
+    EXPERIMENTS.push({ id: `Y${++y}`, question: `${label} · ${city}`, request: cityOffers(id, CITY_IDS[city]!), read: cityRead });
+  }
+}
+for (const id of ["102017103", "177318181"]) EXPERIMENTS.push({ id: `Y${++y}`, question: `${id} · Shymkent with the newer code 790000000`, request: cityOffers(id, CITY_IDS.shymkent2!), read: cityRead });
 
 if (process.argv.includes("--list")) {
   for (const e of EXPERIMENTS) console.log(`${e.id}  ${e.question}\n    ${e.request().url}`);

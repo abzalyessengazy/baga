@@ -51,3 +51,14 @@ jobs:
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with: { name: list-capabilities, path: /tmp/kaspi-C*, if-no-files-found: ignore, retention-days: 14 }
+      # One-off, 10 Nov 2026 only: which goods depend on the city (probe-scale.ts --set Y): 26 sellers requests,
+      # 6 products x 4 cities, 08:31-08:43 UTC after the collector; nothing stored. Same rules as above.
+      - name: City probe (10 Nov only)
+        if: ${{ !cancelled() }}
+        run: '[ "$(date -u +%F)" = "2026-11-10" ] && pnpm --filter @baga/worker probe:scale --set Y --wait || echo "not the probe day"'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      - name: City probe responses
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with: { name: city-probe, path: /tmp/kaspi-Y*, if-no-files-found: ignore, retention-days: 14 }
