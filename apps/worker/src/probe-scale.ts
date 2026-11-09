@@ -275,6 +275,24 @@ for (const [id, label] of CITY_PRODUCTS) {
 }
 for (const id of ["102017103", "177318181"]) EXPERIMENTS.push({ id: `Y${++y}`, question: `${id} · Shymkent with the other code 790000000`, request: cityOffers(id, "shymkent2"), read: cityRead });
 
+// Clothes and shoes (9 Nov, the owner's coat): each size and colour is a variant. A coat link carries a numeric id
+// (176841728 = grey XS); a shoe link carried a code with a letter (15956323b) that we cannot resolve: on 9 Nov
+// kaspi.kz/shop/p/-15956323b/ redirected back to the same variant address. Can the page and the sellers request take
+// these as they are, and do the pages name the other sizes?
+const variantPage = (path: string): Experiment["request"] => () => ({ url: `https://kaspi.kz/shop/p/${path}/?c=${CITY}`, init: { headers: { Accept: "text/html" } } });
+const variantRead = (b: string, s: number): Found => {
+  const ids = [...new Set([...b.matchAll(/"(?:id|productId|configSku|masterSku|sku)"\s*:\s*"?([0-9]{5,12}[a-z]?)"?/g)].map((m) => m[1]!))].slice(0, 12);
+  const price = b.match(/"price"\s*:\s*(\d+)/)?.[1];
+  const sizes = [...new Set([...b.matchAll(/"(?:size|razmer|value)"\s*:\s*"([^"]{1,8})"/gi)].map((m) => m[1]!))].slice(0, 12);
+  return { prices: new Map(), note: `${s}; ids in page: ${ids.join(",")}; price field: ${price ?? "none"}; size-like values: ${sizes.join(",")}; variants word: ${/variant/i.test(b)}` };
+};
+EXPERIMENTS.push(
+  { id: "Yc1", question: "Coat page, numeric id (demisezonnaja-kurtka-adidas-kf1524-seryi-xs-176841728)", request: variantPage("demisezonnaja-kurtka-adidas-kf1524-seryi-xs-176841728"), read: variantRead },
+  { id: "Yc2", question: "Coat sellers with the numeric id", request: cityOffers("176841728", "almaty"), read: cityRead },
+  { id: "Yc3", question: "Shoe page with the letter code (-15956323b)", request: variantPage("-15956323b"), read: variantRead },
+  { id: "Yc4", question: "Shoe sellers with the letter code as the id", request: cityOffers("15956323b", "almaty"), read: cityRead },
+);
+
 if (process.argv.includes("--list")) {
   for (const e of EXPERIMENTS) console.log(`${e.id}  ${e.question}\n    ${e.request().url}`);
   process.exit(0);
@@ -318,14 +336,17 @@ for (const e of run) {
   last = t0;
   let status = 0;
   let body = "";
+  let location: string | null = null;
   try {
     const res = await fetch(url, { ...init, headers: { "User-Agent": ua, ...(init?.headers ?? {}) }, redirect: "manual", signal: AbortSignal.timeout(30_000) });
     status = res.status;
+    location = res.headers.get("location");
     body = await res.text();
   } catch (err) {
     body = String(err);
   }
-  const found = status >= 200 && status < 300 ? e.read(body, status) : { prices: new Map<string, number>(), note: body.slice(0, 200) };
+  const found = status >= 200 && status < 300 ? e.read(body, status)
+    : { prices: new Map<string, number>(), note: `${location ? `redirect to ${location}; ` : ""}${body.slice(0, 200)}` };
   const r: Result = { status, bytes: body.length, ms: Date.now() - t0, body, found };
   results.set(e.id, r);
   writeFileSync(join(tmpdir(), `kaspi-${e.id}.txt`), body);
