@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getTranslations, setRequestLocale } from "next-intl/server";
-import { getSql, getAdminHealth, getFunnel, recentFeedback, pendingMatches, latestStoreRuns, type AdminRun, RUN_PACE_WARN_S } from "@baga/db";
+import { getSql, getAdminHealth, getFunnel, recentFeedback, pendingMatches, latestStoreRuns, manualToday, type AdminRun, RUN_PACE_WARN_S } from "@baga/db";
 import { isInVisitWindow } from "@baga/core";
 import { adminEnabled, isAdmin } from "@/lib/admin";
 
@@ -41,6 +41,8 @@ export default async function AdminPage({ params, searchParams }: Props) {
   const [h, feedback, funnel, pending, storeRuns] = await Promise.all([getAdminHealth(sql), recentFeedback(sql), getFunnel(sql, 7).catch(() => null),
     // Before migration 0018 the store tables do not exist.
     pendingMatches(sql).catch(() => []), latestStoreRuns(sql).catch(() => [])]);
+  // Manual checks on request (migration 0020, DECISIONS 2026-11-09); null before the migration.
+  const manual = await manualToday(sql).catch(() => null);
   const now = Date.now();
   const state = (r: AdminRun) =>
     r.aborted ? t("runAborted", { reason: r.aborted })
@@ -58,6 +60,7 @@ export default async function AdminPage({ params, searchParams }: Props) {
     ...(failedAlerts ? [t("warnAlerts", { n: failedAlerts })] : []),
     ...(h.people.noneWithTrackings ? [t("warnNoChannel", { n: h.people.noneWithTrackings })] : []),
     ...(h.errors.length ? [t("warnErrors", { n: h.errors.reduce((s, e) => s + e.n, 0) })] : []),
+    ...(manual?.pausedUntil ? [t("warnManualPaused", { date: at(manual.pausedUntil) })] : []),
   ];
   const kv = (rows: [string, number | string][]) => (
     <dl className="admin-kv">{rows.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{typeof v === "number" ? count(v) : v}</dd></div>)}</dl>
@@ -76,7 +79,8 @@ export default async function AdminPage({ params, searchParams }: Props) {
         <section className="receipt admin-card">
           <h2>{t("collector")}</h2>
           {kv([[t("lastCheck"), at(lastCheck)], [t("checksToday"), h.checksToday], [t("scheduled"), h.schedule.total],
-            [t("due"), h.schedule.due], [t("failing"), h.schedule.failing]])}
+            [t("due"), h.schedule.due], [t("failing"), h.schedule.failing],
+            ...(manual ? [[t("manualToday"), t("manualOf", { n: manual.done, requested: manual.requested, cap: manual.cap })] as [string, string]] : [])])}
         </section>
         <section className="receipt admin-card">
           <h2>{t("people")}</h2>

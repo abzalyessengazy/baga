@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isInVisitWindow, lastCompleteShiftDay, msUntilVisitWindow, secondsUntilShiftEnds, nextVisitWindowDay, VISIT_WINDOW_MINUTES } from "./window";
+import { isInVisitWindow, isManualCheckTime, lastCompleteShiftDay, msUntilVisitWindow, secondsUntilShiftEnds, nextVisitWindowDay, VISIT_WINDOW_MINUTES } from "./window";
 
 const utc = (hhmm: string) => new Date(`2026-11-02T${hhmm}:00Z`);
 
@@ -54,5 +54,20 @@ describe("secondsUntilShiftEnds", () => {
     expect(secondsUntilShiftEnds(new Date("2026-11-05T08:15:00Z"))).toBe(1800);
     expect(secondsUntilShiftEnds(new Date("2026-11-05T08:45:00Z"))).toBe(86_400);
     expect(secondsUntilShiftEnds(new Date("2026-11-05T20:45:00Z"))).toBe(12 * 3600);
+  });
+});
+
+describe("manual checks (a visitor's own product, 9 Nov 2026)", () => {
+  it("never from 03:55 to 08:50 UTC: the collector and the probe own those minutes", () => {
+    expect(isManualCheckTime(utc("03:54"))).toBe(true);
+    expect(isManualCheckTime(utc("03:55"))).toBe(false);
+    expect(isManualCheckTime(utc("06:00"))).toBe(false);
+    expect(isManualCheckTime(utc("08:49"))).toBe(false);
+    expect(isManualCheckTime(utc("08:50"))).toBe(true);
+    expect(isManualCheckTime(utc("20:00"))).toBe(true); // 01:00 Almaty
+  });
+  it("stops starting a check that could run into the blackout", () => {
+    expect(isManualCheckTime(utc("03:54"), 60_000)).toBe(false);
+    expect(isManualCheckTime(utc("03:53"), 60_000)).toBe(true);
   });
 });

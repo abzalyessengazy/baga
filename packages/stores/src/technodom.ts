@@ -63,8 +63,8 @@ export function parseTechnodomProduct(html: string): TechnodomProduct {
 
 export interface TechnodomClientOptions {
   minIntervalMs?: number; jitterMs?: number; timeoutMs?: number; userAgent?: string;
-  /** Called right before each request, after the pacing wait: throw StoreRequestRefused to stop it. */
-  beforeRequest?: () => void;
+  /** Called right before each request, after the pacing wait (may wait itself): throw StoreRequestRefused to stop it. */
+  beforeRequest?: () => void | Promise<void>;
   fetch?: typeof fetch;
 }
 
@@ -86,7 +86,7 @@ export function createTechnodomClient(o: TechnodomClientOptions = {}) {
   };
   async function get(url: string, accept: string) {
     await gate();
-    o.beforeRequest?.();
+    await o.beforeRequest?.();
     const res = await f(url, { headers: { "User-Agent": ua, Accept: accept }, redirect: "manual", signal: AbortSignal.timeout(timeoutMs) });
     if (res.status < 200 || res.status >= 300) { await res.body?.cancel().catch(() => undefined); throw new TechnodomHttpError(res.status, url); }
     return res.text();

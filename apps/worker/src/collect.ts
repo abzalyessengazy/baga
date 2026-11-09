@@ -5,10 +5,11 @@
  * target alerts to Telegram right after each check, queued emails at the end. Started by .github/workflows/collect.yml at 03:50 UTC; waits for 04:05.
  */
 import { createKaspiClient, buildSnapshot, KaspiHttpError, KaspiParseError, KaspiRequestRefused, canonicalProductUrl, parseKaspiUrl, queuedLinkUrl, variantLinkCode } from "@baga/kaspi";
+import { queuedManualChecks, finishManualCheck, manualPausedUntil } from "@baga/db";
 import { saveSnapshot, claimNotifications, startSend, markSent, markFailed, tidyDeliveries, connectionOptions, requestProduct, attachShortLinkTrackings, weekMovers } from "@baga/db";
 import {
   evaluateAlert, priorityFor, newProductTurn, isStablePrice, STABLE, INTERVAL_MINUTES, PRIORITY_ORDER, USER_INTEREST, CATALOG, SEED_MIN_PRICE, backoffMinutes, isSuspiciousJump, type TrackingAlertState,
-  KASPI_CRAWL_DELAY_MS, isInVisitWindow, needsPageRefresh, msUntilVisitWindow, targetForDrop, almatyDay, runningSale, type Priority,
+  KASPI_CRAWL_DELAY_MS, isInVisitWindow, isManualCheckTime, needsPageRefresh, msUntilVisitWindow, targetForDrop, almatyDay, runningSale, type Priority,
 } from "@baga/core";
 import postgres from "postgres";
 import { env } from "./env";
@@ -18,6 +19,13 @@ import { renderTelegramAlert, renderTelegramBoughtAsk, sendTelegram, DeliveryErr
 import { renderChannelPost } from "./channel";
 
 const sql = postgres(env.databaseUrl(), { max: 2, ...connectionOptions(env.databaseUrl()) });
+/**
+ * `--manual` (DECISIONS.md 2026-11-09, CLAUDE.md rule 6): only the products visitors asked for outside the window
+ * (manual_checks, at most 40 a day), started by .github/workflows/manual.yml when a visitor asks. Never in the
+ * collector's minutes (isManualCheckTime: not 03:55–08:50 UTC), the same 10 s pacing, User-Agent and breaker; the
+ * first 403/429 pauses manual checks for 7 days.
+ */
+const MANUAL = process.argv.includes("--manual");
 // Every request this run makes (page, offers, re-checks, alert confirmations) goes through this gate.
 // The last word before each request, after its pacing wait: nothing is sent once the breaker is open or the window
 // (04:05–08:30 UTC) has closed, whatever the caller planned.
@@ -26,9 +34,12 @@ const breaker = new CircuitBreaker();
 let requests = 0;
 const kaspi = createKaspiClient({
   minIntervalMs: KASPI_CRAWL_DELAY_MS, jitterMs: 2_000,
+  // Manual checks say so in the User-Agent: a single page a visitor asked for, not the daily crawl.
+  ...(MANUAL ? { userAgent: `${process.env.KASPI_USER_AGENT ?? "BAGA price history bot (+contact: hello@baga.app)"}; user-requested check` } : {}),
   beforeRequest: () => {
     if (breaker.openReason) throw new KaspiRequestRefused(breaker.openReason);
-    if (!isInVisitWindow(new Date(), 0)) throw new KaspiRequestRefused("outside the visit window");
+    if (MANUAL ? !isManualCheckTime(new Date()) : !isInVisitWindow(new Date(), 0))
+      throw new KaspiRequestRefused(MANUAL ? "inside the collector's minutes" : "outside the visit window");
     requests++;
   },
 });
@@ -44,7 +55,65 @@ type DueRow = {
   page_checked_at: Date | null; priority: Priority;
 };
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Manual mode: the visitors' requests, then this run ends (a later request starts a new one). */
+async function runManual() {
+  const utcMin = () => { const d = new Date(); return d.getUTCHours() * 60 + d.getUTCMinutes(); };
+  if (!isManualCheckTime(new Date(), WINDOW_MARGIN_MS)) {
+    // Shortly before the blackout ends (08:25–08:50 UTC), wait for it; earlier, the collector takes the products.
+    if (utcMin() >= 8 * 60 + 25 && utcMin() < 8 * 60 + 50) {
+      const end = new Date(); end.setUTCHours(8, 50, 30, 0);
+      console.log(`manual: waiting ${Math.round((end.getTime() - Date.now()) / 1000)} s for the collector's minutes to end`);
+      await sleep(end.getTime() - Date.now());
+    } else {
+      for (const r of await queuedManualChecks(sql, 100)) await finishManualCheck(sql, r.id, "collector", "inside the collector's minutes");
+      console.log(JSON.stringify({ manual: "skipped: the collector's minutes; it fetches visitors' products first" }));
+      return;
+    }
+  }
+  const paused = await manualPausedUntil(sql);
+  if (paused) { console.log(JSON.stringify({ manual: `paused until ${paused.toISOString()} after a 403/429` })); return; }
+  if (!(await queuedManualChecks(sql, 1)).length) { console.log(JSON.stringify({ manual: "nothing queued" })); return; }
+
+  const [run] = await sql<{ id: number }[]>`insert into collection_runs (runner) values ('manual') returning id`;
+  const runId = run!.id;
+  // Technodom's run pauses while a manual run is open (CLAUDE.md rule 6a: never in parallel with a Kaspi request);
+  // give a Technodom request already under way time to finish.
+  await sleep(12_000);
+  let done = 0, failed = 0;
+  let idleSince = Date.now();
+  const deadline = Date.now() + 20 * 60_000;
+  while (!breaker.openReason && Date.now() < deadline && isManualCheckTime(new Date(), WINDOW_MARGIN_MS)) {
+    const rows = await queuedManualChecks(sql);
+    if (!rows.length) {
+      if (Date.now() - idleSince > 90_000) break; // stay a little for requests made while this run started
+      await sleep(15_000);
+      continue;
+    }
+    for (const r of rows) {
+      if (breaker.openReason || !isManualCheckTime(new Date(), WINDOW_MARGIN_MS)) break;
+      const [have] = await sql`select 1 from products where external_id = ${r.externalId}`;
+      if (have) { await finishManualCheck(sql, r.id, "done", "already collected"); continue; }
+      const [q] = await sql<Queued[]>`select external_id, slug, source, min_price from seed_queue
+        where external_id = ${r.externalId} and status = 'pending'`;
+      if (!q) { await finishManualCheck(sql, r.id, "failed", "not in the queue"); failed++; continue; }
+      if (await addQueued(q, runId)) { await finishManualCheck(sql, r.id, "done"); done++; }
+      else if (breaker.blocked > 0) { await finishManualCheck(sql, r.id, "blocked", breaker.openReason); failed++; }
+      else { await finishManualCheck(sql, r.id, "failed", "fetch failed; the collector tries again in its window"); failed++; }
+    }
+    idleSince = Date.now();
+  }
+  const aborted = breaker.openReason;
+  await sql`update collection_runs set finished_at = now(), checked = ${breaker.checked}, changed = 0,
+    failed = ${breaker.failed}, aborted_reason = ${aborted}, requests = ${requests} where id = ${runId}`;
+  await sendQueued();
+  console.log(JSON.stringify({ manual: true, runId, requests, done, failed, aborted }));
+  if (aborted) process.exitCode = 2;
+}
+
 async function main() {
+  if (MANUAL) return runManual();
   const wait = msUntilVisitWindow(new Date());
   if (wait > env.windowWaitMaxMs()) {
     console.log(JSON.stringify({ skipped: "outside collection window (04:05-08:30 UTC)", opensInMinutes: Math.round(wait / 60_000) }));

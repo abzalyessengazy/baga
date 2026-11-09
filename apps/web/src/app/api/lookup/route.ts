@@ -2,11 +2,13 @@ import { NextResponse } from "next/server";
 import { allow } from "@/lib/rateLimit";
 import { clientIp, verifyTurnstile } from "@/lib/turnstile";
 import { queueProductRequest } from "@/lib/product";
+import { requestManual } from "@/lib/manual";
 import { isValidSlug } from "@baga/core";
 
 /**
  * Queues a visitor's request for a product we don't have yet, after a Turnstile check. The collector fetches it
- * inside Kaspi's robots.txt window; this route never requests Kaspi (DECISIONS.md, 2026-11-01).
+ * inside Kaspi's robots.txt window; this route never requests Kaspi (DECISIONS.md, 2026-11-01). Outside that window
+ * it also asks for a manual check, which a GitHub job makes within about a minute (DECISIONS.md, 2026-11-09).
  * Body: { id: "<kaspi product id>", slug?: "<slug from the visitor's link>", token: "<turnstile token>" }. The page then reloads and shows when.
  */
 export async function POST(req: Request) {
@@ -26,6 +28,7 @@ export async function POST(req: Request) {
   }
 
   const r = await queueProductRequest(id, typeof body.slug === "string" && isValidSlug(body.slug) ? body.slug : null);
+  if (r === "queued") await requestManual(id, ip).catch((e) => console.error(`[manual] ${e}`));
   if (r === "queued" || r === "exists") return NextResponse.json({ ok: true });
   if (r === "full") return NextResponse.json({ error: "too_many" }, { status: 429 });
   return NextResponse.json({ error: "generic" }, { status: 503 });

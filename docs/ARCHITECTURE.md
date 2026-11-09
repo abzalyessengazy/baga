@@ -26,6 +26,7 @@ Kaspi.kz ◀── daily, 04:00–08:45 UTC, ≥10 s apart ── Worker (GitHub
 - **Request spacing:** `Crawl-delay: 10`. The worker's client spaces every request by 10 s + up to 2 s of jitter.
 - **Visit window:** `Visit-time: 0400-0845` UTC. `collect.yml` starts at 03:50 UTC, the worker waits for 04:00 and stops at 08:45, and `discover` and `probe` refuse outside the window.
 - **Budget:** about 1,500 requests a day.
+- **Manual checks** (DECISIONS 2026-11-09): a visitor's own new product, on request, outside 03:55–08:50 UTC, via `manual.yml` (`pnpm worker --manual`), at most 40 a day and 3 per visitor, paused 7 days by a 403/429.
   - A new product costs 2 requests: the page and the offers.
   - A routine check costs 1 request (offers only). The product page is refreshed weekly.
   - So the catalog is sized at about 1,000–1,200 products.

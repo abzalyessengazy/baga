@@ -13,6 +13,7 @@ import { claimNotifications, markFailed, markSent, startSend, tidyDeliveries } f
 import { requestWatcherEmail, EMAIL_REQUEST_LIMITS, deleteWatcherTracking, listWatched } from "./watchers";
 import { saveSnapshot } from "./queries";
 import { dayMoves } from "./movers";
+import { requestManualCheck, finishManualCheck, queuedManualChecks, MANUAL_CHECKS } from "./manual";
 import { getShop, productSellers, saveShopFeedback } from "./shops";
 import { decideMatch, matchesToPrice, saveMatch, saveStorePrice, storeMarketplaceId, storeOffers } from "./stores";
 import type { ProductSnapshot } from "@baga/kaspi";
@@ -51,7 +52,7 @@ describe.skipIf(!url)("database (disposable Postgres)", () => {
   afterAll(async () => { await sql?.end(); });
 
   beforeEach(async () => {
-    await sql`truncate store_prices, store_matches, store_runs, notifications, trackings, email_requests, watchers, seller_feedback, seller_daily, offers_current,
+    await sql`truncate manual_checks, store_prices, store_matches, store_runs, notifications, trackings, email_requests, watchers, seller_feedback, seller_daily, offers_current,
       sellers, price_observations, product_state, collection_schedule, products restart identity cascade`;
   });
 
@@ -255,6 +256,30 @@ describe.skipIf(!url)("database (disposable Postgres)", () => {
       expect(rows).toEqual([{ seller_id: null, outcome: "ok" }]);
       await saveShopFeedback(sql, { code: "c".repeat(20) }, "m1", "not_delivered");
       expect((await getShop(sql, "m1"))!.feedback).toMatchObject({ n: 1, not_delivered: 1, ok: 0 });
+    });
+  });
+
+  describe("manual checks (migration 0020)", () => {
+    const who = (k: string) => k.repeat(64).slice(0, 64);
+    it("keeps one open request per product and 3 per visitor a day", async () => {
+      expect(await requestManualCheck(sql, "300000001", who("a"))).toBe("queued");
+      expect(await requestManualCheck(sql, "300000001", who("b"))).toBe("already");
+      expect(await requestManualCheck(sql, "300000002", who("a"))).toBe("queued");
+      expect(await requestManualCheck(sql, "300000003", who("a"))).toBe("queued");
+      expect(await requestManualCheck(sql, "300000004", who("a"))).toBe("visitor_cap");
+      expect(await requestManualCheck(sql, "300000004", who("b"))).toBe("queued");
+    });
+    it("caps the day at 40 in all, also when visitors ask at the same moment", async () => {
+      const asks = Array.from({ length: MANUAL_CHECKS.perDay + 5 }, (_, i) => requestManualCheck(sql, String(310000000 + i), who(String(i % 10)).replace(/./g, (c, j) => (j < 2 ? String(i).padStart(2, "0")[j]! : c))));
+      const r = await Promise.all(asks);
+      expect(r.filter((x) => x === "queued").length).toBe(MANUAL_CHECKS.perDay);
+      expect(r.filter((x) => x === "day_cap").length).toBe(5);
+    });
+    it("pauses every request for 7 days after a 403/429", async () => {
+      expect(await requestManualCheck(sql, "300000001", who("a"))).toBe("queued");
+      const [q] = await queuedManualChecks(sql);
+      await finishManualCheck(sql, q!.id, "blocked", "blocked: 1 response(s) were 403/429");
+      expect(await requestManualCheck(sql, "300000002", who("c"))).toBe("paused");
     });
   });
 

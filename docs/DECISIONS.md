@@ -192,3 +192,13 @@ Measured on run #10 (4 Nov): requests start ~11.9 s apart, so the 04:05–08:30 
 - New catalog products no longer take a fixed share (`CATALOG.newShare` 0.25 → 0): they are added only once every due product is checked. The catalog grows more slowly; no product misses a day while others are added.
 - Day lists (docs/STATS.md rule D) compare a product only with the day before; a change across a missed day shows only in the week lists (rule W).
 - Next, if the 9 Nov probe supports it: a "light" tier of list prices for breadth (needs its own entry and a rule-6 change).
+
+## 2026-11-09 — A visitor's own product checked on request (manual checks)
+**Context.** 80% of the products visitors brought (40 of 50) and 70% of trackings (19 of 27) arrived outside the collector's window, so most new visitors were told "price tomorrow". The owner proposed checking a visitor's own product when they ask.
+**Decision** (approved by the owner on 9 Nov 2026, cap 40 a day). robots.txt addresses crawlers; a single fetch a person asks for is the kind of user-triggered fetch commonly treated as outside it (Visit-time and Crawl-delay are not in RFC 9309 at all). We keep the daily crawl inside the window and allow only this:
+- Only a product a visitor brought that we never checked, after Turnstile, outside the collector's minutes (not 03:55–08:50 UTC: the collector and the probe slot); inside the window the collector fetches it within minutes as before.
+- At most 40 a day in all and 3 per visitor (a daily-rotating hash of the IP, never the IP), recorded in `manual_checks` (migration 0020). Above the caps: "tomorrow", as before. On top of the daily budget, which is set by the window's minutes.
+- The website never requests Kaspi (Kaspi refuses Vercel): it starts `.github/workflows/manual.yml` (GitHub, where the collector already runs; needs `GITHUB_DISPATCH_TOKEN` in Vercel), which runs `pnpm worker --manual`: the same client, 10 s pacing and breaker, User-Agent ending "; user-requested check". Its schedule (every 30 min outside the window) picks up a failed start.
+- The first 403/429 pauses manual checks for 7 days; /admin warns. The morning collector keeps its own stop rule.
+- Technodom requests wait while a manual run is open (rule 6a).
+- Tell Kaspi openly in the next message: single checks a user asked for, at most 40 a day.

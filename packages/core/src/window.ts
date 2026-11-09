@@ -72,3 +72,17 @@ export function secondsUntilShiftEnds(now: Date): number {
   const s = now.getUTCHours() * 3600 + now.getUTCMinutes() * 60 + now.getUTCSeconds();
   return s < end ? end - s : 86_400 - s + end;
 }
+
+/**
+ * Manual checks (a visitor's own product, on request; DECISIONS.md 2026-11-09): never from 5 minutes before the
+ * collector can start until 5 minutes after Kaspi's Visit-time ends (03:55–08:50 UTC): the daily collector and the
+ * occasional probe after it (08:31–08:43) own those minutes, and inside the window the collector fetches a visitor's
+ * product within minutes anyway. Two clients at once would break the 10 s Crawl-delay.
+ */
+export const MANUAL_BLACKOUT_UTC = { startMinute: KASPI_VISIT_WINDOW_UTC.startMinute - 5, endMinute: KASPI_VISIT_WINDOW_UTC.endMinute + 5 } as const;
+
+export function isManualCheckTime(now: Date, marginMs = 0): boolean {
+  const m = (t: Date) => t.getUTCHours() * 60 + t.getUTCMinutes() + t.getUTCSeconds() / 60;
+  const inBlackout = (x: number) => x >= MANUAL_BLACKOUT_UTC.startMinute && x < MANUAL_BLACKOUT_UTC.endMinute;
+  return !inBlackout(m(now)) && !inBlackout(m(new Date(now.getTime() + marginMs)));
+}

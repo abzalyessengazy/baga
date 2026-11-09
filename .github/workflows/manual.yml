@@ -1,0 +1,29 @@
+name: Manual price checks
+on:
+  # A visitor's own product, checked on request outside the collector's window (DECISIONS.md 2026-11-09; CLAUDE.md
+  # rule 6): the website starts this when a visitor asks (at most 40 a day, 3 per visitor; manual_checks). The
+  # worker never sends a request in the collector's minutes (03:55-08:50 UTC), paces requests 10 s apart with the
+  # same User-Agent, and the first 403/429 pauses manual checks for 7 days. The schedule is a backup for a start that
+  # failed (a run with nothing queued ends in seconds, without any Kaspi request).
+  workflow_dispatch:
+  schedule:
+    - cron: "15,45 0-3,9-23 * * *"
+concurrency: { group: manual, cancel-in-progress: false } # one at a time; requests made meanwhile are served by the next
+jobs:
+  manual:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm worker --manual
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          SITE_URL: ${{ vars.SITE_URL || secrets.SITE_URL || 'https://bagaapp.com' }}
+          COLLECT_RUNNER: github-actions-manual

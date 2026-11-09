@@ -39,6 +39,8 @@ const inWindow = () => (manual ? !inKaspiTime() : minute() >= STORE_RUN.startMin
 const norm = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
 
 const sql = postgres(env.databaseUrl(), { max: 2, ...connectionOptions(env.databaseUrl()) });
+const manualRunOpen = async () => (await sql`select 1 from collection_runs where runner = 'manual' and finished_at is null
+  and started_at > now() - interval '30 minutes' limit 1`).length > 0;
 
 async function main() {
   if (!inWindow()) {
@@ -51,7 +53,13 @@ async function main() {
   let requests = 0, priced = 0, matched = 0, failed = 0;
   const td = createTechnodomClient({
     minIntervalMs: STORE_RUN.spacingMs, jitterMs: STORE_RUN.jitterMs,
-    beforeRequest: () => {
+    beforeRequest: async () => {
+      // A manual Kaspi check (a visitor's product, DECISIONS 2026-11-09) is running: wait for it (rule 6a: never in
+      // parallel with a Kaspi request). Such runs last a few minutes; after 25 the store run gives up for today.
+      for (let waited = 0; await manualRunOpen(); waited += 10_000) {
+        if (waited > 25 * 60_000) throw new StoreRequestRefused("a manual Kaspi check kept running");
+        await new Promise((r) => setTimeout(r, 10_000));
+      }
       if (breaker.openReason) throw new StoreRequestRefused(breaker.openReason);
       if (!inWindow()) throw new StoreRequestRefused("outside the store window");
       requests++;

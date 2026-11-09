@@ -12,3 +12,4 @@ export * from "./explore";
 export * from "./delivery";
 export * from "./shops";
 export * from "./stores";
+export * from "./manual";

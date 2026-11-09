@@ -3,6 +3,7 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import type { Metadata } from "next";
 import { priceNotes, computeVerdict, formatTenge, moveDirection, nextVisitWindowDay, isValidSlug, slugName, isInVisitWindow } from "@baga/core";
 import { getProductView, queuedSlug, collectorRunning } from "@/lib/product";
+import { manualRunning } from "@/lib/manual";
 import { QueuedWatcher } from "@/components/QueuedWatcher";
 import { alreadyTracked } from "@/lib/catalog";
 import { Related } from "@/components/Related";
@@ -55,6 +56,8 @@ export default async function ProductPage({ params, searchParams }: Props) {
     // During the visit window with the collector running, visitor requests are fetched within minutes:
     // say so and refresh until the product page exists. Otherwise "today"/"tomorrow".
     const live = r.reason === "queued" && isInVisitWindow(new Date()) && (await collectorRunning());
+    // Outside the window: a manual check the visitor asked for (DECISIONS.md 2026-11-09) runs within about a minute.
+    const manual = r.reason === "queued" && !live && (await manualRunning(id));
     return (
       <main className="wrap untracked">
         <PrintIn className="receipt">
@@ -67,9 +70,9 @@ export default async function ProductPage({ params, searchParams }: Props) {
             ? <ProductLookup id={id} slug={s} />
             : (
               // "today"/"tomorrow" follows the collector's daily run (Kaspi's robots.txt window); times are not shown.
-              live ? (
+              live || manual ? (
                 <>
-                  <p className="untracked-status" role="status">{t("fetchingNow")}</p>
+                  <p className="untracked-status" role="status">{live ? t("fetchingNow") : t("manualChecking")}</p>
                   <QueuedWatcher />
                 </>
               ) : (
