@@ -51,7 +51,7 @@ export default async function ShortLinkPage({ params }: Props) {
           {live ? t("fetchingNow") : manual ? t("manualChecking") : nextVisitWindowDay(new Date()) === "today" ? t("queuedToday") : t("queuedTomorrow")}
         </p>
         {(live || manual) && <QueuedWatcher />}
-        <a className="kaspi-link" href={queuedLinkUrl(row.path)} rel="noopener noreferrer">{t("openOnKaspi")}</a>
+        <a className="kaspi-link" href={queuedLinkUrl(row.path)} target="_blank" rel="noopener noreferrer">{t("openOnKaspi")}</a>
       </PrintIn>
       {/* The visitor can set a price now; it moves onto the product when the collector resolves the link. */}
       <TrackPanel productId={code} shortLink={code} current={null} initial={await trackInitial({ shortLink: code })}

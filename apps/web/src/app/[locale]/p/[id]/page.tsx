@@ -81,7 +81,7 @@ export default async function ProductPage({ params, searchParams }: Props) {
                 <p className="untracked-status" role="status">{nextVisitWindowDay(new Date()) === "today" ? t("queuedToday") : t("queuedTomorrow")}</p>
               )
             )}
-          <a className="kaspi-link" href={`/go/${id}`} rel="noopener">{t("openOnKaspi")}</a>
+          <a className="kaspi-link" href={`/go/${id}`} target="_blank" rel="noopener">{t("openOnKaspi")}</a>
         </PrintIn>
         {/* Queued: the visitor can set a price now; the first price goes to Telegram when the collector gets it. */}
         {r.reason === "queued" && (
@@ -179,7 +179,7 @@ export default async function ProductPage({ params, searchParams }: Props) {
             {t("watching", { count: v.watching })}
           </p>
         )}
-          <a className="btn-kaspi" href={`/go/${v.externalId}`} rel="noopener">{t("openOnKaspi")} ↗</a>
+          <a className="btn-kaspi" href={`/go/${v.externalId}`} target="_blank" rel="noopener">{t("openOnKaspi")} ↗</a>
         </div>
         <div className="product-head">
           {v.imageUrl ? <img src={v.imageUrl} alt="" width={72} height={72} /> : <span />}
