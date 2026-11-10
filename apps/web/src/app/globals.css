@@ -833,6 +833,3 @@ p.chips { margin: 6px 0 0; }
 /* Under the paste form: the week's drops, one quiet line (DropsHint). */
 .drops-hint { margin: 10px 0 0; font-size: var(--step--1); }
 .drops-hint a { color: var(--stamp-on-counter); text-underline-offset: 3px; }
-/* Product page: the rest of its category in the catalog. */
-.category-more { margin: 8px 0 0; font-size: var(--step--1); }
-.category-more a { color: var(--stamp); text-underline-offset: 3px; }

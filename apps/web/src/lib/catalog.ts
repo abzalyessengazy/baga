@@ -36,21 +36,3 @@ export async function alreadyTracked(externalId: string, slug: string | null, li
   }
 }
 
-/**
- * How many priced active products share this leaf category (the same rows as the catalog's «Все» list filtered by
- * it). The product page links to the catalog only when there is more than the product itself.
- */
-export async function categorySize(category: string): Promise<number> {
-  const sql = getSql();
-  if (!sql || !category) return 0;
-  try {
-    const [r] = await sql<{ n: number }[]>`
-      select count(*)::int as n from products p join product_state s on s.product_id = p.id
-      where p.status = 'active' and s.current_min_price is not null
-        and p.category_path[array_length(p.category_path, 1)] = ${category}`;
-    return r?.n ?? 0;
-  } catch (e) {
-    console.error(`[catalog] ${e}`);
-    return 0;
-  }
-}
