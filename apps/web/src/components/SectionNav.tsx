@@ -4,36 +4,45 @@ import { useTranslations } from "next-intl";
 import { Link, usePathname } from "@/i18n/navigation";
 
 // The catalog holds the drops too (its «Подешевели» list), so /drops counts as the catalog (the owner, 10 Nov 2026).
-const SECTIONS = [
+type Section = { href: string; key: "home" | "explore" | "shops" | "myItems"; also: readonly string[] };
+const HOME: Section = { href: "/", key: "home", also: [] };
+const SECTIONS: Section[] = [
   { href: "/explore", key: "explore", also: ["/drops"] },
   { href: "/shops", key: "shops", also: [] },
-  { href: "/my", key: "myItems", also: [] },
-] as const;
+];
+const MY: Section = { href: "/my", key: "myItems", also: [] };
 
-const isOn = (path: string, s: (typeof SECTIONS)[number]) => [s.href, ...s.also].some((h) => path === h || path.startsWith(`${h}/`));
+const isOn = (path: string, s: Section) =>
+  s.href === "/" ? path === "/" : [s.href, ...s.also].some((h) => path === h || path.startsWith(`${h}/`));
 
 /**
- * The header's sections (the owner, 10 Nov 2026). Desktop: «Каталог · Продавцы» beside the logo and «Мои товары» on
- * the right, in words. Phones: one menu button beside the language switch that opens a panel with the three in large
- * text (icons with captions were too small, and violet on the dark counter hard to read).
+ * The header's sections (the owner, 10 Nov 2026). Desktop: «Каталог · Продавцы» beside the logo. «Мои товары» stays a
+ * quick link on every screen. Phones: a menu button opens a small panel with «Главная · Каталог · Продавцы», so the
+ * way back home is there too.
  */
 export function SectionNav() {
   const t = useTranslations("nav");
   return (
     <nav className="section-nav" aria-label={t("sections")}>
-      {SECTIONS.filter((s) => s.key !== "myItems").map((s) => <SectionLink key={s.key} s={s} label={t(s.key)} />)}
+      {SECTIONS.map((s) => <SectionLink key={s.key} s={s} label={t(s.key)} />)}
     </nav>
   );
 }
 
+/** «Мои товары» on every screen; phones show the short word when the full one does not fit (Kazakh). */
 export function MyItemsLink() {
   const t = useTranslations("nav");
-  return <SectionLink s={SECTIONS[2]} label={t("myItems")} className="nav-my" />;
+  const path = usePathname();
+  return (
+    <Link href={MY.href} aria-current={isOn(path, MY) ? "page" : undefined} className="nav-my" aria-label={t("myItems")}>
+      <span className="nav-my-full">{t("myItems")}</span><span className="nav-my-short" aria-hidden>{t("myItemsShort")}</span>
+    </Link>
+  );
 }
 
-function SectionLink({ s, label, className }: { s: (typeof SECTIONS)[number]; label: string; className?: string }) {
+function SectionLink({ s, label }: { s: Section; label: string }) {
   const path = usePathname();
-  return <Link href={s.href} aria-current={isOn(path, s) ? "page" : undefined} className={className}>{label}</Link>;
+  return <Link href={s.href} aria-current={isOn(path, s) ? "page" : undefined}>{label}</Link>;
 }
 
 export function MobileMenu() {
@@ -61,9 +70,9 @@ export function MobileMenu() {
       </button>
       {open && (
         <nav id="site-menu" className="menu-panel" aria-label={t("sections")}>
-          {SECTIONS.map((s) => (
+          {[HOME, ...SECTIONS].map((s) => (
             <Link key={s.key} href={s.href} aria-current={isOn(path, s) ? "page" : undefined} onClick={() => setOpen(false)}>
-              <span>{t(s.key)}</span><span aria-hidden>→</span>
+              {t(s.key)}
             </Link>
           ))}
         </nav>
