@@ -1,5 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <!-- A receipt with a torn edge, in stamp violet. No text. -->
-  <path fill="#4b3fd1" d="M7 2h18v25l-3-2-3 2-3-2-3 2-3-2-3 2z"/>
-  <path fill="#fff" d="M11 8h10v2H11zm0 5h10v2H11zm0 5h6v2h-6z"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+<!-- BAĞA mark, the simplified cut for browser tabs (16-32 px): bolder gaps, no wedge or notch. The full mark is in src/lib/brandMark.ts. -->
+<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5a46f0"/><stop offset="1" stop-color="#3a2cb4"/></linearGradient></defs>
+<rect width="512" height="512" rx="112" fill="url(#g)"/>
+<g fill="#fff">
+<path d="M104 104H352C384 104 410 128 410 162C410 186 402 204 386 218C366 204 346 198 324 198H158C134 172 116 142 104 104Z"/>
+<path fill-rule="evenodd" d="M104 250C130 234 160 228 190 228H330C354 228 376 232 392 240C410 262 416 290 414 320C411 376 374 414 330 414H104Z
+M104 400C140 360 182 306 214 290C240 278 270 274 304 276C334 266 364 248 390 232L394 258C378 280 360 298 344 310C330 318 312 318 296 318C276 318 258 320 244 328C214 350 186 384 160 414H104Z"/>
+</g>
 </svg>
