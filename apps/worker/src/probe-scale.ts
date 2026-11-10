@@ -12,6 +12,8 @@
  *   pnpm --filter @baga/worker probe:scale --set L    the follow-up on the JSON list (6 Nov): L1–L7
  *   pnpm --filter @baga/worker probe:scale --set C    what else the list can do (9 Nov, the owner's go): C1–C14
  *   pnpm --filter @baga/worker probe:scale --set Y    which goods depend on the city (10 Nov, the owner's go): Y1–Y26
+ *   pnpm --filter @baga/worker probe:scale --set K    list coverage (11 Nov, the owner's go for a list tier): how many of
+ *                                                      our stable products one list page holds, and their list prices
  *   --wait   started early by collect.yml: waits for 08:31 UTC (only if started after 08:15)
  */
 import { writeFileSync } from "node:fs";
@@ -295,6 +297,76 @@ EXPERIMENTS.push(
     request: () => ({ url: "https://l.kaspi.kz/shop/BGBmhEPhiHA2Uc1", init: { headers: { Accept: "text/html" } } }), read: (b, s) => ({ prices: new Map(), note: `${s} ${b.slice(0, 200)}` }) },
 );
 
+// --set K (11 Nov 2026, the owner's go for a "list tier"): before building it, measure what decides it. A list page
+// returns 12 products in Kaspi's order for a category, not the ones we ask for; the tier only pays if our stable
+// (catalog-tier) products fill those pages. For the 8 categories holding most of them: one product page each for
+// Kaspi's category code (its breadcrumb), then 5 list pages each (relevance pages 0-3, popularity page 0), counting
+// ours, ours on the catalog tier, and list price vs our stored lowest; plus two brand-filter forms. Read-only DB.
+type Ours = { min: number | null; tier: string };
+const ours = new Map<string, Ours>();
+if (process.argv.includes("--set") && process.argv[process.argv.indexOf("--set") + 1] === "K") {
+  const db = getSql();
+  if (db) {
+    const rows = await db<{ id: string; min: number | null; tier: string; cat: string | null }[]>`
+      select p.external_id as id, s.current_min_price as min, c.priority as tier, p.category_path[array_length(p.category_path, 1)] as cat
+      from products p join product_state s on s.product_id = p.id join collection_schedule c on c.product_id = p.id where p.status = 'active'`;
+    for (const r of rows) ours.set(r.id, { min: r.min, tier: r.tier });
+    const counts = new Map<string, { n: number; sample: string }>();
+    for (const r of rows) if (r.tier === "catalog" && r.cat) {
+      const c = counts.get(r.cat) ?? { n: 0, sample: r.id };
+      c.n++; counts.set(r.cat, c);
+    }
+    const top = [...counts].sort((a, b) => b[1].n - a[1].n).slice(0, 8);
+    const codes = new Map<string, string>();
+    const lastCrumb = (html: string) => [...html.matchAll(/"link":"\/shop\/c\/[^"]*","id":"([^"]+)"\}\]/g)].at(-1)?.[1] ?? null;
+    const coverage = (cat: string, n: number) => (body: string): Found => {
+      const v = json(body) as { data?: Array<{ id?: string; unitPrice?: number }> } | null;
+      const items = v?.data ?? [];
+      const mine = items.filter((i) => i.id && ours.has(String(i.id)));
+      const stable = mine.filter((i) => ours.get(String(i.id))!.tier === "catalog");
+      const cmp = { same: 0, higher: 0, lower: 0 };
+      for (const i of mine) {
+        const o = ours.get(String(i.id))!;
+        if (o.min === null || typeof i.unitPrice !== "number") continue;
+        const p = Math.round(i.unitPrice);
+        if (p === o.min) cmp.same++; else if (p > o.min) cmp.higher++; else cmp.lower++;
+      }
+      return { prices: new Map(), note: `«${cat}» (${n} stable of ours): ${items.length} items, ours ${mine.length}, stable ${stable.length}; list vs ours: same ${cmp.same}, higher ${cmp.higher}, lower ${cmp.lower}` };
+    };
+    top.forEach(([cat, c], k) => {
+      EXPERIMENTS.push({ id: `K0${k}`, question: `Category code of «${cat}» from product ${c.sample}'s breadcrumb`,
+        request: () => ({ url: `https://kaspi.kz/shop/p/-${c.sample}/?c=${CITY}`, init: { headers: { Accept: "text/html" } } }),
+        read: (b) => { const code = lastCrumb(b); if (code) codes.set(cat, code); return { prices: new Map(), note: `«${cat}» → ${code ?? "none"}` }; } });
+    });
+    top.forEach(([cat, c], k) => {
+      const pages: [number, string][] = [[0, "relevance"], [1, "relevance"], [2, "relevance"], [3, "relevance"], [0, "popularity"]];
+      pages.forEach(([page, sort], j) => EXPERIMENTS.push({
+        id: `K${k + 1}${j}`, question: `«${cat}» list, ${sort} page ${page}`,
+        when: () => (codes.has(cat) ? null : "no category code"),
+        request: () => { const code = codes.get(cat) ?? "(code)"; return { url: `https://kaspi.kz/yml/product-view/pl/results?page=${page}&q=${encodeURIComponent(`:category:${code}`)}&text&sort=${sort}&qs&c=${CITY}`,
+          init: { headers: { Accept: "application/json, text/*", Referer: `https://kaspi.kz/shop/c/${encodeURIComponent(code.toLowerCase())}/` } } }; },
+        read: coverage(cat, c.n) }));
+    });
+    // Brand filter, two forms, on the biggest category with its most common brand among our stable products.
+    const [bigCat] = top[0] ?? [];
+    if (bigCat) {
+      const brands = new Map<string, number>();
+      for (const r of await db<{ t: string }[]>`select p.title as t from products p join collection_schedule c on c.product_id = p.id
+        where c.priority = 'catalog' and p.category_path[array_length(p.category_path, 1)] = ${bigCat}`) {
+        const b = r.t.split(/\s+/).find((w) => /^[A-Za-z][A-Za-z0-9-]{2,}$/.test(w)); // the first Latin word: the brand
+        if (b) brands.set(b, (brands.get(b) ?? 0) + 1);
+      }
+      const brand = [...brands].sort((a, b) => b[1] - a[1])[0]?.[0] ?? "Samsung";
+      for (const [id, q] of [["KB1", (code: string) => `:category:${code}:manufacturerName:${brand}`], ["KB2", (code: string) => `:manufacturerName:${brand}:category:${code}`]] as const) {
+        EXPERIMENTS.push({ id, question: `Brand filter «${brand}» in «${bigCat}», form ${id}`, when: () => (codes.has(bigCat) ? null : "no category code"),
+          request: () => ({ url: `https://kaspi.kz/yml/product-view/pl/results?page=0&q=${encodeURIComponent(q(codes.get(bigCat) ?? "(code)"))}&text&sort=relevance&qs&c=${CITY}`,
+            init: { headers: { Accept: "application/json, text/*" } } }),
+          read: coverage(`${bigCat} · ${brand}`, top[0]![1].n) });
+      }
+    }
+  }
+}
+
 if (process.argv.includes("--list")) {
   for (const e of EXPERIMENTS) console.log(`${e.id}  ${e.question}\n    ${e.request().url}`);
   process.exit(0);
@@ -390,3 +462,4 @@ if (sql && all.size) {
       checkedMinAgo: Math.round((Date.now() - r.last_checked_at.getTime()) / 60_000) })) }, null, 1));
   await sql.end();
 }
+if (ours.size) await getSql()?.end({ timeout: 5 }).catch(() => {});

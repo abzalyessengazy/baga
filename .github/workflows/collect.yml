@@ -38,3 +38,15 @@ jobs:
           SITE_URL: ${{ vars.SITE_URL || secrets.SITE_URL || 'https://bagaapp.com' }} # 3 Nov 2026: it was saved as a secret; links fell back to localhost
           HEALTHCHECK_URL: ${{ secrets.HEALTHCHECK_URL }}
           COLLECT_RUNNER: github-actions
+      # One-off, 11 Nov 2026 only: list coverage before building a list tier (probe-scale.ts --set K): 50 requests in
+      # 08:31-08:43 UTC after the collector stops at 08:30; same spacing, User-Agent and stop-on-403/429 rules; the
+      # database is only read. Exits without requests on any other day, or when this run started after 08:32 UTC.
+      - name: List coverage probe (11 Nov only)
+        if: ${{ !cancelled() }}
+        run: '[ "$(date -u +%F)" = "2026-11-11" ] && pnpm --filter @baga/worker probe:scale --set K --wait || echo "not the probe day"'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      - name: List coverage responses
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with: { name: list-coverage, path: /tmp/kaspi-K*, if-no-files-found: ignore, retention-days: 14 }
