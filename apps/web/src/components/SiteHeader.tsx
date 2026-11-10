@@ -1,7 +1,7 @@
 import { Link } from "@/i18n/navigation";
 import { LocaleSwitcher } from "./LocaleSwitcher";
 import { Wordmark } from "./Wordmark";
-import { SectionNav, MyItemsLink, MobileMenu } from "./SectionNav";
+import { SectionNav, MyItemsLink } from "./SectionNav";
 
 export function SiteHeader() {
   return (
@@ -11,7 +11,6 @@ export function SiteHeader() {
       <div className="site-nav">
         <MyItemsLink />
         <LocaleSwitcher />
-        <MobileMenu />
       </div>
     </header>
   );
