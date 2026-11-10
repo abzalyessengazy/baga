@@ -22,7 +22,7 @@ export function SectionNav() {
         const on = [s.href, ...s.also].some((h) => path === h || path.startsWith(`${h}/`));
         return (
           <Link key={s.key} href={s.href} aria-current={on ? "page" : undefined} title={t(s.key)} className="nav-link">
-            <NavIcon name={s.icon} /><span className="nav-txt">{t(s.key)}</span>
+            <NavIcon name={s.icon} /><span className="nav-txt">{t(s.key)}</span><span className="nav-cap" aria-hidden>{t(`short.${s.key}`)}</span>
           </Link>
         );
       })}

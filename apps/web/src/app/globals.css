@@ -81,22 +81,29 @@ a { color: inherit; }
 }
 .section-nav a:hover { opacity: 1; }
 .section-nav a[aria-current="page"] { opacity: 1; color: var(--stamp); border-bottom-color: var(--stamp); }
-.nav-ico { display: none; }
+.nav-ico, .nav-cap { display: none; }
 @media (max-width: 719px) {
-  .section-nav { margin: 0 0 0 auto; gap: 2px; }
-  .site-nav { gap: 6px; margin-left: 2px; }
-  .nav-link { display: inline-grid; place-items: center; width: 40px; height: 40px; border-radius: 999px; padding: 0; border: 0; }
+  .section-nav { margin: 0 0 0 auto; gap: 0; }
+  .site-nav { gap: 6px; margin-left: 0; }
+  /* Icon with a small caption under it (the owner, 10 Nov 2026); the full word stays for screen readers. */
+  .nav-link {
+    display: inline-flex; flex-direction: column; align-items: center; gap: 3px; min-width: 46px;
+    padding: 5px 3px 4px; border: 0; border-radius: 10px; text-decoration: none;
+  }
   .section-nav a.nav-link { opacity: 1; }
-  .nav-link .nav-ico { display: block; }
+  .nav-link .nav-ico { display: block; width: 20px; height: 20px; }
+  .nav-link .nav-cap { display: block; font: 500 0.625rem/1 var(--font-ui); letter-spacing: -0.01em; white-space: nowrap; }
   .nav-link .nav-txt { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .nav-link:hover { background: rgba(29,32,37,0.08); text-decoration: none; }
-  .section-nav a.nav-link[aria-current="page"] { color: var(--stamp); background: var(--paper); }
+  .section-nav a.nav-link[aria-current="page"] { color: var(--stamp); border-bottom: 0; }
+  .site-nav .lang button { min-width: 40px; padding-inline: 9px; }
 }
-@media (max-width: 360px) {
-  .nav-link { width: 34px; height: 34px; }
-  .section-nav { gap: 0; }
-  .site-nav { gap: 4px; }
-  .lang button { min-width: 40px; padding-inline: 9px; }
+@media (max-width: 359px) {
+  .nav-link { min-width: 0; padding-inline: 2px; }
+  .nav-link .nav-cap { font-size: 0.5625rem; }
+  .logo { letter-spacing: 0.22em; --ls: 0.22em; }
+  .site-nav .lang button { min-width: 34px; padding-inline: 7px; }
+  .site-nav { gap: 2px; }
 }
 .nav-my { font: 600 0.875rem/1 var(--font-ui); color: var(--ink-on-counter, var(--ink)); text-decoration: none; }
 .nav-my:hover { text-decoration: underline; text-underline-offset: 3px; }

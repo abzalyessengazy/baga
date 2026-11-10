@@ -12,7 +12,7 @@ export async function SiteHeader() {
       <Link href="/" className="logo"><Wordmark /></Link>
       <SectionNav />
       <nav className="site-nav">
-        <Link href="/my" className="nav-my nav-link" title={t("myItems")}><NavIcon name="my" /><span className="nav-txt">{t("myItems")}</span></Link>
+        <Link href="/my" className="nav-my nav-link" title={t("myItems")}><NavIcon name="my" /><span className="nav-txt">{t("myItems")}</span><span className="nav-cap" aria-hidden>{t("short.my")}</span></Link>
         <LocaleSwitcher />
       </nav>
     </header>
