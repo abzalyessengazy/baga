@@ -3,6 +3,7 @@ import { useTranslations } from "next-intl";
 import { PasteForm } from "./PasteForm";
 import { MarketReceipt } from "./MarketReceipt";
 import { MyStrip } from "./MyStrip";
+import { DropsHint } from "./DropsHint";
 
 export function HomeHero() {
   const t = useTranslations("home");
@@ -12,6 +13,7 @@ export function HomeHero() {
         <h1 className="headline">{t("headline")}</h1>
         <p className="subline">{t("subline")}</p>
         <PasteForm />
+        <DropsHint />
         <MyStrip />
       </div>
       <MarketReceipt />

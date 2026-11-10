@@ -5,7 +5,8 @@ import { isCityDependent, REFERENCE_CITY, priceNotes, computeVerdict, formatTeng
 import { getProductView, queuedSlug, collectorRunning } from "@/lib/product";
 import { manualRunning } from "@/lib/manual";
 import { QueuedWatcher } from "@/components/QueuedWatcher";
-import { alreadyTracked } from "@/lib/catalog";
+import { alreadyTracked, categorySize } from "@/lib/catalog";
+import { Link } from "@/i18n/navigation";
 import { Related } from "@/components/Related";
 import { PriceChart } from "@/components/PriceChart";
 import { TrackPanel } from "@/components/TrackPanel";
@@ -160,6 +161,9 @@ export default async function ProductPage({ params, searchParams }: Props) {
   const checkedAt = showCity ? new Date(cp.observedAt).toISOString() : v.checkedAt;
   // The city the shown prices are from: Almaty until the chosen city was checked.
   const shownIn = showCity ? cityName : t("cityIn.almaty");
+  // The rest of its category in the catalog (the owner, 10 Nov 2026), when there is more than this product.
+  const leaf = v.categoryPath[v.categoryPath.length - 1] ?? "";
+  const catMore = leaf && (await categorySize(leaf)) > 1 ? leaf : null;
   const jsonLd = {
     "@context": "https://schema.org", "@type": "Product", name: v.title, image: v.imageUrl ?? undefined,
     offers: v.minPrice ? { "@type": "AggregateOffer", priceCurrency: "KZT", lowPrice: v.minPrice, offerCount: v.offerCount } : undefined,
@@ -241,6 +245,11 @@ export default async function ProductPage({ params, searchParams }: Props) {
         <hr className="rule" />
         <h2 className="receipt-caption" style={{ fontSize: "inherit", fontWeight: 400, margin: "0 0 6px" }}>{t("historyTitle")}</h2>
         <PriceChart history={v.history} />
+        {catMore && (
+          <p className="category-more">
+            <Link href={{ pathname: "/explore", query: { list: "all", cat: catMore } }}>{t("categoryMore", { category: catMore })}</Link>
+          </p>
+        )}
         <hr className="rule" />
         <h2 className="receipt-caption" style={{ fontSize: "inherit", fontWeight: 400, margin: "0 0 6px" }}>{t("sellersTitle")}</h2>
         {sellerRows.length > 0
