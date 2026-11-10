@@ -81,8 +81,21 @@ a { color: inherit; }
 }
 .section-nav a:hover { opacity: 1; }
 .section-nav a[aria-current="page"] { opacity: 1; color: var(--stamp); border-bottom-color: var(--stamp); }
+/* Phones: a full-width segmented control in the language switch's style (the owner, 10 Nov: loose grey text in the
+   receipt font looked out of place under the header). */
 @media (max-width: 719px) {
-  .section-nav { order: 3; width: 100%; margin: 0; gap: 18px; }
+  .section-nav {
+    order: 3; width: 100%; margin: 0; gap: 0; padding: 3px; border-radius: 999px;
+    background: rgba(29,32,37,0.08); font: 600 var(--step--1)/1 var(--font-ui);
+  }
+  .section-nav a {
+    flex: 1; text-align: center; padding: 9px 4px; border: 0; border-radius: 999px; opacity: 1;
+    color: inherit; white-space: nowrap;
+  }
+  .section-nav a[aria-current="page"] { background: var(--paper); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,0.12); }
+}
+@media (max-width: 719px) and (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .section-nav { background: rgba(255,255,255,0.08); }
 }
 .nav-my { font: 600 0.875rem/1 var(--font-ui); color: var(--ink-on-counter, var(--ink)); text-decoration: none; }
 .nav-my:hover { text-decoration: underline; text-underline-offset: 3px; }
