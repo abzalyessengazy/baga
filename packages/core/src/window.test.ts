@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isInVisitWindow, isManualCheckTime, lastCompleteShiftDay, msUntilVisitWindow, secondsUntilShiftEnds, nextVisitWindowDay, VISIT_WINDOW_MINUTES } from "./window";
+import { isInVisitWindow, isInStoreWindow, isManualCheckTime, lastCompleteShiftDay, msUntilVisitWindow, secondsUntilShiftEnds, nextVisitWindowDay, VISIT_WINDOW_MINUTES } from "./window";
 
 const utc = (hhmm: string) => new Date(`2026-11-02T${hhmm}:00Z`);
 
@@ -69,5 +69,22 @@ describe("manual checks (a visitor's own product, 9 Nov 2026)", () => {
   it("stops starting a check that could run into the blackout", () => {
     expect(isManualCheckTime(utc("03:54"), 60_000)).toBe(false);
     expect(isManualCheckTime(utc("03:53"), 60_000)).toBe(true);
+  });
+});
+
+describe("other stores' window (Technodom, 10 Nov 2026)", () => {
+  it("runs from 08:46 UTC across midnight to 03:50 UTC, never in Kaspi's Visit-time", () => {
+    expect(isInStoreWindow(utc("08:45"))).toBe(false);
+    expect(isInStoreWindow(utc("08:46"))).toBe(true);
+    expect(isInStoreWindow(utc("20:54"))).toBe(true); // a late GitHub trigger on 9 Nov
+    expect(isInStoreWindow(utc("23:59"))).toBe(true);
+    expect(isInStoreWindow(utc("00:30"))).toBe(true);
+    expect(isInStoreWindow(utc("03:49"))).toBe(true);
+    expect(isInStoreWindow(utc("03:50"))).toBe(false);
+    expect(isInStoreWindow(utc("06:00"))).toBe(false);
+  });
+  it("does not start a request that would run past 03:50", () => {
+    expect(isInStoreWindow(utc("03:49"), 60_000)).toBe(false);
+    expect(isInStoreWindow(utc("23:59"), 60_000)).toBe(true);
   });
 });

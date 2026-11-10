@@ -1,7 +1,8 @@
 /**
  * Other stores' prices for exactly matched Kaspi products (DECISIONS.md, 2026-11-07; CLAUDE.md rule 6a). Technodom
  * only for now. Runs after Kaspi's Visit-time has closed, so it never shares a minute with a Kaspi request:
- * 08:46–18:00 UTC (13:46–23:00 Almaty; Technodom sets no Visit-time, 8 Nov: wide so a late GitHub start still runs),
+ * 08:46–03:50 UTC, across midnight (13:46–08:50 Almaty; STORE_WINDOW_UTC: Technodom sets no Visit-time, wide so a late
+ * GitHub start still runs),
  * started by .github/workflows/stores.yml (cron-job.org dispatch, GitHub's own schedule as backup).
  *   1. Prices: confirmed matches whose last price is 12 h+ old, people's products first (one page each).
  *   2. Matching: Kaspi products never checked against Technodom get a candidate from the product sitemap (offline,
@@ -11,7 +12,7 @@
  * By hand: `pnpm --filter @baga/worker stores --now` (any time outside Kaspi's Visit-time).
  */
 import postgres from "postgres";
-import { KASPI_VISIT_WINDOW_UTC, bestCandidate, looseCandidates, mismatch, storeIndex, storeTokens, kaspiColour } from "@baga/core";
+import { KASPI_VISIT_WINDOW_UTC, isInStoreWindow, bestCandidate, looseCandidates, mismatch, storeIndex, storeTokens, kaspiColour } from "@baga/core";
 import {
   connectionOptions, isSimilarReason, storeMarketplaceId, productsToMatch, productsSoldOnKaspiBy, productIdByExternal, exactTitleForSku, saveMatch, matchesToPrice, saveStorePrice,
   setMatchStatus, startStoreRun, finishStoreRun,
@@ -21,9 +22,6 @@ import { env } from "./env";
 import { CircuitBreaker } from "./breaker";
 
 export const STORE_RUN = {
-  /** Minutes of the UTC day: from right after Kaspi's Visit-time to 18:00 UTC (23:00 Almaty). */
-  startMinute: KASPI_VISIT_WINDOW_UTC.endMinute + 1,
-  endMinute: 18 * 60,
   spacingMs: 11_000,
   jitterMs: 2_000,
   prices: 500,
@@ -35,7 +33,7 @@ const minute = (d = new Date()) => d.getUTCHours() * 60 + d.getUTCMinutes() + d.
 // `--now`: a run started by hand outside the daily window, still never during Kaspi's Visit-time (+ a minute either side).
 const manual = process.argv.includes("--now");
 const inKaspiTime = () => minute() >= KASPI_VISIT_WINDOW_UTC.startMinute - 1 && minute() <= KASPI_VISIT_WINDOW_UTC.endMinute;
-const inWindow = () => (manual ? !inKaspiTime() : minute() >= STORE_RUN.startMinute && minute() < STORE_RUN.endMinute - 1);
+const inWindow = () => (manual ? !inKaspiTime() : isInStoreWindow(new Date(), 60_000));
 const norm = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
 
 const sql = postgres(env.databaseUrl(), { max: 2, ...connectionOptions(env.databaseUrl()) });
@@ -44,7 +42,7 @@ const manualRunOpen = async () => (await sql`select 1 from collection_runs where
 
 async function main() {
   if (!inWindow()) {
-    console.log(JSON.stringify({ skipped: "outside the store window (08:46-18:00 UTC)" }));
+    console.log(JSON.stringify({ skipped: "outside the store window (08:46-03:50 UTC)" }));
     return;
   }
   const mid = await storeMarketplaceId(sql, TECHNODOM.code);

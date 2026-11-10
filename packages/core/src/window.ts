@@ -86,3 +86,18 @@ export function isManualCheckTime(now: Date, marginMs = 0): boolean {
   const inBlackout = (x: number) => x >= MANUAL_BLACKOUT_UTC.startMinute && x < MANUAL_BLACKOUT_UTC.endMinute;
   return !inBlackout(m(now)) && !inBlackout(m(new Date(now.getTime() + marginMs)));
 }
+
+/**
+ * Other stores' runs (Technodom; CLAUDE.md rule 6a): from right after Kaspi's Visit-time to 03:50 UTC the next day
+ * (13:46–08:50 Almaty), crossing midnight. Technodom sets no Visit-time; the wide window lets a late GitHub start
+ * still run (9 Nov: backup triggers arrived at 19:13 and 20:54 UTC). It ends 5 minutes before manual checks pause
+ * and 10 before the collector may start, so a store request never runs beside the daily Kaspi crawl.
+ */
+export const STORE_WINDOW_UTC = { startMinute: KASPI_VISIT_WINDOW_UTC.endMinute + 1, endMinute: KASPI_VISIT_WINDOW_UTC.startMinute - 10 } as const;
+
+/** Whether a store request may start now, and (with marginMs) still be inside the window that much later. */
+export function isInStoreWindow(now: Date, marginMs = 0): boolean {
+  const m = (t: Date) => t.getUTCHours() * 60 + t.getUTCMinutes() + t.getUTCSeconds() / 60;
+  const inside = (x: number) => x >= STORE_WINDOW_UTC.startMinute || x < STORE_WINDOW_UTC.endMinute;
+  return inside(m(now)) && inside(m(new Date(now.getTime() + marginMs)));
+}
