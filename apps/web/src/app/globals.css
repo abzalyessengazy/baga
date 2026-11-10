@@ -10,6 +10,8 @@
   --ink-faint: #8b8f96;
   --rule: #b9bcc2;
   --stamp: #4b3fd1;
+  /* Stamp violet as text on the counter: lighter in dark mode, where #4b3fd1 is hard to read (10 Nov 2026). */
+  --stamp-on-counter: #4b3fd1;
   --stamp-red: #c23b2c;
   --kaspi: #f14635; /* Kaspi's brand red: only the «Открыть на Kaspi» button */
   --technodom: #fc6b3f; /* Technodom's brand orange: only its name chip (other stores' prices, DECISIONS 2026-11-07) */
@@ -41,6 +43,7 @@
     --paper: #f4f4ef;
     --paper-shade: #e9e9e3;
     --ink-on-counter: #e8eaee;
+    --stamp-on-counter: #aaa2ff;
   }
 }
 
@@ -72,38 +75,37 @@ a { color: inherit; }
 .wordmark-g::before { content: ""; position: absolute; left: 50%; top: -0.2em; width: 0.5em; height: 0.22em; translate: calc(-50% - var(--ls, 0em) / 2) 0;
   border: 0.1em solid var(--stamp); border-top: 0; border-radius: 0 0 0.5em 0.5em; }
 .site-nav { display: flex; align-items: center; gap: 14px; }
-/* The browsing sections (SectionNav): quiet receipt-type words beside the logo on desktop; on phones every header
-   link is an icon on the logo's row (the owner, 10 Nov 2026), its word kept for screen readers and as a tooltip. */
+/* The header's sections (SectionNav). Desktop: quiet receipt-type words beside the logo. Phones: a menu button
+   beside the language switch opens a paper panel with large text (the owner, 10 Nov 2026). */
 .section-nav { display: flex; gap: 20px; margin: 0 auto 0 36px; font: 500 0.8125rem/1 var(--font-receipt); }
 .section-nav a {
   color: var(--ink-on-counter, var(--ink)); opacity: 0.72; text-decoration: none;
   padding-block: 5px; border-bottom: 2px solid transparent;
 }
 .section-nav a:hover { opacity: 1; }
-.section-nav a[aria-current="page"] { opacity: 1; color: var(--stamp); border-bottom-color: var(--stamp); }
-.nav-ico, .nav-cap { display: none; }
-@media (max-width: 719px) {
-  .section-nav { margin: 0 0 0 auto; gap: 0; }
-  .site-nav { gap: 6px; margin-left: 0; }
-  /* Icon with a small caption under it (the owner, 10 Nov 2026); the full word stays for screen readers. */
-  .nav-link {
-    display: inline-flex; flex-direction: column; align-items: center; gap: 3px; min-width: 46px;
-    padding: 5px 3px 4px; border: 0; border-radius: 10px; text-decoration: none;
-  }
-  .section-nav a.nav-link { opacity: 1; }
-  .nav-link .nav-ico { display: block; width: 20px; height: 20px; }
-  .nav-link .nav-cap { display: block; font: 500 0.625rem/1 var(--font-ui); letter-spacing: -0.01em; white-space: nowrap; }
-  .nav-link .nav-txt { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-  .nav-link:hover { background: rgba(29,32,37,0.08); text-decoration: none; }
-  .section-nav a.nav-link[aria-current="page"] { color: var(--stamp); border-bottom: 0; }
-  .site-nav .lang button { min-width: 40px; padding-inline: 9px; }
+.section-nav a[aria-current="page"], .nav-my[aria-current="page"] { opacity: 1; color: var(--stamp-on-counter); border-bottom-color: var(--stamp-on-counter); }
+.menu { display: none; position: relative; }
+.menu-btn {
+  display: grid; place-items: center; width: 44px; height: 44px; border: 0; border-radius: 999px; cursor: pointer;
+  background: transparent; color: var(--ink-on-counter, var(--ink));
 }
-@media (max-width: 359px) {
-  .nav-link { min-width: 0; padding-inline: 2px; }
-  .nav-link .nav-cap { font-size: 0.5625rem; }
-  .logo { letter-spacing: 0.22em; --ls: 0.22em; }
-  .site-nav .lang button { min-width: 34px; padding-inline: 7px; }
-  .site-nav { gap: 2px; }
+.menu-btn[aria-expanded="true"] { background: rgba(127,127,127,0.18); }
+.menu-panel {
+  position: absolute; right: 0; top: calc(100% + 8px); z-index: 50; width: min(300px, calc(100vw - 32px));
+  background: var(--paper); color: var(--ink); border-radius: 14px; padding: 6px;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.28), 0 1px 3px rgba(0,0,0,0.18);
+}
+.menu-panel a {
+  display: flex; justify-content: space-between; align-items: center; padding: 14px 14px;
+  font: 600 1.0625rem/1.2 var(--font-ui); color: var(--ink); text-decoration: none; border-radius: 10px;
+}
+.menu-panel a + a { border-top: 1px dotted var(--rule); }
+.menu-panel a:hover { background: var(--paper-shade); }
+.menu-panel a[aria-current="page"] { color: var(--stamp); }
+@media (max-width: 719px) {
+  .section-nav, .nav-my { display: none; }
+  .menu { display: block; }
+  .site-nav { gap: 8px; }
 }
 .nav-my { font: 600 0.875rem/1 var(--font-ui); color: var(--ink-on-counter, var(--ink)); text-decoration: none; }
 .nav-my:hover { text-decoration: underline; text-underline-offset: 3px; }
@@ -743,6 +745,8 @@ span.z-thumb { display: block; background: var(--paper-shade); box-shadow: none;
 }
 .explore-filters input:focus, .explore-filters select:focus { outline: 2px solid var(--focus); outline-offset: 1px; }
 .explore-apply { padding: 10px 16px; font-size: var(--step--1); }
+/* On the dark counter the ink button disappeared (10 Nov 2026): paper with ink text there. */
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .explore-apply { background: var(--paper); color: var(--ink); } }
 @media (max-width: 640px) {
   .explore-filters { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
   .explore-q { grid-column: 1 / -1; }
@@ -850,7 +854,7 @@ p.chips { margin: 6px 0 0; }
 
 /* Under the paste form: the week's drops, one quiet line (DropsHint). */
 .drops-hint { margin: 10px 0 0; font-size: var(--step--1); }
-.drops-hint a { color: var(--stamp); text-underline-offset: 3px; }
+.drops-hint a { color: var(--stamp-on-counter); text-underline-offset: 3px; }
 /* Product page: the rest of its category in the catalog. */
 .category-more { margin: 8px 0 0; font-size: var(--step--1); }
 .category-more a { color: var(--stamp); text-underline-offset: 3px; }
