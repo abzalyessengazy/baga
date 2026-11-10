@@ -110,10 +110,15 @@ export default async function ProductPage({ params, searchParams }: Props) {
       : verdict.kind === "low"
         ? verdict.atLow
           ? tv("lowestText", { days: verdict.windowDays })
-          : tv("lowText", { share: Math.round((verdict.cheaperThanShare ?? 0) * 100), days: verdict.windowDays })
+          : tv("lowText", { pct: -(verdict.aboveMedianPct ?? 0), usual: f(verdict.median!), days: verdict.windowDays })
         : verdict.kind === "typical"
-          ? tv("typicalText", { low: f(verdict.typicalLow!), high: f(verdict.typicalHigh!) })
+          ? verdict.typicalLow === verdict.typicalHigh ? tv("typicalOne", { price: f(verdict.typicalLow!) })
+            : tv("typicalText", { low: f(verdict.typicalLow!), high: f(verdict.typicalHigh!) })
           : tv("highText", { pct: verdict.aboveMedianPct ?? 0, min: f(verdict.min!), date: fmtDate(verdict.minDay!, locale) });
+  // A recent low far below today is said plainly (10 Nov 2026): «Было дешевле: 169 990 ₸ (4 ноя)». «Дороже обычного»
+  // already names the lowest.
+  const verdictWas = verdict?.wasCheaper && verdict.kind === "typical"
+    ? tv("wasCheaper", { min: f(verdict.min!), date: fmtDate(verdict.minDay!, locale) }) : null;
   // The chart shows each day's lowest price; the total is the latest check. When a cheaper offer was seen earlier the
   // same day and is gone now, say so, so the two numbers do not look like a mistake.
   const checkedDay = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Almaty" }).format(new Date(v.checkedAt));
@@ -203,7 +208,7 @@ export default async function ProductPage({ params, searchParams }: Props) {
               <span className="receipt-sub">{tr("verdict")}</span>
               <span className={`stamp is-${verdict.kind}`}>{tv(verdict.kind)}</span>
             </div>
-            <p className="verdict-text">{verdictText}</p>
+            <p className="verdict-text">{verdictText}{verdictWas && <> <strong>{verdictWas}</strong></>}</p>
           </>
         )}
         <SaleCheck history={v.history} locale={L} />

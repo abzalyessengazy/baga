@@ -53,6 +53,18 @@ describe("computeVerdict", () => {
     expect(v.kind).toBe("high");
     expect(v.aboveMedianPct).toBeGreaterThan(0);
   });
+  it("is not a good price at the usual price, nor far above a recent low (10 Nov 2026, DREAME H13 Pro)", () => {
+    const vacuum = series([319_990, 169_990, 319_990, 306_190, 306_190, 306_190, 306_190, 306_190]);
+    const v = computeVerdict(vacuum, 306_190);
+    expect(v.kind).toBe("typical");
+    expect(v.wasCheaper).toBe(true);
+    expect(v.median).toBe(306_190);
+  });
+  it("is a good price clearly under the usual one, close to the lowest", () => {
+    const v = computeVerdict(series([100_000, 100_000, 100_000, 100_000, 93_000, 92_000, 100_000, 100_000, 100_000, 100_000]), 93_000);
+    expect(v.kind).toBe("low");
+    expect(v.wasCheaper).toBe(false);
+  });
   it("only uses the last 60 days", () => {
     const old = series([...Array.from({ length: 40 }, () => 100), ...Array.from({ length: 60 }, () => 1000)]);
     const v = computeVerdict(old, 1000);

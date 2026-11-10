@@ -25,13 +25,18 @@ export interface Verdict {
   aboveMedianPct: number | null;
   /** "low": today is the lowest price of the window (or within lowTolerancePct of it). */
   atLow: boolean;
+  /** The window's median daily low (the usual price), or null. */
+  median: Tenge | null;
+  /** The window's lowest was wasCheaperPct+ below today: the page says «Было дешевле: … (date)». */
+  wasCheaper: boolean;
 }
 
 /**
  * 7 Nov 2026 (owner): the stamp said «Мало данных» on every product because it waited for 14 days. Now it speaks
  * from 3 observed days, always naming how many days it is based on, and describes only the past (CLAUDE.md rule 2):
- * stable (the whole window within ±stablePct), low (at the window's lowest, or at/below the 20th percentile),
- * high (above the 70th percentile and highMinPct+ above the median), else typical.
+ * stable (the whole window within ±stablePct), low (at the window's lowest, or at/below the 20th percentile and
+ * lowBelowMedianPct+ under the median and within lowMaxAboveMinPct of the lowest), high (above the 70th percentile
+ * and highMinPct+ above the median), else typical.
  */
 export const VERDICT_CONFIG = {
   minObservedDays: 3,
@@ -44,6 +49,15 @@ export const VERDICT_CONFIG = {
   lowTolerancePct: 1,
   /** "high" needs at least this % above the median (a 70th percentile a few tenge above it is no news). */
   highMinPct: 3,
+  /**
+   * 10 Nov 2026 (owner, a vacuum at its usual 306 190 ₸ called «Хорошая цена» 6 days after 169 990 ₸): «Хорошая цена»
+   * below the window's lowest needs today at least lowBelowMedianPct under the usual (median) price and at most
+   * lowMaxAboveMinPct over the window's lowest. The 20th percentile alone matched the most common price.
+   */
+  lowBelowMedianPct: 3,
+  lowMaxAboveMinPct: 10,
+  /** The window's lowest this far below today is said on the page («Было дешевле»). */
+  wasCheaperPct: 10,
 } as const;
 
 export function percentile(sorted: number[], p: number): number {
@@ -76,6 +90,8 @@ export function computeVerdict(history: DailyLow[], current: Tenge, cfg = VERDIC
     cheaperThanShare: null,
     aboveMedianPct: null,
     atLow: false,
+    median: null,
+    wasCheaper: false,
   };
   if (window.length === 0) return base;
 
@@ -95,12 +111,15 @@ export function computeVerdict(history: DailyLow[], current: Tenge, cfg = VERDIC
   base.typicalHigh = pHigh;
   base.cheaperThanShare = prices.filter((p) => p > current).length / prices.length;
   base.aboveMedianPct = median > 0 ? Math.round(((current - median) / median) * 100) : 0;
+  base.median = median;
+  base.wasCheaper = current >= base.min * (1 + cfg.wasCheaperPct / 100);
 
   const lowest = Math.min(base.min, current);
   const highest = Math.max(base.max, current);
   base.atLow = current <= base.min * (1 + cfg.lowTolerancePct / 100);
   if (highest <= lowest * (1 + cfg.stablePct / 100)) base.kind = "stable";
-  else if (base.atLow || current <= pLow) base.kind = "low";
+  else if (base.atLow || (current <= pLow && current <= median * (1 - cfg.lowBelowMedianPct / 100)
+    && current <= base.min * (1 + cfg.lowMaxAboveMinPct / 100))) base.kind = "low";
   else if (current > pHigh && current >= median * (1 + cfg.highMinPct / 100)) base.kind = "high";
   else base.kind = "typical";
   return base;
