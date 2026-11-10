@@ -1,7 +1,7 @@
 import "server-only";
 import { createHash } from "node:crypto";
 import { almatyDay, isManualCheckTime } from "@baga/core";
-import { getSql, requestManualCheck, manualCheckState, type ManualRequest } from "@baga/db";
+import { getSql, requestManualCheck, manualCheckState, type ManualRequest, type ManualTarget } from "@baga/db";
 
 /**
  * A visitor's own product checked on request outside the collector's window (DECISIONS.md 2026-11-09, CLAUDE.md
@@ -39,19 +39,19 @@ async function startWorkflow(): Promise<boolean> {
   }
 }
 
-/** After a visitor's product was queued: ask for a manual check when it is the time for one. */
-export async function requestManual(externalId: string, ip: string): Promise<ManualRequest | "not_now" | "unavailable"> {
+/** After a visitor's product or link was queued: ask for a manual check when it is the time for one. */
+export async function requestManual(target: ManualTarget, ip: string): Promise<ManualRequest | "not_now" | "unavailable"> {
   if (!manualAccepted()) return "not_now";
   const sql = getSql();
   if (!sql) return "unavailable";
-  const r = await requestManualCheck(sql, externalId, requester(ip));
+  const r = await requestManualCheck(sql, target, requester(ip));
   if (r === "queued") await startWorkflow();
   return r;
 }
 
-/** Whether the product page should say «проверяем по вашему запросу» and refresh itself. */
-export async function manualRunning(externalId: string): Promise<boolean> {
+/** Whether the product or link page should say «проверяем по вашему запросу» and refresh itself. */
+export async function manualRunning(target: ManualTarget): Promise<boolean> {
   const sql = getSql();
   if (!sql) return false;
-  return (await manualCheckState(sql, externalId).catch(() => null)) === "running";
+  return (await manualCheckState(sql, target).catch(() => null)) === "running";
 }

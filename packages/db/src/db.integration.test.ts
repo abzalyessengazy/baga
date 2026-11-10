@@ -14,6 +14,7 @@ import { requestWatcherEmail, EMAIL_REQUEST_LIMITS, deleteWatcherTracking, listW
 import { saveSnapshot, queueShortLink } from "./queries";
 import { dayMoves } from "./movers";
 import { requestManualCheck, finishManualCheck, queuedManualChecks, MANUAL_CHECKS } from "./manual";
+import { cityChecksDue, saveCityPrice, latestCityPrice } from "./cities";
 import { getShop, productSellers, saveShopFeedback } from "./shops";
 import { decideMatch, matchesToPrice, saveMatch, saveStorePrice, storeMarketplaceId, storeOffers } from "./stores";
 import type { ProductSnapshot } from "@baga/kaspi";
@@ -52,7 +53,7 @@ describe.skipIf(!url)("database (disposable Postgres)", () => {
   afterAll(async () => { await sql?.end(); });
 
   beforeEach(async () => {
-    await sql`truncate short_link_queue, manual_checks, store_prices, store_matches, store_runs, notifications, trackings, email_requests, watchers, seller_feedback, seller_daily, offers_current,
+    await sql`truncate short_link_queue, manual_checks, city_prices, store_prices, store_matches, store_runs, notifications, trackings, email_requests, watchers, seller_feedback, seller_daily, offers_current,
       sellers, price_observations, product_state, collection_schedule, products restart identity cascade`;
   });
 
@@ -270,24 +271,32 @@ describe.skipIf(!url)("database (disposable Postgres)", () => {
   describe("manual checks (migration 0020)", () => {
     const who = (k: string) => k.repeat(64).slice(0, 64);
     it("keeps one open request per product and 3 per visitor a day", async () => {
-      expect(await requestManualCheck(sql, "300000001", who("a"))).toBe("queued");
-      expect(await requestManualCheck(sql, "300000001", who("b"))).toBe("already");
-      expect(await requestManualCheck(sql, "300000002", who("a"))).toBe("queued");
-      expect(await requestManualCheck(sql, "300000003", who("a"))).toBe("queued");
-      expect(await requestManualCheck(sql, "300000004", who("a"))).toBe("visitor_cap");
-      expect(await requestManualCheck(sql, "300000004", who("b"))).toBe("queued");
+      expect(await requestManualCheck(sql, { externalId: "300000001" }, who("a"))).toBe("queued");
+      expect(await requestManualCheck(sql, { externalId: "300000001" }, who("b"))).toBe("already");
+      expect(await requestManualCheck(sql, { externalId: "300000002" }, who("a"))).toBe("queued");
+      expect(await requestManualCheck(sql, { externalId: "300000003" }, who("a"))).toBe("queued");
+      expect(await requestManualCheck(sql, { externalId: "300000004" }, who("a"))).toBe("visitor_cap");
+      expect(await requestManualCheck(sql, { externalId: "300000004" }, who("b"))).toBe("queued");
     });
     it("caps the day at 40 in all, also when visitors ask at the same moment", async () => {
-      const asks = Array.from({ length: MANUAL_CHECKS.perDay + 5 }, (_, i) => requestManualCheck(sql, String(310000000 + i), who(String(i % 10)).replace(/./g, (c, j) => (j < 2 ? String(i).padStart(2, "0")[j]! : c))));
+      const asks = Array.from({ length: MANUAL_CHECKS.perDay + 5 }, (_, i) => requestManualCheck(sql, { externalId: String(310000000 + i) }, who(String(i % 10)).replace(/./g, (c, j) => (j < 2 ? String(i).padStart(2, "0")[j]! : c))));
       const r = await Promise.all(asks);
       expect(r.filter((x) => x === "queued").length).toBe(MANUAL_CHECKS.perDay);
       expect(r.filter((x) => x === "day_cap").length).toBe(5);
     });
     it("pauses every request for 7 days after a 403/429", async () => {
-      expect(await requestManualCheck(sql, "300000001", who("a"))).toBe("queued");
+      expect(await requestManualCheck(sql, { externalId: "300000001" }, who("a"))).toBe("queued");
       const [q] = await queuedManualChecks(sql);
       await finishManualCheck(sql, q!.id, "blocked", "blocked: 1 response(s) were 403/429");
-      expect(await requestManualCheck(sql, "300000002", who("c"))).toBe("paused");
+      expect(await requestManualCheck(sql, { externalId: "300000002" }, who("c"))).toBe("paused");
+    });
+    it("takes a queued link too (migration 0022), within the same caps", async () => {
+      await queueShortLink(sql, "23955438b", "/shop/p/-23955438b/");
+      expect(await requestManualCheck(sql, { linkCode: "23955438b" }, who("d"))).toBe("queued");
+      expect(await requestManualCheck(sql, { linkCode: "23955438b" }, who("e"))).toBe("already");
+      const [q] = await queuedManualChecks(sql);
+      expect(q).toMatchObject({ externalId: null, linkCode: "23955438b" });
+      await expect(sql`insert into manual_checks (requester) values (${who("f")})`).rejects.toThrow();
     });
   });
 
@@ -322,6 +331,28 @@ describe.skipIf(!url)("database (disposable Postgres)", () => {
       expect(m.down.map((x) => x.externalId)).toEqual(["200000002"]);
       expect(m.compared).toBe(1);
       expect(m.checked).toBe(2);
+    });
+  });
+
+  describe("prices by city (migration 0023)", () => {
+    const save = (externalId: string, categoryPath: string[]) => saveSnapshot(sql, { marketplace: "kaspi", externalId, title: `Product ${externalId}`, imageUrl: null, categoryPath, reviews: null, rating: null,
+      offers: [{ sellerId: "m1", sellerName: "Shop", sellerRating: 4.9, sellerReviews: 100, price: 3_000, deliveryDuration: null, preorderDays: 0 }],
+      minPrice: 3_000, offerCount: 1, inStock: true, fetchedAt: new Date().toISOString() }, null, null);
+    it("asks the other cities only for pharmacy and baby care, once a day each", async () => {
+      await save("400000001", ["Аптека", "Лекарства"]);
+      await save("400000002", ["Телефоны и гаджеты", "Смартфоны"]);
+      await save("400000003", ["Детские товары", "Игрушки"]);
+      const due = await cityChecksDue(sql, 10);
+      expect(due.map((d) => `${d.externalId}:${d.city}`)).toEqual(["400000001:astana", "400000001:atyrau", "400000001:shymkent"]);
+      await saveCityPrice(sql, due[1]!.productId, "atyrau", [
+        { sellerId: "b", sellerName: "БИОСФЕРА", sellerRating: null, sellerReviews: null, price: 3_499, deliveryDuration: "TODAY" },
+        { sellerId: "a", sellerName: "Аптека", sellerRating: 4.8, sellerReviews: 20, price: 3_500, deliveryDuration: null },
+      ], null);
+      await saveCityPrice(sql, due[0]!.productId, "astana", [], null);
+      expect((await cityChecksDue(sql, 10)).map((d) => d.city)).toEqual(["shymkent"]);
+      expect(await latestCityPrice(sql, due[0]!.productId, "atyrau")).toMatchObject({ minPrice: 3_499, offerCount: 2, sellers: [{ name: "БИОСФЕРА", price: 3_499 }, { name: "Аптека" }] });
+      expect(await latestCityPrice(sql, due[0]!.productId, "astana")).toMatchObject({ minPrice: null, offerCount: 0, sellers: [] });
+      expect(await latestCityPrice(sql, due[0]!.productId, "shymkent")).toBeNull();
     });
   });
 

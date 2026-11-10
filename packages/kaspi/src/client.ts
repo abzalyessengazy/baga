@@ -4,8 +4,9 @@ import { gunzipSync } from "node:zlib";
 import { isKaspiSitemapUrl, parseSitemap } from "./sitemap";
 
 /**
- * Kaspi's lowest price is national (checked 1 Nov 2026 across 6 cities), so one reference city is enough.
- * Almaty = 750000000.
+ * Kaspi's lowest price is national for most goods (checked 1 Nov 2026 across 6 cities), so one reference city is
+ * enough: Almaty = 750000000. Pharmacy and baby care are sold by local shops (10 Nov 2026 probe): for those the
+ * collector also asks fetchOffers with another city's id (packages/core/src/cities.ts).
  */
 export const REFERENCE_CITY_ID = "750000000";
 
@@ -90,17 +91,18 @@ export function createKaspiClient(opts: KaspiClientOptions = {}) {
     return res;
   }
 
-  async function fetchOffers(productId: string, limit = 50) {
+  /** The sellers list; `city` overrides the client's city for this request (city-dependent goods only). */
+  async function fetchOffers(productId: string, limit = 50, city = cityId) {
     const res = await request(`https://kaspi.kz/yml/offer-view/offers/${productId}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Accept: "application/json, text/*",
-        "X-KS-City": cityId,
+        "X-KS-City": city,
         Referer: canonicalProductUrl(productId),
       },
       body: JSON.stringify({
-        cityId,
+        cityId: city,
         id: productId,
         merchantUID: [],
         limit,

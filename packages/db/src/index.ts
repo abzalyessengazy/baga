@@ -13,3 +13,4 @@ export * from "./delivery";
 export * from "./shops";
 export * from "./stores";
 export * from "./manual";
+export * from "./cities";

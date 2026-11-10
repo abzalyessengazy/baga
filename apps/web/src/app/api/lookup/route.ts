@@ -28,7 +28,7 @@ export async function POST(req: Request) {
   }
 
   const r = await queueProductRequest(id, typeof body.slug === "string" && isValidSlug(body.slug) ? body.slug : null);
-  if (r === "queued") await requestManual(id, ip).catch((e) => console.error(`[manual] ${e}`));
+  if (r === "queued") await requestManual({ externalId: id }, ip).catch((e) => console.error(`[manual] ${e}`));
   if (r === "queued" || r === "exists") return NextResponse.json({ ok: true });
   if (r === "full") return NextResponse.json({ error: "too_many" }, { status: 429 });
   return NextResponse.json({ error: "generic" }, { status: 503 });

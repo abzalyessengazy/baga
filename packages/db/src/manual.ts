@@ -18,6 +18,8 @@ const almatyToday = (sql: postgres.Sql) => sql`(now() at time zone 'Asia/Almaty'
 const isToday = (sql: postgres.Sql) => sql`(requested_at at time zone 'Asia/Almaty')::date = ${almatyToday(sql)}`;
 
 export type ManualRequest = "queued" | "already" | "day_cap" | "visitor_cap" | "paused";
+/** What a manual check is for: a product number, or a queued link whose product the run finds first (migration 0022). */
+export type ManualTarget = { externalId: string } | { linkCode: string };
 
 /** When manual checks resume after a block, or null. */
 export async function manualPausedUntil(sql: postgres.Sql): Promise<Date | null> {
@@ -27,35 +29,42 @@ export async function manualPausedUntil(sql: postgres.Sql): Promise<Date | null>
   return r?.until ?? null;
 }
 
-/** Records a visitor's request within the caps. One open request per product; the caps hold under concurrency. */
-export async function requestManualCheck(sql: postgres.Sql, externalId: string, requester: string): Promise<ManualRequest> {
+/** Records a visitor's request within the caps. One open request per product or link; the caps hold under concurrency. */
+export async function requestManualCheck(sql: postgres.Sql, target: ManualTarget, requester: string): Promise<ManualRequest> {
+  const externalId = "externalId" in target ? target.externalId : null;
+  const linkCode = "linkCode" in target ? target.linkCode : null;
   return sql.begin(async (tx) => {
     // One request at a time decides on the caps (a transaction-scoped lock works through the pooler).
     await tx`select pg_advisory_xact_lock(hashtext('manual_checks'))`;
     if (await manualPausedUntil(tx as unknown as postgres.Sql)) return "paused";
-    const [open] = await tx`select 1 from manual_checks where external_id = ${externalId} and status = 'queued'`;
+    const [open] = await tx`select 1 from manual_checks where status = 'queued'
+      and ${externalId ? tx`external_id = ${externalId}` : tx`link_code = ${linkCode}`}`;
     if (open) return "already";
     const [n] = await tx<{ all: number; mine: number }[]>`
       select count(*)::int as all, count(*) filter (where requester = ${requester})::int as mine
       from manual_checks where ${isToday(tx as unknown as postgres.Sql)} and status <> 'collector'`;
     if ((n?.all ?? 0) >= MANUAL_CHECKS.perDay) return "day_cap";
     if ((n?.mine ?? 0) >= MANUAL_CHECKS.perVisitor) return "visitor_cap";
-    await tx`insert into manual_checks (external_id, requester) values (${externalId}, ${requester})`;
+    await tx`insert into manual_checks (external_id, link_code, requester) values (${externalId}, ${linkCode}, ${requester})`;
     return "queued";
   });
 }
 
 /** The product page's view of a queued product: is a manual check under way, or did today's caps stop it? */
-export async function manualCheckState(sql: postgres.Sql, externalId: string): Promise<"running" | null> {
-  const [r] = await sql`select 1 from manual_checks where external_id = ${externalId} and status = 'queued'
-    and requested_at > now() - interval '30 minutes'`;
+export async function manualCheckState(sql: postgres.Sql, target: ManualTarget): Promise<"running" | null> {
+  const [r] = await sql`select 1 from manual_checks where status = 'queued' and requested_at > now() - interval '30 minutes'
+    and ${"externalId" in target
+      // A link's check goes on after the link resolved: the product page shows it too.
+      ? sql`(external_id = ${target.externalId} or link_code in (select code from short_link_queue where external_id = ${target.externalId}))`
+      : sql`link_code = ${target.linkCode}`}`;
   return r ? "running" : null;
 }
 
 /** For the worker: open requests, oldest first. */
 export async function queuedManualChecks(sql: postgres.Sql, limit = 10) {
-  return sql<{ id: number; externalId: string }[]>`
-    select id, external_id as "externalId" from manual_checks where status = 'queued' order by requested_at limit ${limit}`;
+  return sql<{ id: number; externalId: string | null; linkCode: string | null }[]>`
+    select id, external_id as "externalId", link_code as "linkCode" from manual_checks where status = 'queued'
+    order by requested_at limit ${limit}`;
 }
 
 export async function finishManualCheck(sql: postgres.Sql, id: number, status: "done" | "failed" | "blocked" | "collector", error: string | null = null) {

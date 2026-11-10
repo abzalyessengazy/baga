@@ -202,3 +202,16 @@ Measured on run #10 (4 Nov): requests start ~11.9 s apart, so the 04:05–08:30 
 - The first 403/429 pauses manual checks for 7 days; /admin warns. The morning collector keeps its own stop rule.
 - Technodom requests wait while a manual run is open (rule 6a).
 - Tell Kaspi openly in the next message: single checks a user asked for, at most 40 a day.
+
+## 2026-11-10 — Manual checks also take queued links (amends 2026-11-09)
+**Context.** A link from the Kaspi app to clothes or shoes points to a letter code (`…-23955438b`), not a product number, and the website may not ask kaspi.kz which product it is (rule 6), so the link was queued for the morning collector. The owner's coat link pasted at 17:26 on 9 Nov got its first price 15.6 hours later. The 10 Nov probe confirmed the chain: short link → letter-code address → a 302 to the numeric product, whose page and sellers request work as usual; the sellers request with the letter code returns nothing.
+**Decision** (the owner, 10 Nov 2026). A queued link (a variant link, or a short link Kaspi did not answer from the website) asks for a manual check like a product does, within the same caps (40 a day, 3 per visitor), at the same times. The manual run makes the same one or two non-following GETs the collector makes (`resolveLink`), then checks the product. `manual_checks.link_code` (migration 0022); exactly one of `external_id`, `link_code` is set.
+
+## 2026-11-10 — Pharmacy prices by city (amends 2026-11-01 "One national price")
+**Context.** The owner, in Atyrau, saw Виусид on sale there while BAĞA said «нет в продаже» (we ask with Almaty's city id). The 10 Nov probe asked 6 products in 4 cities (Almaty 750000000, Astana 710000000, Shymkent 511010000, Atyrau 231010000; the other Shymkent code 790000000 returned no sellers even for an iPhone). Electronics, beauty and home goods: the same price and sellers in all four. Pharmacy: each city has its own pharmacies; Виусид not sold in Almaty, ~50 000 ₸ elsewhere; Виферон 2 898 ₸ in Astana, 3 499 ₸ in Atyrau (+21%). Diapers: one cheaper seller in Shymkent.
+**Decision** (the owner, 10 Nov 2026).
+- Almaty stays the reference city: price history, verdict, alerts, movers and stats use it, unchanged.
+- For goods in city-dependent categories only (`packages/core/src/cities.ts`: «Аптека», «Детские товары / Для малыша и мамы»), the collector also asks the other three cities' sellers, one request per city, at most once in 20 hours, at most 150 in a run, inside the window with the same pacing and breaker; a manual check of such a product does the three too. Stored in `city_prices` (migration 0023): the lowest price, the count and the 10 cheapest sellers, as observed.
+- The product page of such goods shows a city picker (Алматы, Астана, Шымкент, Атырау; remembered in a cookie). In another city the total and the sellers are that city's, with the check time; the verdict is hidden and a line says history, verdict and alerts are Almaty's. A city not yet checked says so and shows Almaty.
+- Cost today: 3 such products, 9 requests a day. Other categories join only after a probe shows they differ by city.
+- Later, if used: alerts and history per city.

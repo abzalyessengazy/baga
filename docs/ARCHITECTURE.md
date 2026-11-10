@@ -15,7 +15,7 @@ Kaspi.kz ◀── daily, 04:00–08:45 UTC, ≥10 s apart ── Worker (GitHub
 - **Product:** the product page HTML contains `BACKEND.components.item = {...}`, with `card.title`, `galleryImages` and `breadcrumbs`.
 - **Seed catalog:** comes from Kaspi's sitemap (`/shop/sitemap.xml`, the one robots.txt lists), via the `discover` command. The index lists 350 product sitemaps and 320 per-city category sitemaps, hosted in one dated folder on Kaspi's CDN (`resources.cdn-kaspi.kz/img/cnt/s/m/<date>/`). Only that folder is fetched there, with the same 10 s spacing.
 - **Short links:** `l.kaspi.kz/…` links are resolved with one GET that doesn't follow the redirect, after Turnstile.
-- **Prices are national:** the lowest price was identical in 6 cities for 3 products. We use reference city 750000000 (Almaty).
+- **Prices are national for most goods:** the lowest price was identical in 6 cities for 3 products. We use reference city 750000000 (Almaty). Pharmacy and baby care are sold by local shops (10 Nov probe): for those the collector also stores Astana, Shymkent and Atyrau sellers once a day in `city_prices`, and the product page has a city picker (DECISIONS 2026-11-10).
 - **Which networks Kaspi accepts:**
   - Answers normally: a Kazakh home connection and GitHub Actions.
   - Answers with 429: Vercel (AWS).
@@ -26,7 +26,7 @@ Kaspi.kz ◀── daily, 04:00–08:45 UTC, ≥10 s apart ── Worker (GitHub
 - **Request spacing:** `Crawl-delay: 10`. The worker's client spaces every request by 10 s + up to 2 s of jitter.
 - **Visit window:** `Visit-time: 0400-0845` UTC. `collect.yml` starts at 03:50 UTC, the worker waits for 04:00 and stops at 08:45, and `discover` and `probe` refuse outside the window.
 - **Budget:** about 1,500 requests a day.
-- **Manual checks** (DECISIONS 2026-11-09): a visitor's own new product, on request, outside 03:55–08:50 UTC, via `manual.yml` (`pnpm worker --manual`), at most 40 a day and 3 per visitor, paused 7 days by a 403/429.
+- **Manual checks** (DECISIONS 2026-11-09): a visitor's own new product, on request, outside 03:55–08:50 UTC, via `manual.yml` (`pnpm worker --manual`), at most 40 a day and 3 per visitor, paused 7 days by a 403/429. A queued link (clothes and shoes from the phone) gets one too: the run finds its product number first.
   - A new product costs 2 requests: the page and the offers.
   - A routine check costs 1 request (offers only). The product page is refreshed weekly.
   - So the catalog is sized at about 1,000–1,200 products.

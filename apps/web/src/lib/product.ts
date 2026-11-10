@@ -69,11 +69,12 @@ export async function queueProductRequest(externalId: string, slug: string | nul
 }
 
 /** Queues an l.kaspi.kz short link for the collector to resolve. */
-export async function queueShortLinkRequest(code: string, path: string): Promise<"queued" | "full" | "unavailable"> {
+/** "pending": the link waits for its product number (a manual check can take it); "known": resolved or failed before. */
+export async function queueShortLinkRequest(code: string, path: string): Promise<"pending" | "known" | "full" | "unavailable"> {
   const sql = getSql();
   if (!sql) return "unavailable";
   const r = await queueShortLink(sql, code, path);
-  return r === "full" ? "full" : "queued";
+  return r === "full" ? "full" : r.status === "pending" ? "pending" : "known";
 }
 
 /** A queued short link: still pending, failed, or resolved to a product id. */

@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import type { Metadata } from "next";
-import { priceNotes, computeVerdict, formatTenge, moveDirection, nextVisitWindowDay, isValidSlug, slugName, isInVisitWindow } from "@baga/core";
+import { isCityDependent, REFERENCE_CITY, priceNotes, computeVerdict, formatTenge, moveDirection, nextVisitWindowDay, isValidSlug, slugName, isInVisitWindow } from "@baga/core";
 import { getProductView, queuedSlug, collectorRunning } from "@/lib/product";
 import { manualRunning } from "@/lib/manual";
 import { QueuedWatcher } from "@/components/QueuedWatcher";
@@ -16,8 +16,10 @@ import { PrintIn, StampIn } from "@/components/PrintIn";
 import { dayMonth, type DatesT } from "@/lib/dayMonth";
 import { jsonLdHtml } from "@/lib/jsonLd";
 import { SellerTable, type SellerRow } from "@/components/SellerTable";
+import { CityPicker } from "@/components/CityPicker";
+import { visitorCity, cityPrice } from "@/lib/city";
 
-type Props = { params: Promise<{ locale: string; id: string }>; searchParams: Promise<{ s?: string | string[] }> };
+type Props = { params: Promise<{ locale: string; id: string }>; searchParams: Promise<{ s?: string | string[]; city?: string | string[] }> };
 const fmtDate = (iso: string, locale: string) =>
   new Intl.DateTimeFormat(locale === "kk" ? "kk-KZ" : "ru-KZ", { day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Almaty" }).format(new Date(iso));
 /** "5 қар, 12:19" / "5 ноя, 12:19" (Almaty time); month names from messages, browsers lack Kazakh ones. */
@@ -57,7 +59,7 @@ export default async function ProductPage({ params, searchParams }: Props) {
     // say so and refresh until the product page exists. Otherwise "today"/"tomorrow".
     const live = r.reason === "queued" && isInVisitWindow(new Date()) && (await collectorRunning());
     // Outside the window: a manual check the visitor asked for (DECISIONS.md 2026-11-09) runs within about a minute.
-    const manual = r.reason === "queued" && !live && (await manualRunning(id));
+    const manual = r.reason === "queued" && !live && (await manualRunning({ externalId: id }));
     return (
       <main className="wrap untracked">
         <PrintIn className="receipt">
@@ -98,6 +100,13 @@ export default async function ProductPage({ params, searchParams }: Props) {
   }
   const v = r.view;
   const L = locale as "ru" | "kk";
+  // Prices by city (DECISIONS.md 2026-11-10): pharmacy and baby care are sold by local shops. For those, the visitor's
+  // city replaces Almaty's price and sellers; history, verdict and alerts stay Almaty's (the reference city).
+  const local = !v.delisted && isCityDependent(v.categoryPath);
+  const city = local ? await visitorCity((await searchParams).city) : REFERENCE_CITY;
+  const inCity = city !== REFERENCE_CITY;
+  const cp = inCity ? await cityPrice(v.externalId, city) : null;
+  const cityName = t(`cityIn.${city}`);
   const f = (n: number) => formatTenge(n, L);
   const verdict = v.minPrice !== null ? computeVerdict(v.history, v.minPrice) : null;
   const verdictText = !verdict ? null
@@ -133,10 +142,22 @@ export default async function ProductPage({ params, searchParams }: Props) {
   // Shop evidence for every offer (packages/core/src/sellers.ts): Kaspi's rating as a label, and an offer far below
   // the other sellers pointed out. Computed over all stored offers, not only the 12 shown.
   const notes = priceNotes(v.offers);
-  const sellerRows: SellerRow[] = v.offers.map((o, i) => ({
+  const almatyRows: SellerRow[] = v.offers.map((o, i) => ({
     sellerId: o.sellerId, sellerName: o.sellerName, sellerRating: o.sellerRating, sellerReviews: o.sellerReviews,
     price: o.price, priceText: f(o.price), deliveryText: delivery(o.deliveryDuration), note: notes[i] ?? null,
   }));
+  const cityOffers = (cp?.sellers ?? []).map((o) => ({ sellerId: o.id, sellerName: o.name, sellerRating: o.rating, sellerReviews: o.reviews, price: o.price, deliveryDuration: o.delivery }));
+  const cityNotes = priceNotes(cityOffers);
+  const cityRows: SellerRow[] = cityOffers.map((o, i) => ({
+    ...o, priceText: f(o.price), deliveryText: delivery(o.deliveryDuration), note: cityNotes[i] ?? null,
+  }));
+  // The city view only once that city was checked; until then Almaty's, with a line saying so.
+  const showCity = inCity && cp !== null;
+  const sellerRows = showCity ? cityRows : almatyRows;
+  const shownCount = showCity ? cityRows.length : shown.length;
+  const offerCount = showCity ? cp.offerCount : v.offerCount;
+  const totalPrice = showCity ? cp.minPrice : v.minPrice;
+  const checkedAt = showCity ? new Date(cp.observedAt).toISOString() : v.checkedAt;
   const jsonLd = {
     "@context": "https://schema.org", "@type": "Product", name: v.title, image: v.imageUrl ?? undefined,
     offers: v.minPrice ? { "@type": "AggregateOffer", priceCurrency: "KZT", lowPrice: v.minPrice, offerCount: v.offerCount } : undefined,
@@ -168,23 +189,25 @@ export default async function ProductPage({ params, searchParams }: Props) {
         <hr className="rule" />
         <div className="meta-row">
           <span>{tr("observedSince", { date: fmtDate(v.observedSince, locale) })}</span>
-          <strong>{tr("checkedAt", { time: fmtTime(v.checkedAt, td) })}</strong>
+          <strong>{tr("checkedAt", { time: fmtTime(checkedAt, td) })}</strong>
         </div>
         <hr className="rule" />
+        {local && <CityPicker city={city} />}
+        {inCity && !showCity && <p className="note city-note">{t("cityNotChecked", { city: cityName })}</p>}
         <div className="total">
           <span className="total-label">{tr("total")}</span>
-          <span className="total-value">{v.delisted ? t("delisted") : v.minPrice !== null ? f(v.minPrice) : t("outOfStockCity")}</span>
-          {/* We check with Almaty's city id; some goods (medicine) are sold only by local shops (9 Nov 2026). */}
-          {!v.delisted && v.minPrice === null && <span className="total-sub">{t("outOfStockCityNote")}</span>}
+          <span className="total-value">{v.delisted ? t("delisted") : totalPrice !== null ? f(totalPrice) : showCity ? t("cityNotSold", { city: cityName }) : t("outOfStockCity")}</span>
+          {/* Almaty's price; goods sold by local shops have the city picker above (10 Nov 2026). */}
+          {!v.delisted && totalPrice === null && !inCity && <span className="total-sub">{local ? t("outOfStockPickCity") : t("outOfStockCityNote")}</span>}
           {v.delisted && v.lastPrice != null && (
             <span className="total-sub total-earlier">{t("delistedText", { price: f(v.lastPrice), date: fmtDate(v.checkedAt, locale) })}</span>
           )}
-          {v.offerCount > 0 && <span className="total-sub">{tr("from", { count: v.offerCount })}</span>}
-          {earlierLow !== null && <span className="total-sub total-earlier">{t("earlierToday", { price: f(earlierLow) })}</span>}
+          {offerCount > 0 && <span className="total-sub">{tr("from", { count: offerCount })}</span>}
+          {!showCity && earlierLow !== null && <span className="total-sub total-earlier">{t("earlierToday", { price: f(earlierLow) })}</span>}
         </div>
         {/* Other stores at a glance, under the price (DECISIONS 2026-11-07): a plain name chip, never the store's logo;
             the exact item first, else the similar one; a click opens the store's page, the details stay in the block below. */}
-        {v.minPrice !== null && v.elsewhere.length > 0 && (() => {
+        {!showCity && v.minPrice !== null && v.elsewhere.length > 0 && (() => {
           const o = v.elsewhere.find((x) => x.kind === "exact") ?? v.elsewhere[0]!;
           const d = o.price - v.minPrice;
           const cls = o.kind === "similar" ? "is-similar" : d < 0 ? "is-cheaper" : "";
@@ -202,7 +225,8 @@ export default async function ProductPage({ params, searchParams }: Props) {
             </a>
           );
         })()}
-        {verdict && (
+        {showCity && <p className="note city-note">{t("cityHistoryNote")}</p>}
+        {verdict && !showCity && (
           <>
             <div className="verdict-line">
               <span className="receipt-sub">{tr("verdict")}</span>
@@ -218,10 +242,10 @@ export default async function ProductPage({ params, searchParams }: Props) {
         <hr className="rule" />
         <h2 className="receipt-caption" style={{ fontSize: "inherit", fontWeight: 400, margin: "0 0 6px" }}>{t("sellersTitle")}</h2>
         {sellerRows.length > 0
-          ? <SellerTable rows={sellerRows} shown={shown.length} ratedAt={dayMonth(v.checkedAt, td)} />
-          : <p className="verdict-text">{v.delisted ? t("delisted") : t("outOfStockCity")}</p>}
-        {v.offerCount > shown.length && <p className="note">{t("moreSellers", { count: v.offerCount - shown.length })}</p>}
-        <p className="note">{t("nationalPrice")}</p>
+          ? <SellerTable key={city} rows={sellerRows} shown={shownCount} ratedAt={dayMonth(checkedAt, td)} />
+          : <p className="verdict-text">{v.delisted ? t("delisted") : showCity ? t("cityNotSold", { city: cityName }) : t("outOfStockCity")}</p>}
+        {offerCount > shownCount && <p className="note">{t("moreSellers", { count: offerCount - shownCount })}</p>}
+        <p className="note">{local ? t("cityPrice") : t("nationalPrice")}</p>
         {/* Other stores, exact matches only (DECISIONS.md, 2026-11-07): the store's own price, never adjusted. */}
         {v.elsewhere.length > 0 && v.minPrice !== null && (
           <section className="elsewhere" id="elsewhere" aria-label={t("elsewhereTitle")}>

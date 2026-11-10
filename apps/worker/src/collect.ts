@@ -5,11 +5,11 @@
  * target alerts to Telegram right after each check, queued emails at the end. Started by .github/workflows/collect.yml at 03:50 UTC; waits for 04:05.
  */
 import { createKaspiClient, buildSnapshot, KaspiHttpError, KaspiParseError, KaspiRequestRefused, canonicalProductUrl, parseKaspiUrl, queuedLinkUrl, variantLinkCode } from "@baga/kaspi";
-import { queuedManualChecks, finishManualCheck, manualPausedUntil } from "@baga/db";
+import { queuedManualChecks, finishManualCheck, manualPausedUntil, cityChecksDue, saveCityPrice } from "@baga/db";
 import { saveSnapshot, claimNotifications, startSend, markSent, markFailed, tidyDeliveries, connectionOptions, requestProduct, attachShortLinkTrackings, weekMovers } from "@baga/db";
 import {
   evaluateAlert, priorityFor, newProductTurn, isStablePrice, STABLE, INTERVAL_MINUTES, PRIORITY_ORDER, USER_INTEREST, CATALOG, SEED_MIN_PRICE, backoffMinutes, isSuspiciousJump, type TrackingAlertState,
-  KASPI_CRAWL_DELAY_MS, isInVisitWindow, isManualCheckTime, needsPageRefresh, msUntilVisitWindow, targetForDrop, almatyDay, runningSale, type Priority,
+  KASPI_CRAWL_DELAY_MS, CITIES, CITY_CHECKS, isCityDependent, isInVisitWindow, isManualCheckTime, needsPageRefresh, msUntilVisitWindow, targetForDrop, almatyDay, runningSale, type Priority,
 } from "@baga/core";
 import postgres from "postgres";
 import { env } from "./env";
@@ -93,12 +93,33 @@ async function runManual() {
     }
     for (const r of rows) {
       if (breaker.openReason || !isManualCheckTime(new Date(), WINDOW_MARGIN_MS)) break;
-      const [have] = await sql`select 1 from products where external_id = ${r.externalId}`;
+      // A queued link (phone links to clothes and shoes, or a short link Kaspi did not answer from the website):
+      // find its product number first, 1-2 requests (migration 0022).
+      let externalId = r.externalId;
+      if (r.linkCode) {
+        const [link] = await sql<{ code: string; path: string; status: string; external_id: string | null }[]>`
+          select code, path, status, external_id from short_link_queue where code = ${r.linkCode}`;
+        if (!link || link.status === "failed") { await finishManualCheck(sql, r.id, "failed", "link failed"); failed++; continue; }
+        const found = link.status === "resolved" ? link.external_id : await resolveLink(link);
+        if (found === "refused") break;
+        if (!found) {
+          await finishManualCheck(sql, r.id, breaker.blocked > 0 ? "blocked" : "failed", breaker.openReason ?? "link did not resolve");
+          failed++; continue;
+        }
+        externalId = found;
+      }
+      if (!externalId) { await finishManualCheck(sql, r.id, "failed", "no product number"); failed++; continue; }
+      const [have] = await sql`select 1 from products where external_id = ${externalId}`;
       if (have) { await finishManualCheck(sql, r.id, "done", "already collected"); continue; }
       const [q] = await sql<Queued[]>`select external_id, slug, source, min_price from seed_queue
-        where external_id = ${r.externalId} and status = 'pending'`;
+        where external_id = ${externalId} and status = 'pending'`;
       if (!q) { await finishManualCheck(sql, r.id, "failed", "not in the queue"); failed++; continue; }
-      if (await addQueued(q, runId)) { await finishManualCheck(sql, r.id, "done"); done++; }
+      if (await addQueued(q, runId)) {
+        // Pharmacy and baby care: the other cities' sellers too, so a visitor outside Almaty sees their city today.
+        const [p] = await sql<{ id: number; category_path: string[] }[]>`select id, category_path from products where external_id = ${externalId}`;
+        if (p && isCityDependent(p.category_path)) await checkCities(runId, 3, p.id);
+        await finishManualCheck(sql, r.id, "done"); done++;
+      }
       else if (breaker.blocked > 0) { await finishManualCheck(sql, r.id, "blocked", breaker.openReason); failed++; }
       else { await finishManualCheck(sql, r.id, "failed", "fetch failed; the collector tries again in its window"); failed++; }
     }
@@ -181,6 +202,7 @@ async function main() {
   while (!breaker.openReason && inWindow()) {
     await saveRequests();
     if (await serveVisitors()) continue;
+    if (await checkCities(runId, 1)) continue;
     const due = await claimDue(env.chunkSize());
     if (due.length) {
       for (const row of due) {
@@ -226,31 +248,67 @@ async function main() {
 async function resolveShortLinks(): Promise<number> {
   const rows = await sql<{ code: string; path: string }[]>`
     select code, path from short_link_queue where status = 'pending' and attempts < 3 order by added_at limit 5`;
-  for (const r of rows) {
+  for (const r of rows) if ((await resolveLink(r)) === "refused") break;
+  return rows.length;
+}
+
+/**
+ * One queued link: finds the product number and queues the product as a visitor request. Returns the product
+ * number, null when the link failed, or "refused" when the request was not sent (the link keeps its tries).
+ */
+async function resolveLink(r: { code: string; path: string }): Promise<string | null | "refused"> {
+  try {
+    let target = await kaspi.resolveShortLink(queuedLinkUrl(r.path));
+    const variant = target ? variantLinkCode(target) : null;
+    if (variant) target = await kaspi.resolveShortLink(queuedLinkUrl(variant.path));
+    const p = target ? parseKaspiUrl(target) : null;
+    if (!p?.ok) {
+      await sql`update short_link_queue set status = 'failed', attempts = attempts + 1, last_error = ${`points to ${target}`.slice(0, 500)} where code = ${r.code}`;
+      return null;
+    }
+    await requestProduct(sql, p.productId, p.slug, 10_000);
+    await sql`update short_link_queue set status = 'resolved', external_id = ${p.productId}, slug = ${p.slug}, resolved_at = now() where code = ${r.code}`;
+    // Prices set on the waiting page move onto the product (migration 0009).
+    await attachShortLinkTrackings(sql, r.code, p.productId);
+    breaker.record(true);
+    return p.productId;
+  } catch (e) {
+    if (e instanceof KaspiRequestRefused) return "refused";
+    const http = e instanceof KaspiHttpError ? e : null;
+    breaker.record(false, http?.isBlocking ?? false, e instanceof KaspiParseError);
+    await sql`update short_link_queue set attempts = attempts + 1, last_error = ${String(e).slice(0, 500)},
+      status = case when attempts + 1 >= 3 then 'failed' else 'pending' end where code = ${r.code}`;
+    console.error(`short link ${r.code}: ${e}`);
+    return null;
+  }
+}
+
+/**
+ * Prices by city (DECISIONS.md 2026-11-10, migration 0023): for pharmacy and baby-care goods, one sellers request per
+ * other city, at most once in CITY_CHECKS.recheckHours, at most CITY_CHECKS.maxPerRun in a run. Same pacing,
+ * breaker and window as every request. Returns how many requests were sent.
+ */
+let cityRequests = 0;
+async function checkCities(runId: number, limit: number, onlyProduct?: number): Promise<number> {
+  const room = Math.min(limit, CITY_CHECKS.maxPerRun - cityRequests);
+  if (room <= 0) return 0;
+  let sent = 0;
+  for (const r of await cityChecksDue(sql, room, onlyProduct)) {
+    if (breaker.openReason) break;
     try {
-      let target = await kaspi.resolveShortLink(queuedLinkUrl(r.path));
-      const variant = target ? variantLinkCode(target) : null;
-      if (variant) target = await kaspi.resolveShortLink(queuedLinkUrl(variant.path));
-      const p = target ? parseKaspiUrl(target) : null;
-      if (!p?.ok) {
-        await sql`update short_link_queue set status = 'failed', attempts = attempts + 1, last_error = ${`points to ${target}`.slice(0, 500)} where code = ${r.code}`;
-        continue;
-      }
-      await requestProduct(sql, p.productId, p.slug, 10_000);
-      await sql`update short_link_queue set status = 'resolved', external_id = ${p.productId}, slug = ${p.slug}, resolved_at = now() where code = ${r.code}`;
-      // Prices set on the waiting page move onto the product (migration 0009).
-      await attachShortLinkTrackings(sql, r.code, p.productId);
+      const offers = await kaspi.fetchOffers(r.externalId, 50, CITIES[r.city]);
+      await saveCityPrice(sql, r.productId, r.city, offers, runId);
       breaker.record(true);
     } catch (e) {
-      if (e instanceof KaspiRequestRefused) break; // not sent: the link keeps its tries
+      if (e instanceof KaspiRequestRefused) break;
       const http = e instanceof KaspiHttpError ? e : null;
       breaker.record(false, http?.isBlocking ?? false, e instanceof KaspiParseError);
-      await sql`update short_link_queue set attempts = attempts + 1, last_error = ${String(e).slice(0, 500)},
-        status = case when attempts + 1 >= 3 then 'failed' else 'pending' end where code = ${r.code}`;
-      console.error(`short link ${r.code}: ${e}`);
+      console.error(`city ${r.city} ${r.externalId}: ${e}`);
     }
+    sent++;
+    cityRequests++;
   }
-  return rows.length;
+  return sent;
 }
 
 /**

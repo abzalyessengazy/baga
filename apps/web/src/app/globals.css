@@ -740,6 +740,15 @@ span.z-thumb { display: block; background: var(--paper-shade); box-shadow: none;
   border: 1px solid var(--rule); background: transparent; color: var(--ink-soft);
 }
 .seller-order button.is-on { border-color: var(--stamp); color: var(--stamp); font-weight: 650; }
+/* The visitor's city on goods sold by local shops (pharmacy, baby care; DECISIONS.md 2026-11-10). */
+.city-picker { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 10px; }
+.city-picker-label { font-size: 0.75rem; color: var(--ink-soft); margin-right: 2px; }
+.city-picker a {
+  font-size: 0.75rem; padding: 4px 10px; border-radius: 999px; text-decoration: none;
+  border: 1px solid var(--rule); color: var(--ink-soft);
+}
+.city-picker a.is-on { border-color: var(--stamp); color: var(--stamp); font-weight: 650; }
+.city-note { margin: 0 0 8px; }
 .shop-kicker { margin: 0 0 4px; color: var(--ink-soft); }
 .shop .receipt { margin-bottom: 24px; }
 .shop-facts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 0 0 10px; }
