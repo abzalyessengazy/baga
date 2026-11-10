@@ -72,8 +72,8 @@ a { color: inherit; }
 .wordmark-g::before { content: ""; position: absolute; left: 50%; top: -0.2em; width: 0.5em; height: 0.22em; translate: calc(-50% - var(--ls, 0em) / 2) 0;
   border: 0.1em solid var(--stamp); border-top: 0; border-radius: 0 0 0.5em 0.5em; }
 .site-nav { display: flex; align-items: center; gap: 14px; }
-/* The browsing sections (SectionNav): quiet receipt-type text beside the logo; a second row on phones. */
-.site-header { flex-wrap: wrap; row-gap: 12px; }
+/* The browsing sections (SectionNav): quiet receipt-type words beside the logo on desktop; on phones every header
+   link is an icon on the logo's row (the owner, 10 Nov 2026), its word kept for screen readers and as a tooltip. */
 .section-nav { display: flex; gap: 20px; margin: 0 auto 0 36px; font: 500 0.8125rem/1 var(--font-receipt); }
 .section-nav a {
   color: var(--ink-on-counter, var(--ink)); opacity: 0.72; text-decoration: none;
@@ -81,21 +81,22 @@ a { color: inherit; }
 }
 .section-nav a:hover { opacity: 1; }
 .section-nav a[aria-current="page"] { opacity: 1; color: var(--stamp); border-bottom-color: var(--stamp); }
-/* Phones: a full-width segmented control in the language switch's style (the owner, 10 Nov: loose grey text in the
-   receipt font looked out of place under the header). */
+.nav-ico { display: none; }
 @media (max-width: 719px) {
-  .section-nav {
-    order: 3; width: 100%; margin: 0; gap: 0; padding: 3px; border-radius: 999px;
-    background: rgba(29,32,37,0.08); font: 600 var(--step--1)/1 var(--font-ui);
-  }
-  .section-nav a {
-    flex: 1; text-align: center; padding: 9px 4px; border: 0; border-radius: 999px; opacity: 1;
-    color: inherit; white-space: nowrap;
-  }
-  .section-nav a[aria-current="page"] { background: var(--paper); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,0.12); }
+  .section-nav { margin: 0 0 0 auto; gap: 2px; }
+  .site-nav { gap: 6px; margin-left: 2px; }
+  .nav-link { display: inline-grid; place-items: center; width: 40px; height: 40px; border-radius: 999px; padding: 0; border: 0; }
+  .section-nav a.nav-link { opacity: 1; }
+  .nav-link .nav-ico { display: block; }
+  .nav-link .nav-txt { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .nav-link:hover { background: rgba(29,32,37,0.08); text-decoration: none; }
+  .section-nav a.nav-link[aria-current="page"] { color: var(--stamp); background: var(--paper); }
 }
-@media (max-width: 719px) and (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .section-nav { background: rgba(255,255,255,0.08); }
+@media (max-width: 360px) {
+  .nav-link { width: 34px; height: 34px; }
+  .section-nav { gap: 0; }
+  .site-nav { gap: 4px; }
+  .lang button { min-width: 40px; padding-inline: 9px; }
 }
 .nav-my { font: 600 0.875rem/1 var(--font-ui); color: var(--ink-on-counter, var(--ink)); text-decoration: none; }
 .nav-my:hover { text-decoration: underline; text-underline-offset: 3px; }

@@ -3,6 +3,7 @@ import { Link } from "@/i18n/navigation";
 import { LocaleSwitcher } from "./LocaleSwitcher";
 import { Wordmark } from "./Wordmark";
 import { SectionNav } from "./SectionNav";
+import { NavIcon } from "./NavIcon";
 
 export async function SiteHeader() {
   const t = await getTranslations("nav");
@@ -11,7 +12,7 @@ export async function SiteHeader() {
       <Link href="/" className="logo"><Wordmark /></Link>
       <SectionNav />
       <nav className="site-nav">
-        <Link href="/my" className="nav-my">{t("myItems")}</Link>
+        <Link href="/my" className="nav-my nav-link" title={t("myItems")}><NavIcon name="my" /><span className="nav-txt">{t("myItems")}</span></Link>
         <LocaleSwitcher />
       </nav>
     </header>

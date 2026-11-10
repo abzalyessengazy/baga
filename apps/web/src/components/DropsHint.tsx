@@ -6,7 +6,8 @@ import { loadMarket } from "@/lib/market";
 
 /**
  * One line under the paste form for visitors without a link in hand (the owner, 10 Nov 2026): what got cheaper
- * this week. Shown only when the week has drops (Market.deals, the same rule as /drops); nothing otherwise.
+ * this week, in the catalog's «Подешевели» list. Shown only when the week has drops (Market.deals, the same rule);
+ * nothing otherwise.
  */
 export function DropsHint() {
   const t = useTranslations("home");
@@ -17,5 +18,5 @@ export function DropsHint() {
     return () => { live = false; };
   }, []);
   if (!show) return null;
-  return <p className="drops-hint"><Link href="/drops">{t("dropsHint")}</Link></p>;
+  return <p className="drops-hint"><Link href={{ pathname: "/explore", query: { list: "drops" } }}>{t("dropsHint")}</Link></p>;
 }
