@@ -4,7 +4,7 @@ import { saleDates, type SaleT } from "@/lib/sale-dates";
 
 /**
  * "Kaspi Жұма: проверка" on the product page: the sale price against what we saw before it and after it
- * (core/sales.ts). Observed prices only; says so when there is nothing to compare with.
+ * (core/sales.ts). Observed prices only; hidden when there is nothing to compare with.
  */
 export async function SaleCheck({ history, locale }: { history: DailyLow[]; locale: "ru" | "kk" }) {
   const today = almatyDay();
@@ -23,10 +23,13 @@ export async function SaleCheck({ history, locale }: { history: DailyLow[]; loca
       </div>
     );
   }
+  // Nothing to compare with (we did not watch the product before the sale): no block at all, during or after
+  // the sale. A check is only shown when it can say something (the owner, 10 Nov 2026).
+  if (c.kind === "noBaseline") return null;
   const lines = [
     t("during", { price: f(c.duringLow) }),
     ...(c.before ? [t("before", { price: f(c.before.low), days: c.before.days })] : []),
-    c.kind === "noBaseline" ? t("noBaseline") : t(c.kind, { pct: Math.abs(c.beforePct ?? 0) }),
+    t(c.kind, { pct: Math.abs(c.beforePct ?? 0) }),
     c.ongoing ? t("ongoing")
       : !c.after ? t("waitingAfter")
       : c.after.pct >= 3 ? t("afterUp", { price: f(c.after.price), pct: c.after.pct })

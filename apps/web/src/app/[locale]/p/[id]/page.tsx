@@ -158,6 +158,8 @@ export default async function ProductPage({ params, searchParams }: Props) {
   const offerCount = showCity ? cp.offerCount : v.offerCount;
   const totalPrice = showCity ? cp.minPrice : v.minPrice;
   const checkedAt = showCity ? new Date(cp.observedAt).toISOString() : v.checkedAt;
+  // The city the shown prices are from: Almaty until the chosen city was checked.
+  const shownIn = showCity ? cityName : t("cityIn.almaty");
   const jsonLd = {
     "@context": "https://schema.org", "@type": "Product", name: v.title, image: v.imageUrl ?? undefined,
     offers: v.minPrice ? { "@type": "AggregateOffer", priceCurrency: "KZT", lowPrice: v.minPrice, offerCount: v.offerCount } : undefined,
@@ -196,8 +198,8 @@ export default async function ProductPage({ params, searchParams }: Props) {
         {inCity && !showCity && <p className="note city-note">{t("cityNotChecked", { city: cityName })}</p>}
         <div className="total">
           <span className="total-label">{tr("total")}</span>
-          <span className="total-value">{v.delisted ? t("delisted") : totalPrice !== null ? f(totalPrice) : showCity ? t("cityNotSold", { city: cityName }) : t("outOfStockCity")}</span>
-          {/* Almaty's price; goods sold by local shops have the city picker above (10 Nov 2026). */}
+          <span className="total-value">{v.delisted ? t("delisted") : totalPrice !== null ? f(totalPrice) : local ? t("cityNotSold", { city: shownIn }) : t("outOfStockCity")}</span>
+          {/* Almaty's price, national for most goods; goods sold by local shops have the city picker above (10 Nov 2026). */}
           {!v.delisted && totalPrice === null && !inCity && <span className="total-sub">{local ? t("outOfStockPickCity") : t("outOfStockCityNote")}</span>}
           {v.delisted && v.lastPrice != null && (
             <span className="total-sub total-earlier">{t("delistedText", { price: f(v.lastPrice), date: fmtDate(v.checkedAt, locale) })}</span>
@@ -243,7 +245,7 @@ export default async function ProductPage({ params, searchParams }: Props) {
         <h2 className="receipt-caption" style={{ fontSize: "inherit", fontWeight: 400, margin: "0 0 6px" }}>{t("sellersTitle")}</h2>
         {sellerRows.length > 0
           ? <SellerTable key={city} rows={sellerRows} shown={shownCount} ratedAt={dayMonth(checkedAt, td)} />
-          : <p className="verdict-text">{v.delisted ? t("delisted") : showCity ? t("cityNotSold", { city: cityName }) : t("outOfStockCity")}</p>}
+          : <p className="verdict-text">{v.delisted ? t("delisted") : local ? t("cityNotSold", { city: shownIn }) : t("outOfStockCity")}</p>}
         {offerCount > shownCount && <p className="note">{t("moreSellers", { count: offerCount - shownCount })}</p>}
         <p className="note">{local ? t("cityPrice") : t("nationalPrice")}</p>
         {/* Other stores, exact matches only (DECISIONS.md, 2026-11-07): the store's own price, never adjusted. */}
