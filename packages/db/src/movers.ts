@@ -17,6 +17,11 @@ export interface Mover {
   current: number | null;
 }
 
+/**
+ * Rule W (docs/STATS.md): the current lowest price against the price a week ago, i.e. the product's earliest daily
+ * low 2–7 days before today that held two days in a row (owner, 11 Nov: against the week's highest or lowest day, a one-day blip that came back
+ * showed as a move). Biggest percent first.
+ */
 export async function weekMovers(sql: postgres.Sql, dir: "down" | "up", limit = 30, minPct = MOVE_MIN_PCT): Promise<Mover[]> {
   const down = dir === "down";
   return sql<Mover[]>`
@@ -26,13 +31,19 @@ export async function weekMovers(sql: postgres.Sql, dir: "down" | "up", limit = 
       where min_price is not null and observed_at > now() - interval '9 days'
       group by 1, 2),
     today as (select (now() at time zone 'Asia/Almaty')::date as day),
+    d2 as (
+      select product_id, day, p, lag(p) over w as prev, lead(p) over w as next
+      from d window w as (partition by product_id order by day)),
     prior as (
-      select d.product_id, max(d.p)::int as high, min(d.p)::int as low
-      from d, today where d.day < today.day and d.day >= today.day - 7
-      group by 1)
+      -- The price a week ago: the earliest daily low 2–7 days back that held two days in a row (equal within
+      -- 1% to the observed day before or after it), so a one-day blip is never the reference.
+      select distinct on (d2.product_id) d2.product_id, d2.p::int as was
+      from d2, today where d2.day < today.day - 1 and d2.day >= today.day - 7
+        and ((d2.prev is not null and abs(d2.p - d2.prev) <= d2.prev * 0.01) or (d2.next is not null and abs(d2.p - d2.next) <= d2.next * 0.01))
+      order by d2.product_id, d2.day)
     select p.external_id as "externalId", p.title, p.title_kk as "titleKk", p.image_url as "imageUrl",
-           s.current_min_price as now, ${down ? sql`pr.high` : sql`pr.low`} as was,
-           round((s.current_min_price - ${down ? sql`pr.high` : sql`pr.low`}) * 100.0 / ${down ? sql`pr.high` : sql`pr.low`})::int as pct,
+           s.current_min_price as now, pr.was,
+           round((s.current_min_price - pr.was) * 100.0 / pr.was)::int as pct,
            coalesce(s.offer_count, 0) as "offerCount", s.last_checked_at as "checkedAt", s.current_min_price as current
     from prior pr
     join product_state s on s.product_id = pr.product_id
@@ -40,9 +51,9 @@ export async function weekMovers(sql: postgres.Sql, dir: "down" | "up", limit = 
     where p.status = 'active' and s.in_stock and s.current_min_price is not null
       and (s.last_checked_at at time zone 'Asia/Almaty')::date >= today.day - 1
       and ${down
-        ? sql`s.current_min_price <= pr.high * (1 - ${minPct}::numeric / 100)`
-        : sql`s.current_min_price >= pr.low * (1 + ${minPct}::numeric / 100)`}
-    order by ${down ? sql`s.current_min_price::numeric / pr.high asc` : sql`s.current_min_price::numeric / pr.low desc`}
+        ? sql`s.current_min_price <= pr.was * (1 - ${minPct}::numeric / 100)`
+        : sql`s.current_min_price >= pr.was * (1 + ${minPct}::numeric / 100)`}
+    order by s.current_min_price::numeric / pr.was ${down ? sql`asc` : sql`desc`}
     limit ${limit}`;
 }
 

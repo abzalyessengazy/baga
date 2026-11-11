@@ -1,6 +1,6 @@
 import type postgres from "postgres";
-import { priceNote, sellerLabel, type PriceNote, type SellerLabel } from "@baga/core";
-import { dayMoves, weekMovers, type Mover } from "./movers";
+import { pickOrder, priceNote, sellerLabel, type PriceNote, type SellerLabel } from "@baga/core";
+import { dayMoves, stillMoving, weekMovers, type Mover } from "./movers";
 
 /** One product where sellers ask very different prices right now (offers of its latest check). */
 export interface MarketSpread { externalId: string; title: string; titleKk: string | null; imageUrl: string | null; lo: number; hi: number; sellers: number }
@@ -9,14 +9,15 @@ export interface MarketSpread { externalId: string; title: string; titleKk: stri
 export interface MarketCategory { name: string; imageUrl: string | null; products: number; from: number; median: number; weekPct: number | null; compared: number }
 
 /**
- * The home page's find of the day: the biggest week drop (rule W), the product's own price now against its highest
- * daily low of the previous 7 days. Only history counts: the cheapest seller against the other sellers' median is not
- * a find (7 Nov 2026: Soundcore Liberty 5 showed −53% against dear resellers while four shops asked the same 27 990 ₸).
+ * The home page's find of the day (packages/core/src/pick.ts): one of the week's best drops (rule W), a different
+ * one each day, never a product the home page already shows. Only history counts: the cheapest seller against the other sellers' median is not a find (7 Nov 2026:
+ * Soundcore Liberty 5 showed −53% against dear resellers while four shops asked the same 27 990 ₸), and a product
+ * whose cheapest offer needs a seller check is skipped.
  */
 export interface MarketPick {
   kind: "drop";
   externalId: string; title: string; titleKk: string | null; imageUrl: string | null;
-  /** The current lowest price, and what it is compared with: the week's highest daily low. */
+  /** The current lowest price, and what it is compared with: the price a week ago (rule W). */
   price: number; ref: number; pct: number; sellers: number;
   /** The cheapest offer far below the other sellers (priceNote): "check" adds "проверьте продавца". */
   note?: PriceNote;
@@ -48,6 +49,8 @@ export const MARKET_CONFIG = {
   lowsMinDays: 7,
   /** Seller spread: in-stock products with 2+ sellers checked in the last 3 days; cheap accessories are left out of the list. */
   spreadMinPrice: 5_000, spreadTop: 12,
+  /** An offer above this many times the product's median offer is not part of its seller gap. */
+  spreadOutlier: 2,
   /** A category is listed from this many priced products; its week change needs this many with history. */
   categoryMin: 8, categoryCompared: 5, categoryTop: 8,
   deals: 12,
@@ -91,12 +94,18 @@ export async function getMarket(sql: postgres.Sql): Promise<Market> {
       from d window w as (partition by product_id))
     select count(*)::int as n from r
     where rn = 1 and day = ${moves.day}::date and days >= ${c.lowsMinDays} and p < before_low` : [];
+  // Seller gap (docs/STATS.md): an offer above twice the product's median offer is left out (owner, 11 Nov: one
+  // small shop at 759 990 ₸ next to four at 185-203k read as our error, not as a gap a buyer could use).
   const offers = sql`
-    select o.product_id, min(o.price)::int as lo, max(o.price)::int as hi, count(*)::int as sellers,
-           round(percentile_cont(0.5) within group (order by o.price))::int as med
-    from offers_current o join product_state s on s.product_id = o.product_id join products p on p.id = o.product_id
-    where p.status = 'active' and s.in_stock and s.last_checked_at > now() - interval '3 days'
-    group by 1 having count(*) >= 2`;
+    with b as (
+      select o.product_id, o.price from offers_current o join product_state s on s.product_id = o.product_id
+      join products p on p.id = o.product_id
+      where p.status = 'active' and s.in_stock and s.last_checked_at > now() - interval '3 days'),
+    m as (select product_id, percentile_cont(0.5) within group (order by price) as med from b group by 1)
+    select b.product_id, min(b.price)::int as lo, max(b.price)::int as hi, count(*)::int as sellers, round(m.med)::int as med
+    from b join m on m.product_id = b.product_id
+    where b.price <= m.med * ${c.spreadOutlier}
+    group by b.product_id, m.med having count(*) >= 2`;
   const [spread] = await sql<{ products: number; over10: number; over25: number; median: number | null }[]>`
     with x as (${offers})
     select count(*)::int as products,
@@ -133,19 +142,7 @@ export async function getMarket(sql: postgres.Sql): Promise<Market> {
     from x group by name having count(*) >= ${c.categoryMin}
     order by count(*) desc limit ${c.categoryTop}`;
   const deals = await weekMovers(sql, "down", c.deals);
-  const d = deals[0];
-  const drop: MarketPick | null = d ? { kind: "drop", externalId: d.externalId, title: d.title, titleKk: d.titleKk,
-    imageUrl: d.imageUrl, price: d.now, ref: d.was, pct: d.pct, sellers: d.offerCount } : null;
-  const pick = drop;
-  // The find of the day says what the seller table would say about its cheapest offer.
-  if (pick) {
-    const [o] = await sql<{ prices: number[]; rating: number | null; reviews: number | null }[]>`
-      select array_agg(o.price order by o.price, se.id) as prices,
-             (array_agg(se.rating order by o.price, se.id))[1] as rating, (array_agg(se.reviews order by o.price, se.id))[1] as reviews
-      from offers_current o join sellers se on se.id = o.seller_id join products p on p.id = o.product_id
-      where p.external_id = ${pick.externalId}`;
-    pick.note = o?.prices?.length ? priceNote(o.prices[0]!, o.prices.slice(1), o.rating, o.reviews) : null;
-  }
+  const pick = await pickOfDay(sql, moves, deals);
   const down = moves.down.length, up = moves.up.length;
   return {
     catalog: catalog ?? { products: 0, sellers: 0, firstDay: null },
@@ -156,3 +153,25 @@ export async function getMarket(sql: postgres.Sql): Promise<Market> {
     categories, deals, pick, shops,
   };
 }
+
+/** The find of the day: the first candidate of pickOrder whose cheapest offer does not need a seller check. */
+async function pickOfDay(sql: postgres.Sql, moves: Awaited<ReturnType<typeof dayMoves>>, deals: Mover[]): Promise<MarketPick | null> {
+  if (!moves.day) return null;
+  // The day list's visible rows on the home page (ZReport, 4 rows): not repeated as the find.
+  const shown = moves.down.filter(stillMoving).slice(0, DAY_ROWS_SHOWN).map((m) => m.externalId);
+  for (const m of pickOrder(deals, moves.day, shown)) {
+    const [o] = await sql<{ prices: number[]; rating: number | null; reviews: number | null }[]>`
+      select array_agg(o.price order by o.price, se.id) as prices,
+             (array_agg(se.rating order by o.price, se.id))[1] as rating, (array_agg(se.reviews order by o.price, se.id))[1] as reviews
+      from offers_current o join sellers se on se.id = o.seller_id join products p on p.id = o.product_id
+      where p.external_id = ${m.externalId}`;
+    const note = o?.prices?.length ? priceNote(o.prices[0]!, o.prices.slice(1), o.rating, o.reviews) : null;
+    if (note?.kind === "check") continue;
+    return { kind: "drop", externalId: m.externalId, title: m.title, titleKk: m.titleKk, imageUrl: m.imageUrl,
+      price: m.now, ref: m.was, pct: m.pct, sellers: m.offerCount, note };
+  }
+  return null;
+}
+
+/** Rows of the day list the home page shows before «Смотреть все» (ZReport ROWS_TWO). */
+export const DAY_ROWS_SHOWN = 4;

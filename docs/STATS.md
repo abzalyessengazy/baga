@@ -45,23 +45,36 @@ of them cheaper) and the Z-report "День" lists (biggest percent first).
 ## Rule W: now against the previous 7 days (`weekMovers`, `packages/db/src/movers.ts`)
 
 The product's current lowest price (`product_state.current_min_price`, in stock, checked on the shift or the day
-before) against its daily lows of the 7 Almaty days before today:
+before) against its price **a week ago**: its earliest daily low 2–7 Almaty days before today that held two days in
+a row (equal within 1% to the observed day before or after it), so a one-day blip is never the reference.
 
-- **Drop**: current price at least `MOVE_MIN_PCT` below the **highest** of those daily lows.
-- **Rise**: current price at least `MOVE_MIN_PCT` above the **lowest** of those daily lows.
+- **Drop**: current price at least `MOVE_MIN_PCT` below the price a week ago.
+- **Rise**: current price at least `MOVE_MIN_PCT` above it.
 
-A drop that has since gone back up is not a drop any more. Biggest percent first.
+Until 11 Nov 2026 the reference was the week's highest (drops) or lowest (rises) daily low, so a one-day blip that
+came back showed as a move (owner, 11 Nov: FreeBuds SE 3 at 14 490 ₸ all week with one day at 17 889 ₸ showed −19%).
+Biggest percent first.
 
-Used by: `/drops`, the Z-report "Неделя" lists, "Самое большое снижение недели" (the first drop), the find of the
-day (when its drop is bigger in percent than the best seller gap) and the Telegram channel (which posts only drops
-of 5% or more, its own bar for a post worth sending).
+Used by: `/drops`, `/explore` drops and rises, the Z-report "Неделя" lists, "Подешевел сильнее всех за неделю" (the
+first drop) and the Telegram channel (which posts only drops of 5% or more, its own bar for a post worth sending).
+
+Day lists ("День"): a product whose later check has undone its move is not listed (`stillMoving`); the day's counts
+keep every move.
+
+## Find of the day (`packages/core/src/pick.ts`)
+
+One of the week's best drops (rule W), a different one each day: the best 5 eligible drops in turn. Never a product
+the home page already shows (the week's biggest drop and the 4 visible rows of the day list), only drops of 10% or
+more on products from 5 000 ₸, and not a product whose cheapest offer needs a seller check.
 
 ## Other numbers
 
 - **Products under watch**: active products (`products.status = 'active'`), all time.
+- **Most tracked** («Чаще всего отслеживают»): products with a price that 2+ people track; hidden until there is one.
 - **Sellers with offers**: distinct sellers in `offers_current` of active products (each product's latest check).
 - **Seller gap** ("Разница у продавцов"): one product's cheapest and dearest current offer; in stock, 2+ sellers,
-  checked in the last 3 days. The median gap and the share above 25% are over those products.
+  checked in the last 3 days. Offers above twice the product's median offer are left out (11 Nov: one shop at
+  759 990 ₸ beside four at 185–203k). The median gap and the share above 25% are over those products.
 - **Categories**: Kaspi leaf category, 8+ priced in-stock products checked today or yesterday; lowest and median
   current price. The week change, once 5+ of them have one, is the median over products of the current price
   against their earliest daily low 2–7 days ago.

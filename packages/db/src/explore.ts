@@ -2,13 +2,15 @@ import type postgres from "postgres";
 import { MOVE_MIN_PCT } from "@baga/core";
 import { likePattern } from "./like";
 import { addedByPerson } from "./stats";
+import { MARKET_CONFIG } from "./market";
 
 /**
  * The catalog browser (/explore): every product we watch, as one of four lists, with search, a category filter,
  * sorting and pages. The lists follow docs/STATS.md, the same rules as the home page slips:
- * - drops / rises: rule W, the current lowest price against the highest / lowest daily low of the previous
- *   7 Almaty days (a check today or yesterday, in stock, MOVE_MIN_PCT or more);
- * - spread: the cheapest and the dearest seller of the latest check (2+ sellers, checked in the last 3 days);
+ * - drops / rises: rule W, the current lowest price against the price a week ago (the earliest daily low 2–7
+ *   Almaty days before today that held two days in a row; a check today or yesterday, in stock, MOVE_MIN_PCT or more);
+ * - spread: the cheapest and the dearest seller of the latest check (2+ sellers, checked in the last 3 days),
+ *   leaving out offers above MARKET_CONFIG.spreadOutlier times the product's median offer;
  * - all: every active product with a price.
  * Only observed prices; nothing is estimated.
  */
@@ -52,12 +54,21 @@ export async function exploreCatalog(sql: postgres.Sql, x: ExploreQuery): Promis
       from price_observations where min_price is not null and observed_at > now() - interval '9 days'
       group by 1, 2),
     today as (select (now() at time zone 'Asia/Almaty')::date as day),
+    d2 as (
+      select product_id, day, p, lag(p) over w as prev, lead(p) over w as next
+      from d window w as (partition by product_id order by day)),
     prior as (
-      select d.product_id, max(d.p)::int as high, min(d.p)::int as low
-      from d, today where d.day < today.day and d.day >= today.day - 7 group by 1),
+      -- The price a week ago: the earliest daily low 2–7 days back that held two days in a row (equal within
+      -- 1% to the observed day before or after it), so a one-day blip is never the reference.
+      select distinct on (d2.product_id) d2.product_id, d2.p::int as was
+      from d2, today where d2.day < today.day - 1 and d2.day >= today.day - 7
+        and ((d2.prev is not null and abs(d2.p - d2.prev) <= d2.prev * 0.01) or (d2.next is not null and abs(d2.p - d2.next) <= d2.next * 0.01))
+      order by d2.product_id, d2.day),
+    om as (select product_id, percentile_cont(0.5) within group (order by price) as med from offers_current group by 1),
     o as (
-      select product_id, min(price)::int as lo, max(price)::int as hi, count(*)::int as n
-      from offers_current group by 1),
+      select oc.product_id, min(oc.price)::int as lo, max(oc.price)::int as hi, count(*)::int as n
+      from offers_current oc join om on om.product_id = oc.product_id
+      where oc.price <= om.med * ${MARKET_CONFIG.spreadOutlier} group by 1),
     -- People with an active tracking (the «tracked» order: the home page's «Чаще всего отслеживают» in full).
     w as (
       select product_id, count(distinct coalesce(watcher_id::text, user_id::text))::int as n
@@ -66,7 +77,7 @@ export async function exploreCatalog(sql: postgres.Sql, x: ExploreQuery): Promis
       select p.external_id, p.title, p.title_kk, p.image_url, p.first_seen_at, coalesce(p.kaspi_reviews, 0) as reviews,
              p.category_path[array_length(p.category_path, 1)] as category,
              s.current_min_price as price, coalesce(s.offer_count, 0) as offer_count,
-             ${list === "drops" ? sql`pr.high` : list === "rises" ? sql`pr.low` : sql`null::int`} as was,
+             ${list === "drops" || list === "rises" ? sql`pr.was` : sql`null::int`} as was,
              case when o.n >= 2 then o.lo end as lo, case when o.n >= 2 then o.hi end as hi, coalesce(w.n, 0) as watchers,
              ${sort === "new" ? addedByPerson(sql) : sql`false`} as by_person
       from products p join product_state s on s.product_id = p.id
@@ -75,9 +86,9 @@ export async function exploreCatalog(sql: postgres.Sql, x: ExploreQuery): Promis
       left join o on o.product_id = p.id, today
       where p.status = 'active' and s.current_min_price is not null
         ${list === "drops" ? sql`and s.in_stock and (s.last_checked_at at time zone 'Asia/Almaty')::date >= today.day - 1
-          and s.current_min_price <= pr.high * (1 - ${min}::numeric / 100)` : sql``}
+          and s.current_min_price <= pr.was * (1 - ${min}::numeric / 100)` : sql``}
         ${list === "rises" ? sql`and s.in_stock and (s.last_checked_at at time zone 'Asia/Almaty')::date >= today.day - 1
-          and s.current_min_price >= pr.low * (1 + ${min}::numeric / 100)` : sql``}
+          and s.current_min_price >= pr.was * (1 + ${min}::numeric / 100)` : sql``}
         ${list === "spread" ? sql`and s.in_stock and o.n >= 2 and o.lo >= ${EXPLORE.spreadMinPrice}
           and s.last_checked_at > now() - interval '3 days'` : sql``}
         ${words.length ? sql`and ${words.map((w) => sql`(p.title ilike ${likePattern(w)} or p.title_kk ilike ${likePattern(w)})`)

@@ -31,7 +31,7 @@ function Thumb({ src }: { src: string | null }) {
 // Each slip shows only the rows that fit it whole; "Смотреть все →" opens the full list in the catalog
 // (/explore). One-line rows: 5, two-line rows: 4, three-line rows (categories): 3.
 const ROWS = 5;
-const ROWS_TWO = 4;
+const ROWS_TWO = 4; // packages/db market.ts DAY_ROWS_SHOWN: the find of the day skips these rows
 const ROWS_THREE = 3;
 
 /* 2. Price moves (docs/STATS.md rules D and W): biggest drops or rises in percent, one line per product, the top line inked. */

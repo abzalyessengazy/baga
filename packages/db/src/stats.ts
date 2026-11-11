@@ -15,6 +15,9 @@ export const addedByPerson = (sql: postgres.Sql) => sql`(not p.is_seed and (
   exists (select 1 from events e where e.external_id = p.external_id and e.at <= p.first_seen_at)
   or exists (select 1 from trackings t where t.product_id = p.id and t.created_at <= p.first_seen_at + interval '1 day')))`;
 
+/** «Чаще всего отслеживают» lists a product from this many people tracking it. */
+export const MIN_TRACKERS = 2;
+
 /** A product in a plain list (most tracked, newest). */
 export interface StatsProduct { externalId: string; title: string; titleKk: string | null; imageUrl: string | null; price: number | null; at: Date }
 export interface StatsMoves { drops: StatsMove[]; rises: StatsMove[] }
@@ -82,13 +85,16 @@ export async function getPlatformStats(sql: postgres.Sql, dayCount = 14, listCou
   const move = (m: Mover): StatsMove => ({ externalId: m.externalId, title: m.title, titleKk: m.titleKk, imageUrl: m.imageUrl, from: m.was, to: m.now, pct: m.pct, at: m.checkedAt });
   const product = (r: { external_id: string; title: string; title_kk: string | null; image_url: string | null; price: number | null; at: Date }): StatsProduct =>
     ({ externalId: r.external_id, title: r.title, titleKk: r.title_kk, imageUrl: r.image_url, price: r.price, at: r.at });
-  // Ordered by how many watchers track a product; the counts themselves stay private while they are small.
+  // Ordered by how many people track a product; the counts themselves stay private while they are small. Only
+  // products with a price that MIN_TRACKERS or more people track (owner, 11 Nov: with one person each, "most tracked"
+  // was really "recently tracked"); the slip hides itself until there is one.
   const tracked = await sql<{ external_id: string; title: string; title_kk: string | null; image_url: string | null; price: number | null; at: Date }[]>`
     select p.external_id, p.title, p.title_kk, p.image_url, s.current_min_price as price, max(t.created_at) as at
-    from trackings t join products p on p.id = t.product_id left join product_state s on s.product_id = p.id
-    where p.status = 'active' and t.status <> 'removed'
+    from trackings t join products p on p.id = t.product_id join product_state s on s.product_id = p.id
+    where p.status = 'active' and t.status <> 'removed' and s.current_min_price is not null
     group by p.id, s.current_min_price
-    order by count(*) desc, max(t.created_at) desc limit ${listCount}`;
+    having count(distinct coalesce(t.watcher_id::text, t.user_id::text)) >= ${MIN_TRACKERS}
+    order by count(distinct coalesce(t.watcher_id::text, t.user_id::text)) desc, max(t.created_at) desc limit ${listCount}`;
   const newest = await sql<{ external_id: string; title: string; title_kk: string | null; image_url: string | null; price: number | null; at: Date }[]>`
     select p.external_id, p.title, p.title_kk, p.image_url, s.current_min_price as price, p.first_seen_at as at
     from products p join product_state s on s.product_id = p.id
