@@ -12,10 +12,9 @@ describe("Collection window inside Kaspi's robots.txt Visit-time 0400-0845 UTC",
     expect(isInVisitWindow(utc("08:44"))).toBe(false);
     expect(isInVisitWindow(utc("16:00"))).toBe(false); // 21:00 Almaty
   });
-  it("closes at 08:30 on 11 Nov 2026 only, for the list coverage probe after it", () => {
-    expect(isInVisitWindow(new Date("2026-11-11T08:29:00Z"))).toBe(true);
-    expect(isInVisitWindow(new Date("2026-11-11T08:31:00Z"))).toBe(false);
+  it("has no early-stop days left after the 11 Nov probe", () => {
     expect(isInVisitWindow(new Date("2026-11-12T08:31:00Z"))).toBe(true);
+    expect(isInVisitWindow(new Date("2026-11-13T08:41:00Z"))).toBe(true);
   });
   it("keeps a safety margin before closing", () => {
     expect(isInVisitWindow(utc("08:41"), 30_000)).toBe(true);

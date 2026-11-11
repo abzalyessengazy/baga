@@ -236,3 +236,8 @@ Expected: ~450 more requests a day for new products and fresher checks, about 30
 - Savings are kept apart: «saved» only where the person answered «Да, купил» (start price minus alert price); «drops caught» for every target alert sent, bought or not. Never shown publicly as savings.
 - The bot answers `/id` with the chat's number so the owner can fill the secret.
 - A later AI summary on top of this report stays read-only (no pushes, no deploys, no Kaspi requests).
+
+## 2026-11-11 — No list tier (the 11 Nov coverage probe)
+**Context.** The owner asked for a list tier: read Kaspi category list pages (12 products each) instead of checking calm products one by one. A list shows Kaspi's choice of products, not ours, so it pays only if our calm products fill those pages.
+**Measured** (probe K, 11 Nov 08:31–08:39 UTC, 8 categories holding most calm products, relevance pages 0–3 and popularity page 0): 37 list pages, 444 products shown, 53 of them ours (12%), **12 of our calm products, 0.3 per request** against 1 per request when checked directly. Monitors were best (5 calm in 5 pages), smartphones and tablets had none. A brand-filtered list (`:category:Monitors:manufacturerName:Acer`) got 403 from Kaspi's nginx; the probe stopped there as rule 6 requires (robots.txt does not disallow these pages; the other 40 requests got 200).
+**Decision.** No list tier: it would cost about 3× more requests per calm product. Capacity comes from the 10 Nov changes ("More checks from the same rules") instead. CLAUDE.md rule 6 is unchanged.

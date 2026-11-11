@@ -25,9 +25,9 @@ function minuteOfDayUtc(d: Date): number {
 /**
  * Days the collector stops early (UTC date → end minute), to leave the rest of Kaspi's Visit-time to a one-off
  * probe: two clients at once would break the 10 s Crawl-delay. A probe after the collector (probe-scale.ts --wait,
- * 08:31–08:43) needs its day here since the window ends at 08:42. 11 Nov 2026: the list coverage probe (set K).
+ * 08:31–08:43) needs its day here since the window ends at 08:42. None now (11 Nov 2026 was the list coverage probe).
  */
-export const COLLECT_END_EXCEPTIONS_UTC: Readonly<Record<string, number>> = { "2026-11-11": 8 * 60 + 30 };
+export const COLLECT_END_EXCEPTIONS_UTC: Readonly<Record<string, number>> = {};
 
 /** Minute of the UTC day when the collection window closes on `now`'s day. */
 export function collectEndMinute(now: Date): number {
