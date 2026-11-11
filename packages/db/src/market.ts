@@ -37,6 +37,8 @@ export interface Market {
   /** Biggest drops against the previous 7 days (the same rule as /drops). */
   deals: Mover[];
   pick: MarketPick | null;
+  /** Up to PICK.rotate finds, today's turn first (`pick` is the first). */
+  picks: MarketPick[];
   /**
    * Shop evidence (DECISIONS.md, 2026-11-05 "Shop evidence, not verdicts"): the shops in current offers by the
    * label of their Kaspi rating (sellerLabel), and the products whose cheapest offer is far below the other sellers
@@ -142,7 +144,8 @@ export async function getMarket(sql: postgres.Sql): Promise<Market> {
     from x group by name having count(*) >= ${c.categoryMin}
     order by count(*) desc limit ${c.categoryTop}`;
   const deals = await weekMovers(sql, "down", c.deals);
-  const pick = await pickOfDay(sql, moves, deals);
+  const picks = await picksOfDay(sql, moves, deals);
+  const pick = picks[0] ?? null;
   const down = moves.down.length, up = moves.up.length;
   return {
     catalog: catalog ?? { products: 0, sellers: 0, firstDay: null },
@@ -150,15 +153,16 @@ export async function getMarket(sql: postgres.Sql): Promise<Market> {
     compared: moves.compared, down, up, same: moves.compared - down - up,
     newLows: lows?.n ?? 0,
     spread: { products: spread?.products ?? 0, over10: spread?.over10 ?? 0, over25: spread?.over25 ?? 0, medianPct: spread?.median ?? null, top },
-    categories, deals, pick, shops,
+    categories, deals, pick, picks, shops,
   };
 }
 
-/** The find of the day: the first candidate of pickOrder whose cheapest offer does not need a seller check. */
-async function pickOfDay(sql: postgres.Sql, moves: Awaited<ReturnType<typeof dayMoves>>, deals: Mover[]): Promise<MarketPick | null> {
-  if (!moves.day) return null;
-  // The day list's visible rows on the home page (ZReport, 4 rows): not repeated as the find.
+/** The finds of the day: pickOrder's candidates whose cheapest offer does not need a seller check, today's turn first. */
+async function picksOfDay(sql: postgres.Sql, moves: Awaited<ReturnType<typeof dayMoves>>, deals: Mover[]): Promise<MarketPick[]> {
+  if (!moves.day) return [];
+  // The day list's visible rows on the home page (ZReport, 4 rows): not repeated as a find.
   const shown = moves.down.filter(stillMoving).slice(0, DAY_ROWS_SHOWN).map((m) => m.externalId);
+  const out: MarketPick[] = [];
   for (const m of pickOrder(deals, moves.day, shown)) {
     const [o] = await sql<{ prices: number[]; rating: number | null; reviews: number | null }[]>`
       select array_agg(o.price order by o.price, se.id) as prices,
@@ -167,10 +171,10 @@ async function pickOfDay(sql: postgres.Sql, moves: Awaited<ReturnType<typeof day
       where p.external_id = ${m.externalId}`;
     const note = o?.prices?.length ? priceNote(o.prices[0]!, o.prices.slice(1), o.rating, o.reviews) : null;
     if (note?.kind === "check") continue;
-    return { kind: "drop", externalId: m.externalId, title: m.title, titleKk: m.titleKk, imageUrl: m.imageUrl,
-      price: m.now, ref: m.was, pct: m.pct, sellers: m.offerCount, note };
+    out.push({ kind: "drop", externalId: m.externalId, title: m.title, titleKk: m.titleKk, imageUrl: m.imageUrl,
+      price: m.now, ref: m.was, pct: m.pct, sellers: m.offerCount, note });
   }
-  return null;
+  return out;
 }
 
 /** Rows of the day list the home page shows before «Смотреть все» (ZReport ROWS_TWO). */
