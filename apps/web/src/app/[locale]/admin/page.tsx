@@ -4,6 +4,7 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import { getSql, getAdminHealth, getFunnel, recentFeedback, pendingMatches, latestStoreRuns, manualToday, type AdminRun, RUN_PACE_WARN_S } from "@baga/db";
 import { isInVisitWindow } from "@baga/core";
 import { adminEnabled, isAdmin } from "@/lib/admin";
+import { Link } from "@/i18n/navigation";
 
 type Props = { params: Promise<{ locale: string }>; searchParams: Promise<{ e?: string }> };
 export const dynamic = "force-dynamic";
@@ -68,7 +69,7 @@ export default async function AdminPage({ params, searchParams }: Props) {
   return (
     <main className="wrap untracked admin">
       <h1 className="product-title" style={{ color: "var(--ink-on-counter, var(--ink))" }}>{t("title")}</h1>
-      <p className="admin-now">{t("now", { time: at(new Date()) })}</p>
+      <p className="admin-now">{t("now", { time: at(new Date()) })} · <Link href="/admin/business">{t("toBusiness")}</Link></p>
 
       <section className={`receipt admin-card${warnings.length ? " is-warn" : ""}`}>
         <h2>{warnings.length ? t("warnings") : t("allGood")}</h2>

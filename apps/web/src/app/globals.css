@@ -861,3 +861,52 @@ p.chips { margin: 6px 0 0; }
 .remove-ask .channel-text { margin: 0; }
 .remove-ask .bought-options .btn { flex: 1 1 calc(50% - 8px); }
 .remove-ask-foot { display: flex; justify-content: space-between; gap: 16px; margin-top: 10px; }
+
+/* Business dashboard (/admin/business): admin cards plus tiles, a funnel and small one-measure bar charts. */
+.biz-periods { display: flex; gap: 6px; margin: 0 0 14px; flex-wrap: wrap; }
+.biz-period { font: 600 var(--step--1)/1 var(--font-receipt); padding: 8px 12px; border-radius: 999px; border: 1px solid var(--rule); color: var(--ink); background: var(--paper); text-decoration: none; }
+.biz-period[aria-current="page"] { background: var(--stamp); border-color: var(--stamp); color: var(--paper); }
+.biz-note { font-size: var(--step--1); color: var(--ink-on-counter, var(--ink-soft)); margin: 0 0 14px; max-width: 70ch; }
+.admin-card .biz-note { color: var(--ink-soft); margin: 10px 0 0; }
+.biz-def { font-size: var(--step--1); color: var(--ink-faint); margin: 12px 0 0; max-width: 70ch; }
+.biz-targets th[scope="row"] { color: var(--ink); font-weight: 400; white-space: normal; min-width: 180px; padding-right: 16px; }
+.biz-targets td { font-weight: 700; }
+.biz-mark { font-weight: 600; white-space: nowrap; }
+.biz-mark.is-on { color: var(--stamp); }
+.biz-mark.is-half { color: var(--caution, #a86a00); }
+.biz-mark.is-off { color: var(--stamp-red); }
+.biz-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); gap: 14px 18px; }
+.biz-tiles.is-two { grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr)); }
+.biz-tile { min-width: 0; padding-top: 10px; border-top: 1px dashed var(--rule); }
+.biz-tile.is-main { border-top: 2px solid var(--stamp); }
+.biz-tile p { margin: 0; }
+.biz-tile-k { font-size: var(--step--1); color: var(--ink-soft); }
+.biz-tile-v { font: 800 1.75rem/1.15 var(--font-ui); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; margin-top: 2px !important; }
+.biz-tile-d { font: 400 var(--step--1)/1.4 var(--font-receipt); color: var(--ink-faint); margin-top: 2px !important; }
+.biz-tile-d .is-up { color: var(--stamp); font-weight: 600; }
+.biz-tile-d .is-down { color: var(--stamp-red); font-weight: 600; }
+.biz-charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 18px; }
+.biz-chart { margin: 0; min-width: 0; }
+.biz-chart figcaption { font-size: var(--step--1); color: var(--ink-soft); margin-bottom: 4px; display: flex; justify-content: space-between; gap: 8px; }
+.biz-chart figcaption b { color: var(--ink); font-family: var(--font-receipt); }
+.biz-chart svg { width: 100%; height: auto; display: block; overflow: visible; }
+.biz-axis { stroke: var(--rule); stroke-width: 1; }
+.biz-tick { font: 400 9px var(--font-receipt); fill: var(--ink-faint); }
+.biz-bar { fill: color-mix(in srgb, var(--stamp) 55%, var(--paper)); }
+.is-last .biz-bar { fill: var(--stamp); }
+.biz-hit { fill: transparent; }
+g:hover > .biz-bar { fill: var(--stamp); }
+.biz-details { margin-top: 12px; font-size: var(--step--1); }
+.biz-details summary { cursor: pointer; color: var(--stamp); }
+.biz-funnel { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.biz-funnel li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; font-size: var(--step--1); }
+.biz-funnel-k { color: var(--ink-soft); }
+.biz-funnel-v { font-family: var(--font-receipt); font-weight: 700; text-align: right; }
+.biz-funnel-bar { order: 3; grid-column: 1 / -1; height: 8px; background: color-mix(in srgb, var(--rule) 45%, transparent); border-radius: 4px; overflow: hidden; }
+.biz-funnel-bar > span { display: block; height: 100%; background: var(--stamp); border-radius: 4px; }
+.biz-name { white-space: normal; min-width: 200px; }
+.biz-name a { color: var(--ink); }
+.biz-chip { margin-left: 6px; font-size: 0.6875rem; padding: 2px 6px; border-radius: 4px; background: var(--stamp); color: var(--paper); }
+tr.is-post td { font-weight: 700; }
+.wrap.untracked.biz { max-width: 1040px; }
+@media (min-width: 900px) { .biz .biz-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); } .biz .biz-tiles.is-two { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
