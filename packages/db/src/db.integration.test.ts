@@ -314,6 +314,16 @@ describe.skipIf(!url)("database (disposable Postgres)", () => {
       expect(await claimNotifications(sql, "telegram")).toEqual([]);
       expect(await deleteWatcherTracking(sql, w, t!.id)).toBe(false); // already removed
     });
+    it("keeps the answer to «Почему убираете?» and counts «Купил(а) на Kaspi» as bought (migration 0026)", async () => {
+      const w = await watcher({ chat: 43 });
+      const n = await notification(w, "telegram");
+      const [t] = await sql<{ id: string }[]>`select tracking_id as id from notifications where id = ${n}`;
+      expect(await deleteWatcherTracking(sql, w, t!.id, "bought")).toBe(true);
+      const [row] = await sql<{ removed_reason: string; bought: string; status: string }[]>`
+        select removed_reason, bought, status from trackings where id = ${t!.id}`;
+      expect(row).toMatchObject({ removed_reason: "bought", bought: "yes", status: "removed" });
+      await expect(sql`update trackings set removed_reason = 'bored' where id = ${t!.id}`).rejects.toThrow();
+    });
   });
 
   describe("day moves (docs/STATS.md rule D)", () => {

@@ -131,8 +131,12 @@ export async function upsertWatcherTracking(sql: postgres.Sql, watcherId: string
  * «Удалить» in «Мои товары» (migration 0019): the tracking is kept as history with status 'removed', hidden from the
  * list, never alerted again; its queued messages are dropped. Tracking the product again revives the same row.
  */
-export async function deleteWatcherTracking(sql: postgres.Sql, watcherId: string, trackingId: string): Promise<boolean> {
-  return sql.begin(async (tx) => {
+/** Why a visitor removed a product (migration 0026); the question is optional. */
+export const REMOVED_REASONS = ["bought", "bought_elsewhere", "changed_mind", "price_never_dropped"] as const;
+export type RemovedReason = (typeof REMOVED_REASONS)[number];
+
+export async function deleteWatcherTracking(sql: postgres.Sql, watcherId: string, trackingId: string, reason: RemovedReason | null = null): Promise<boolean> {
+  const ok = await sql.begin(async (tx) => {
     const r = await tx`update trackings set status = 'removed', removed_at = now()
       where id = ${trackingId} and watcher_id = ${watcherId} and status <> 'removed'`;
     if (!r.count) return false;
@@ -140,6 +144,14 @@ export async function deleteWatcherTracking(sql: postgres.Sql, watcherId: string
       where tracking_id = ${trackingId} and status = 'queued'`;
     return true;
   });
+  // The answer is kept apart, so a removal still works before migration 0026 is applied.
+  if (ok && reason) {
+    const bought = reason === "bought" ? "yes" : reason === "changed_mind" ? "no" : null;
+    await sql`update trackings set removed_reason = ${reason},
+        bought = coalesce(${bought}::text, bought), bought_at = case when ${bought}::text is not null then now() else bought_at end
+      where id = ${trackingId} and watcher_id = ${watcherId}`.catch(() => {});
+  }
+  return ok;
 }
 
 export async function getWatcherTracking(sql: postgres.Sql, watcherId: string, externalId: string) {

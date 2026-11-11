@@ -854,3 +854,10 @@ p.chips { margin: 6px 0 0; }
 .pick-arrow:hover { border-color: var(--stamp); color: var(--stamp); }
 @media (hover: hover) and (pointer: fine) { .pick-arrow { display: inline-grid; place-items: center; } }
 @media (prefers-reduced-motion: reduce) { .pick-dot { transition: none; } }
+
+/* «Почему убираете?» in «Мои товары»: opens in the row, under the product. */
+.remove-ask { grid-column: 1 / -1; padding: 10px 0 2px; }
+.remove-ask .channel-title { margin: 0 0 2px; }
+.remove-ask .channel-text { margin: 0; }
+.remove-ask .bought-options .btn { flex: 1 1 calc(50% - 8px); }
+.remove-ask-foot { display: flex; justify-content: space-between; gap: 16px; margin-top: 10px; }
