@@ -216,7 +216,7 @@ export default async function BusinessPage({ params, searchParams }: Props) {
       <div className="admin-grid">
         <section className="receipt admin-card">
           <h2>{t("boughtTitle")}</h2>
-          {kv([[t("bAsked"), b.bought.asked], [t("bYes"), b.bought.yes], [t("bLater"), b.bought.later], [t("bNo"), b.bought.no]])}
+          {kv([[t("bAsked"), b.bought.asked], [t("bAnswered"), b.bought.yes + b.bought.later + b.bought.no], [t("bYes"), b.bought.yes], [t("bLater"), b.bought.later], [t("bNo"), b.bought.no]])}
         </section>
         <section className="receipt admin-card">
           <h2>{t("removedTitle")}</h2>
