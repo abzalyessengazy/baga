@@ -1,13 +1,13 @@
 name: Collect prices
 on:
   # Once a day. kaspi.kz/robots.txt asks bots to visit 04:00-08:45 UTC (09:00-13:45 Almaty) with a
-  # 10 s crawl delay. We keep off the edges: the worker sends requests only 04:05-08:30 UTC (09:05-13:30 Almaty).
-  # The job starts at 03:50 UTC and the worker waits for 04:05.
+  # 10 s crawl delay. We keep off the edges: the worker sends requests only 04:01-08:42 UTC (09:01-13:42 Almaty).
+  # The job starts at 03:50 UTC and the worker waits for 04:01.
   # See DECISIONS.md "Follow kaspi.kz/robots.txt". Manual runs outside the window exit without requests.
   # GitHub delays scheduled runs under load and often drops them (2 and 3 Nov 2026: no morning run at all; the
   # triggers arrived at 11:42, 13:52 and 17:04 UTC). So there is a backup trigger every 20 minutes through the
   # window: whichever arrives first collects. While a collector runs, GitHub keeps one later trigger waiting and
-  # cancels the others ("cancelled" in the Actions list is expected). A trigger after 08:30 exits within seconds
+  # cancels the others ("cancelled" in the Actions list is expected). A trigger after 08:42 exits within seconds
   # without any Kaspi request.
   # Main trigger since 3 Nov 2026: cron-job.org calls workflow_dispatch at 03:50 UTC plus backups (DECISIONS.md,
   # "External trigger for the collector"). These schedule lines stay as a further backup.

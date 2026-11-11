@@ -375,7 +375,7 @@ if (process.argv.includes("--list")) {
 const utcMinute = () => { const d = new Date(); return d.getUTCHours() * 60 + d.getUTCMinutes(); };
 if (process.argv.includes("--wait") && utcMinute() >= 8 * 60 + 15 && utcMinute() < 8 * 60 + 31) {
   const d = new Date(); d.setUTCHours(8, 31, 0, 0);
-  console.log(`Waiting for 08:31 UTC (${Math.round((d.getTime() - Date.now()) / 1000)} s): the collector's last request is before 08:30.`);
+  console.log(`Waiting for 08:31 UTC (${Math.round((d.getTime() - Date.now()) / 1000)} s): the collector stops at 08:30 on a probe day (COLLECT_END_EXCEPTIONS_UTC).`);
   await new Promise((r) => setTimeout(r, d.getTime() - Date.now()));
 }
 // collect.yml can start a queued second run as the first ends (~08:43): with --wait, only a start by 08:32 probes.

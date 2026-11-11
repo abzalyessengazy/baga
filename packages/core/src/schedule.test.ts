@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { priorityFor, backoffMinutes, isSuspiciousJump, needsPageRefresh, queueLane, newProductTurn, isStablePrice, INTERVAL_MINUTES, CATALOG } from "./schedule";
+import { priorityFor, backoffMinutes, isSuspiciousJump, needsPageRefresh, queueLane, newProductTurn, isStablePrice, isCalmPrice, intervalFor, INTERVAL_MINUTES, CATALOG } from "./schedule";
 import { VISIT_WINDOW_MINUTES } from "./window";
 import { formatTenge, toTenge } from "./money";
 
@@ -11,8 +11,10 @@ describe("schedule", () => {
     const base = { now, refreshedThisRun: 0 };
     expect(needsPageRefresh({ ...base, pageCheckedAt: null, priority: "seed", refreshedThisRun: 10_000 })).toBe(true);
     expect(needsPageRefresh({ ...base, pageCheckedAt: fresh, priority: "seed" })).toBe(false);
-    expect(needsPageRefresh({ ...base, pageCheckedAt: old, priority: "seed" })).toBe(true);
-    expect(needsPageRefresh({ ...base, pageCheckedAt: old, priority: "seed", refreshedThisRun: CATALOG.pageRefreshPerRun })).toBe(false);
+    expect(needsPageRefresh({ ...base, pageCheckedAt: old, priority: "seed" })).toBe(false); // 30 days since 10 Nov
+    const month = new Date("2026-10-10T04:00:00Z"); // 31 days ago
+    expect(needsPageRefresh({ ...base, pageCheckedAt: month, priority: "seed" })).toBe(true);
+    expect(needsPageRefresh({ ...base, pageCheckedAt: month, priority: "seed", refreshedThisRun: CATALOG.pageRefreshPerRun })).toBe(false);
     expect(needsPageRefresh({ ...base, pageCheckedAt: old, priority: "tracked", refreshedThisRun: CATALOG.pageRefreshPerRun })).toBe(true);
     expect(needsPageRefresh({ ...base, pageCheckedAt: old, priority: "hot", refreshedThisRun: CATALOG.pageRefreshPerRun })).toBe(true);
     expect(needsPageRefresh({ ...base, pageCheckedAt: old, priority: "catalog" })).toBe(false); // 30 days for catalog
@@ -113,5 +115,29 @@ describe("stable prices are checked every third day (8 Nov 2026)", () => {
     expect(priorityFor({ activeTrackings: 0, minDistanceToTargetPct: null, isSeed: true, lastViewedDaysAgo: null, seedRank: 5, stable: false })).toBe("seed");
     expect(priorityFor({ activeTrackings: 0, minDistanceToTargetPct: null, isSeed: true, lastViewedDaysAgo: 2, seedRank: 5, stable: true })).toBe("seed");
     expect(priorityFor({ activeTrackings: 1, minDistanceToTargetPct: null, isSeed: true, lastViewedDaysAgo: null, seedRank: 5, stable: true })).toBe("tracked");
+  });
+});
+
+describe("longer gaps where nothing happens (10 Nov 2026)", () => {
+  it("calls a price calm after 7+ observed days within 2%", () => {
+    expect(isCalmPrice(Array(7).fill(50_000))).toBe(true);
+    expect(isCalmPrice([50_000, 50_500, 50_900, 50_000, 50_000, 50_000, 50_000])).toBe(true);
+    expect(isCalmPrice(Array(6).fill(50_000))).toBe(false); // too few days
+    expect(isCalmPrice([...Array(6).fill(50_000), 52_000])).toBe(false); // a 4% move
+  });
+  it("checks calm catalog products every 5 days and untracked ones out of stock every 3", () => {
+    expect(intervalFor("catalog", { calm: true, inStock: true })).toBe(5 * 24 * 60);
+    expect(intervalFor("catalog", { calm: false, inStock: true })).toBe(INTERVAL_MINUTES.catalog);
+    expect(intervalFor("seed", { calm: true, inStock: true })).toBe(INTERVAL_MINUTES.seed); // opened lately: daily
+    expect(intervalFor("seed", { calm: false, inStock: false })).toBe(3 * 24 * 60);
+    expect(intervalFor("catalog", { calm: true, inStock: false })).toBe(3 * 24 * 60);
+  });
+  it("never stretches what someone tracks", () => {
+    expect(intervalFor("tracked", { calm: true, inStock: false })).toBe(INTERVAL_MINUTES.tracked);
+    expect(intervalFor("hot", { calm: true, inStock: false })).toBe(INTERVAL_MINUTES.hot);
+  });
+  it("re-reads untracked product pages monthly, watched ones weekly", () => {
+    expect(CATALOG.pageRefreshDays.seed).toBe(30);
+    expect(CATALOG.pageRefreshDays.tracked).toBe(7);
   });
 });

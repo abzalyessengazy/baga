@@ -215,3 +215,12 @@ Measured on run #10 (4 Nov): requests start ~11.9 s apart, so the 04:05–08:30 
 - The product page of such goods shows a city picker (Алматы, Астана, Шымкент, Атырау; remembered in a cookie). In another city the total and the sellers are that city's, with the check time; the verdict is hidden and a line says history, verdict and alerts are Almaty's. A city not yet checked says so and shows Almaty.
 - Cost today: 3 such products, 9 requests a day. Other categories join only after a probe shows they differ by city.
 - Later, if used: alerts and history per city.
+
+## 2026-11-10 — More checks from the same rules
+**Context.** The collector uses its whole window every day (1,440 requests on 10 Nov), and 1,283 queued products wait. Measured on 10 Nov: the random 0–2 s added to each 10 s gap cost ~8% of the requests; our margins (04:05–08:30 inside Kaspi's 04:00–08:45) another ~6%; weekly re-reads of untracked product pages ~90 requests a day; 791 of 1,532 products (52%) kept one lowest price all week; 117 had no offers.
+**Decision** (the owner, 10 Nov 2026). Kaspi's robots.txt rules stay exactly as they are (10 s Crawl-delay, Visit-time 04:00–08:45 UTC, stop on 403/429); only our own extra caution changes:
+- Gaps of exactly 10.2 s start to start, no random extra.
+- Collection window 04:01–08:42 UTC (09:01–13:42 Almaty); the collector stops starting a product 1 minute before the end. A probe after the collector (08:31–08:43) needs its day in `COLLECT_END_EXCEPTIONS_UTC` (11 Nov: the list coverage probe).
+- Product pages of untracked products re-read monthly (tracked: weekly).
+- A catalog product calm for 14 days (7+ observed days within 2%) is checked every 5 days; an untracked product with no offers every 3 days. Opening or tracking a product still brings it to the next run, and any move puts it back on its tier.
+Expected: ~450 more requests a day for new products and fresher checks, about 30% more capacity.

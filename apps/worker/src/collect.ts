@@ -1,14 +1,14 @@
 /**
- * One daily collection run inside Kaspi's robots.txt visit window (04:00–08:45 UTC; we use 04:05–08:30), one request per ≥10 s:
+ * One daily collection run inside Kaspi's robots.txt visit window (04:00–08:45 UTC; we use 04:01–08:42), one request per ≥10 s:
  * fetch visitor requests first, then check due products (offers only; product page weekly), then queued seed
  * products; poll for new visitor requests until the window closes; evaluate alerts; send the first price and
- * target alerts to Telegram right after each check, queued emails at the end. Started by .github/workflows/collect.yml at 03:50 UTC; waits for 04:05.
+ * target alerts to Telegram right after each check, queued emails at the end. Started by .github/workflows/collect.yml at 03:50 UTC; waits for 04:01.
  */
 import { createKaspiClient, buildSnapshot, KaspiHttpError, KaspiParseError, KaspiRequestRefused, canonicalProductUrl, parseKaspiUrl, queuedLinkUrl, variantLinkCode } from "@baga/kaspi";
 import { queuedManualChecks, finishManualCheck, manualPausedUntil, cityChecksDue, saveCityPrice } from "@baga/db";
 import { saveSnapshot, claimNotifications, startSend, markSent, markFailed, tidyDeliveries, connectionOptions, requestProduct, attachShortLinkTrackings, weekMovers } from "@baga/db";
 import {
-  evaluateAlert, priorityFor, newProductTurn, isStablePrice, STABLE, INTERVAL_MINUTES, PRIORITY_ORDER, USER_INTEREST, CATALOG, SEED_MIN_PRICE, backoffMinutes, isSuspiciousJump, type TrackingAlertState,
+  evaluateAlert, priorityFor, newProductTurn, isStablePrice, isCalmPrice, intervalFor, CALM, STABLE, INTERVAL_MINUTES, PRIORITY_ORDER, USER_INTEREST, CATALOG, SEED_MIN_PRICE, backoffMinutes, isSuspiciousJump, type TrackingAlertState,
   KASPI_CRAWL_DELAY_MS, CITIES, CITY_CHECKS, isCityDependent, isInVisitWindow, isManualCheckTime, needsPageRefresh, msUntilVisitWindow, targetForDrop, almatyDay, runningSale, type Priority,
 } from "@baga/core";
 import postgres from "postgres";
@@ -28,12 +28,14 @@ const sql = postgres(env.databaseUrl(), { max: 2, ...connectionOptions(env.datab
 const MANUAL = process.argv.includes("--manual");
 // Every request this run makes (page, offers, re-checks, alert confirmations) goes through this gate.
 // The last word before each request, after its pacing wait: nothing is sent once the breaker is open or the window
-// (04:05–08:30 UTC) has closed, whatever the caller planned.
+// (04:01–08:42 UTC) has closed, whatever the caller planned.
 const breaker = new CircuitBreaker();
 // Every request that passes the guard is sent: counted for collection_runs.requests (migration 0017).
 let requests = 0;
 const kaspi = createKaspiClient({
-  minIntervalMs: KASPI_CRAWL_DELAY_MS, jitterMs: 2_000,
+  // Exactly robots.txt's 10 s plus 0.2 s, no random extra (DECISIONS.md 2026-11-10 "More checks from the same rules":
+  // the 0-2 s jitter cost ~8% of the day's requests and protected nothing). Gaps are measured start to start.
+  minIntervalMs: KASPI_CRAWL_DELAY_MS + 200, jitterMs: 0,
   // Manual checks say so in the User-Agent: a single page a visitor asked for, not the daily crawl.
   ...(MANUAL ? { userAgent: `${process.env.KASPI_USER_AGENT ?? "BAGA price history bot (+contact: hello@baga.app)"}; user-requested check` } : {}),
   beforeRequest: () => {
@@ -45,7 +47,7 @@ const kaspi = createKaspiClient({
 });
 
 // Worst case for one product: page + offers + suspicious re-check + alert confirmation = 4 requests ≈ 48 s.
-// Stop starting new products when less than this remains, so no request lands after 08:30 UTC.
+// Stop starting new products when less than this remains, so no request lands after 08:42 UTC.
 const WINDOW_MARGIN_MS = 60_000;
 const inWindow = () => isInVisitWindow(new Date(), WINDOW_MARGIN_MS);
 
@@ -137,7 +139,7 @@ async function main() {
   if (MANUAL) return runManual();
   const wait = msUntilVisitWindow(new Date());
   if (wait > env.windowWaitMaxMs()) {
-    console.log(JSON.stringify({ skipped: "outside collection window (04:05-08:30 UTC)", opensInMinutes: Math.round(wait / 60_000) }));
+    console.log(JSON.stringify({ skipped: "outside collection window (04:01-08:42 UTC)", opensInMinutes: Math.round(wait / 60_000) }));
     await cleanUp();
     await sendQueued(); // Telegram and email only, no Kaspi requests
     return;
@@ -460,16 +462,20 @@ async function reschedule(productId: number, minPrice: number | null) {
     from x`;
   // Daily lows of the last STABLE.days days (this check included): a catalog product whose price has not moved
   // is checked every third day (8 Nov 2026), freeing ~300 requests a day for daily checks of everything else.
-  const lows = await sql<{ p: number }[]>`
-    select min(min_price)::int as p from price_observations
-    where product_id = ${productId} and min_price is not null and observed_at > now() - make_interval(days => ${STABLE.days})
+  // The last CALM.days days of daily lows, each with its day: STABLE reads the last STABLE.days of them, CALM all
+  // (10 Nov 2026: calm for 2 weeks = every 5 days; no offers = every 3 days, unless someone tracks it).
+  const lows14 = await sql<{ p: number; old: boolean }[]>`
+    select min(min_price)::int as p, (observed_at at time zone 'Asia/Almaty')::date < (now() at time zone 'Asia/Almaty')::date - ${STABLE.days - 1} as old
+    from price_observations
+    where product_id = ${productId} and min_price is not null and observed_at > now() - make_interval(days => ${CALM.days})
     group by (observed_at at time zone 'Asia/Almaty')::date`;
+  const lows = lows14.filter((r) => !r.old);
   const priority = priorityFor({
     activeTrackings: t?.n ?? 0, minDistanceToTargetPct: minPrice === null ? null : (t?.dist ?? null),
     isSeed: p?.is_seed ?? false, lastViewedDaysAgo: p?.viewed_days ?? null, seedRank: p?.seed_rank ?? 0,
     stable: isStablePrice(lows.map((r) => r.p)),
   });
-  const minutes = INTERVAL_MINUTES[priority];
+  const minutes = intervalFor(priority, { calm: isCalmPrice(lows14.map((r) => r.p)), inStock: minPrice !== null });
   await sql`update collection_schedule set priority = ${priority}, interval_minutes = ${minutes}, fail_count = 0,
     last_error = null, locked_until = null, next_check_at = now() + make_interval(mins => ${minutes})
     where product_id = ${productId}`;

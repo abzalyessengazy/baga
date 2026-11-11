@@ -43,7 +43,7 @@ const indexFromFixture = process.argv.includes("--index-from-fixture");
 const FIRST_RUN_FILES = 40;
 
 if (!fromFile && !isInVisitWindow(new Date())) {
-  console.error("Outside the collection window (04:05–08:30 UTC = 09:05–13:30 Almaty, inside kaspi.kz robots.txt 04:00–08:45). No requests made.");
+  console.error("Outside the collection window (04:01–08:42 UTC = 09:01–13:42 Almaty, inside kaspi.kz robots.txt 04:00–08:45). No requests made.");
   process.exit(1);
 }
 

@@ -24,7 +24,9 @@ export const PRIORITY_ORDER: Priority[] = ["hot", "tracked", "seed", "catalog", 
  */
 export const CATALOG = {
   dailyTop: 400,
-  pageRefreshDays: { hot: 7, tracked: 7, seed: 7, catalog: 30, cold: 30 } satisfies Record<Priority, number>,
+  // Untracked products' pages monthly since 10 Nov 2026 (DECISIONS.md "More checks from the same rules"): names and
+  // photos rarely change, and weekly re-reads cost ~90 requests a day. Watched products stay weekly.
+  pageRefreshDays: { hot: 7, tracked: 7, seed: 30, catalog: 30, cold: 30 } satisfies Record<Priority, number>,
   /**
    * Overdue product pages refreshed per run for products nobody tracks (DECISIONS.md, 2026-11-04 "Tracked first,
    * real views, spread page refreshes"). Steady state needs ~70 a day; the cap spreads a batch first fetched on one
@@ -47,6 +49,31 @@ export const CATALOG = {
 } as const;
 
 export const STABLE = { days: 7, minDays: 3, pct: 2 } as const;
+
+/**
+ * Longer gaps where nothing happens (DECISIONS.md 2026-11-10 "More checks from the same rules"; 52% of products kept one
+ * lowest price all week): a catalog product calm for CALM.days (CALM.minDays observed days, all within CALM.pct) is
+ * checked every 5 days; an untracked product nobody can buy (no offers) every 3 days. Opening a product or tracking it
+ * still brings it to the next run (queueLane), and any move puts it back on its tier.
+ */
+export const CALM = { days: 14, minDays: 7, pct: 2, intervalMinutes: 5 * 24 * 60 } as const;
+export const OUT_OF_STOCK_INTERVAL_MINUTES = 3 * 24 * 60;
+
+/** Whether daily lows (the last CALM.days days, observed days only) say the price has been calm that long. */
+export function isCalmPrice(lows: number[]): boolean {
+  if (lows.length < CALM.minDays) return false;
+  const lo = Math.min(...lows), hi = Math.max(...lows);
+  return lo > 0 && hi <= lo * (1 + CALM.pct / 100);
+}
+
+/** The check interval for a product's tier, stretched for calm catalog products and untracked ones out of stock. */
+export function intervalFor(priority: Priority, p: { calm: boolean; inStock: boolean }): number {
+  const base = INTERVAL_MINUTES[priority];
+  if (priority === "hot" || priority === "tracked") return base;
+  if (!p.inStock) return Math.max(base, OUT_OF_STOCK_INTERVAL_MINUTES);
+  if (priority === "catalog" && p.calm) return Math.max(base, CALM.intervalMinutes);
+  return base;
+}
 
 /** Whether daily lows (the last STABLE.days days, observed days only) say the price is stable. */
 export function isStablePrice(lows: number[]): boolean {
