@@ -834,12 +834,12 @@ p.chips { margin: 6px 0 0; }
 .drops-hint { margin: 10px 0 0; font-size: var(--step--1); }
 .drops-hint a { color: var(--stamp-on-counter); text-underline-offset: 3px; }
 
-/* «Находки дня» slider (PickSlider): native scroll with snapping, one find per slide. */
+/* «Находки дня» slider (PickSlider): a strip moved by transform inside a clipping viewport, one find per slide. */
 .pick-slider { margin: 16px -10px 4px; }
-.pick-track { position: relative; display: grid; grid-auto-flow: column; grid-auto-columns: 100%; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory;
-  scrollbar-width: none; overscroll-behavior-x: contain; border-radius: 10px; }
-.pick-track::-webkit-scrollbar { display: none; }
-.pick-track > .mk-pick { margin: 0; scroll-snap-align: start; scroll-snap-stop: always; }
+.pick-viewport { overflow: hidden; border-radius: 10px; }
+.pick-track { display: flex; gap: 12px; touch-action: pan-y; cursor: grab; will-change: transform; user-select: none; -webkit-user-select: none; }
+.pick-track:active { cursor: grabbing; }
+.pick-track > .mk-pick { flex: 0 0 100%; min-width: 0; margin: 0; -webkit-user-drag: none; }
 .pick-controls { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 10px; }
 .pick-dots { display: flex; align-items: center; gap: 6px; }
 .pick-dot { position: relative; width: 8px; height: 8px; padding: 0; border: 0; border-radius: 999px; background: var(--rule, #c9ccd2);
