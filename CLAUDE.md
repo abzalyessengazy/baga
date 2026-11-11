@@ -14,7 +14,7 @@ Read `docs/IMPLEMENTATION_PLAN.md` first: work only on the current milestone.
 ## Commands
 - `pnpm dev` (web on :3000; `BAGA_FIXTURES=1` serves captured Kaspi data, no network/DB needed)
 - `pnpm test` · `pnpm typecheck` · `pnpm i18n:check` · `pnpm build`
-- `pnpm worker` (needs `DATABASE_URL`) · `pnpm --filter @baga/worker discover` (visit window only; `--from-file` re-picks offline) · `pnpm --filter @baga/worker seed [file]` · `pnpm db:migrate`
+- `pnpm worker` (needs `DATABASE_URL`) · `pnpm --filter @baga/worker discover` (visit window only; `--from-file` re-picks offline) · `pnpm --filter @baga/worker seed [file]` · `pnpm --filter @baga/worker report --dry` (the owner's daily report, read-only) · `pnpm db:migrate`
 - Build checks while the user may have `pnpm dev` running: `BAGA_DIST_DIR=.next-check pnpm build` (never delete `apps/web/.next`).
 
 ## Hard rules

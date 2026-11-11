@@ -23,7 +23,7 @@ export async function POST(req: Request) {
   const externalId = str(b.externalId, /^\d{5,12}$/);
   if (b.name === "product_view" && externalId) await markViewed(sql, externalId).catch(() => {});
   await addEvent(sql, {
-    name: b.name as EventName, sid,
+    name: b.name as EventName, sid, vid: str(b.vid, /^[A-Za-z0-9_-]{16,32}$/),
     locale: b.locale === "kk" ? "kk" : b.locale === "ru" ? "ru" : null,
     device: b.device === "mobile" || b.device === "desktop" ? b.device : null,
     source: str(b.source, /^[a-z0-9.\-_]{1,64}$/i)?.toLowerCase() ?? null,

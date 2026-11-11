@@ -15,3 +15,4 @@ export * from "./sellers";
 export * from "./matching";
 export * from "./chains";
 export * from "./cities";
+export * from "./targets";

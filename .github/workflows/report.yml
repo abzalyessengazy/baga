@@ -1,0 +1,49 @@
+name: Daily owner report
+on:
+  # One Telegram message to the owner a day (DECISIONS.md, 2026-11-11 "Daily owner report"), after the collector's
+  # window (ends 08:42 UTC) and the Technodom run (starts 08:50 UTC, ~35 min): 09:45 UTC = 14:45 Almaty.
+  # GitHub sometimes skips or delays a schedule, so there are two later backups; a day already reported is skipped.
+  schedule:
+    - cron: "45 9 * * *"
+    - cron: "15 11,13 * * *"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Send even if today's report was already sent"
+        type: boolean
+        default: false
+concurrency: { group: report, cancel-in-progress: false }
+permissions:
+  contents: read
+  actions: read
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Already sent today?
+        id: sent
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          n=$(gh run list -R "$GITHUB_REPOSITORY" --workflow report.yml --status success --created ">=$(date -u +%F)" --json databaseId --jq length)
+          echo "count=$n" >> "$GITHUB_OUTPUT"
+      - if: steps.sent.outputs.count == '0' || inputs.force
+        uses: actions/checkout@v4
+        with: { fetch-depth: 50 }
+      - if: steps.sent.outputs.count == '0' || inputs.force
+        uses: pnpm/action-setup@v4
+      - if: steps.sent.outputs.count == '0' || inputs.force
+        uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - if: steps.sent.outputs.count == '0' || inputs.force
+        run: pnpm install --frozen-lockfile
+      - if: steps.sent.outputs.count == '0' || inputs.force
+        run: pnpm --filter @baga/worker report
+        env:
+          # The read-only user (migration 0024); the main one only until that secret exists, in a read-only transaction.
+          REPORT_DATABASE_URL: ${{ secrets.REPORT_DATABASE_URL }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          OWNER_TELEGRAM_CHAT_ID: ${{ secrets.OWNER_TELEGRAM_CHAT_ID }}
+          SITE_URL: ${{ vars.SITE_URL || 'https://bagaapp.com' }}

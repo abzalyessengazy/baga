@@ -224,3 +224,15 @@ Measured on run #10 (4 Nov): requests start ~11.9 s apart, so the 04:05–08:30 
 - Product pages of untracked products re-read monthly (tracked: weekly).
 - A catalog product calm for 14 days (7+ observed days within 2%) is checked every 5 days; an untracked product with no offers every 3 days. Opening or tracking a product still brings it to the next run, and any move puts it back on its tier.
 Expected: ~450 more requests a day for new products and fresher checks, about 30% more capacity.
+
+## 2026-11-11 — An anonymous visitor id (amends 2026-11-03 "In-house funnel instead of PostHog")
+**Context.** The funnel joins steps with a per-tab id, so unique visitors, returning visitors and retention cannot be counted: one person with three tabs is three visits. The owner's 30-day plan needs them.
+**Decision** (the owner, 11 Nov 2026). One more random id per browser, `baga.vid` in localStorage, sent with each funnel step (`events.vid`, migration 0025). Not a cookie, no name, IP or account, not sent to other sites; kept until the visitor clears site data, rows kept 180 days as before. The privacy policy says so (ru/kk, «Обновлено 11 ноября 2026»). Events from before 11 Nov have no browser id and count by tab.
+
+## 2026-11-11 — Daily owner report
+**Context.** The owner works on BAĞA beside a full-time job and asked for an automatic daily summary instead of remembering to check the admin page.
+**Decision** (the owner, 11 Nov 2026). `.github/workflows/report.yml` runs `pnpm --filter @baga/worker report` at 09:45 UTC (after the collector and the Technodom run) and sends one Telegram message to `OWNER_TELEGRAM_CHAT_ID`: what needs attention, yesterday's visitors and funnel against the 7-day average and the targets in `packages/core/src/targets.ts` (set 11 Nov for 11 Dec), savings, today's data health, and the commits of the last 24 h. Numbers come only from the database, no AI layer yet, so the report cannot state a figure the data does not hold.
+- It reads as `baga_reporter` (migration 0024): select only, with a read-only row policy on each table, in a read-only transaction. The owner sets its password in the Supabase SQL editor; the repo never holds it. A new table needs its own `reporter_read` policy to appear in the report.
+- Savings are kept apart: «saved» only where the person answered «Да, купил» (start price minus alert price); «drops caught» for every target alert sent, bought or not. Never shown publicly as savings.
+- The bot answers `/id` with the chat's number so the owner can fill the secret.
+- A later AI summary on top of this report stays read-only (no pushes, no deploys, no Kaspi requests).

@@ -14,3 +14,4 @@ export * from "./shops";
 export * from "./stores";
 export * from "./manual";
 export * from "./cities";
+export * from "./report";

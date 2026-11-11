@@ -7,7 +7,8 @@ import { siteUrl } from "@/lib/site";
 
 /**
  * Telegram bot webhook (DECISIONS.md, 2026-11-02). Telegram sends the secret header we registered with setWebhook;
- * anything else is refused. Commands: /start <code> links alerts, /list shows what is tracked, /stop unlinks.
+ * anything else is refused. Commands: /start <code> links alerts, /list shows what is tracked, /stop unlinks, /id
+ * answers the chat's number.
  * Alerts themselves are sent by the collector. Button taps on its "Вы купили?" message arrive as callback_query
  * `b:<bought_code>:<answer>` (migration 0011).
  */
@@ -55,6 +56,10 @@ export async function POST(req: Request) {
     const w = await getWatcherByChat(sql, chat);
     const t = await getTranslations({ locale: w?.locale ?? guess, namespace: "bot" });
     await sendTelegram(chat, w ? await listText(w) : tgEscape(t("welcome", { site: siteUrl() })));
+  } else if (cmd === "/id") {
+    // The chat's own number, e.g. for the owner's daily report (OWNER_TELEGRAM_CHAT_ID).
+    const t = await getTranslations({ locale: guess, namespace: "bot" });
+    await sendTelegram(chat, tgEscape(t("chatId", { id: chat })));
   } else if (cmd === "/stop") {
     const w = await getWatcherByChat(sql, chat);
     const t = await getTranslations({ locale: w?.locale ?? guess, namespace: "bot" });

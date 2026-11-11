@@ -1,24 +1,38 @@
 /**
  * The in-house funnel, browser side (DECISIONS.md, 2026-11-03 "In-house funnel instead of PostHog"). One random id
- * per tab in sessionStorage joins the steps of a visit; nothing is kept after the tab closes, no cookie is set.
+ * per tab in sessionStorage joins the steps of a visit. Since 11 Nov (DECISIONS.md, "An anonymous visitor id") one
+ * more random id per browser in localStorage counts unique and returning visitors; no cookie, no name, no IP.
  * Fire-and-forget: a failed or blocked beacon never affects the page.
  */
 export type FunnelStep = "visit" | "paste" | "product_view" | "track" | "channel";
 const SID_KEY = "baga.sid";
 
-function sid(): string | null {
+const VID_KEY = "baga.vid";
+
+function randomId(): string {
+  const b = crypto.getRandomValues(new Uint8Array(12));
+  return btoa(String.fromCharCode(...b)).replace(/\+/g, "-").replace(/\//g, "_");
+}
+
+/** The id kept under key, created on first use; null when the storage is blocked (even reading it can throw). */
+function stored(store: () => Storage, key: string): string | null {
   try {
-    let v = sessionStorage.getItem(SID_KEY);
+    const st = store();
+    let v = st.getItem(key);
     if (!v) {
-      const b = crypto.getRandomValues(new Uint8Array(12));
-      v = btoa(String.fromCharCode(...b)).replace(/\+/g, "-").replace(/\//g, "_");
-      sessionStorage.setItem(SID_KEY, v);
+      v = randomId();
+      st.setItem(key, v);
     }
     return v;
   } catch {
     return null;
   }
 }
+
+/** One per tab: joins the steps of a visit. */
+const sid = () => stored(() => sessionStorage, SID_KEY);
+/** One per browser, kept until the visitor clears site data: unique and returning visitors. */
+const vid = () => stored(() => localStorage, VID_KEY);
 
 /** Where the visit came from: ?utm_source=…, else the referring site's host, else "direct". */
 function source(): string {
@@ -36,7 +50,7 @@ export function track(name: FunnelStep, opts: { externalId?: string; detail?: st
   const id = sid();
   if (!id) return;
   const body = JSON.stringify({
-    name, sid: id, locale: document.documentElement.lang,
+    name, sid: id, vid: vid() ?? undefined, locale: document.documentElement.lang,
     device: matchMedia("(pointer: coarse)").matches || innerWidth < 768 ? "mobile" : "desktop",
     source: name === "visit" ? source() : undefined,
     externalId: opts.externalId && /^\d{5,12}$/.test(opts.externalId) ? opts.externalId : undefined,

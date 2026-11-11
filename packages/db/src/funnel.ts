@@ -2,18 +2,20 @@ import type postgres from "postgres";
 
 /**
  * The in-house funnel (migration 0011, DECISIONS.md 2026-11-03 "In-house funnel instead of PostHog"): steps of one
- * visit joined by a per-tab random id, no cookie and no IP. And the "Вы купили?" answers on trackings.
+ * visit joined by a per-tab random id, no cookie and no IP; since 11 Nov also an anonymous per-browser id (0025). And the "Вы купили?" answers on trackings.
  */
 export const EVENT_NAMES = ["visit", "paste", "product_view", "track", "channel"] as const;
 export type EventName = (typeof EVENT_NAMES)[number];
 export interface FunnelEvent {
   name: EventName; sid: string; locale: "ru" | "kk" | null; device: "mobile" | "desktop" | null;
   source: string | null; externalId: string | null; detail: string | null;
+  /** The browser's anonymous visitor id (migration 0025), null when storage is blocked. */
+  vid?: string | null;
 }
 
 export async function addEvent(sql: postgres.Sql, e: FunnelEvent): Promise<void> {
-  await sql`insert into events (name, sid, locale, device, source, external_id, detail)
-    values (${e.name}, ${e.sid}, ${e.locale}, ${e.device}, ${e.source}, ${e.externalId}, ${e.detail})`;
+  await sql`insert into events (name, sid, vid, locale, device, source, external_id, detail)
+    values (${e.name}, ${e.sid}, ${e.vid ?? null}, ${e.locale}, ${e.device}, ${e.source}, ${e.externalId}, ${e.detail})`;
 }
 
 /**
