@@ -1,5 +1,5 @@
 import type postgres from "postgres";
-import { dayMoves, weekMovers, type Mover } from "./movers";
+import { dayMoves, stillMoving, weekMovers, type Mover } from "./movers";
 
 /** One Almaty calendar day of collector work. */
 export interface StatsDay { day: string; checks: number; drops: number }
@@ -108,7 +108,7 @@ export async function getPlatformStats(sql: postgres.Sql, dayCount = 14, listCou
     shiftRun: shift?.started_at && shift.finished_at ? { startedAt: shift.started_at, finishedAt: shift.finished_at } : null,
     days: days.reverse(),
     moves: {
-      day: { drops: day.down.slice(0, listCount).map(move), rises: day.up.slice(0, listCount).map(move) },
+      day: { drops: day.down.filter(stillMoving).slice(0, listCount).map(move), rises: day.up.filter(stillMoving).slice(0, listCount).map(move) },
       week: { drops: weekDown.map(move), rises: weekUp.map(move) },
     },
     mostTracked: tracked.map(product),

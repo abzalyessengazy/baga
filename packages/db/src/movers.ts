@@ -13,6 +13,8 @@ import { lastCompleteShiftDay, MOVE_MIN_PCT, moveDirection } from "@baga/core";
 export interface Mover {
   externalId: string; title: string; titleKk: string | null; imageUrl: string | null;
   now: number; was: number; pct: number; offerCount: number; checkedAt: Date;
+  /** The latest lowest price (product_state), which may be newer than `now` in a day list. */
+  current: number | null;
 }
 
 export async function weekMovers(sql: postgres.Sql, dir: "down" | "up", limit = 30, minPct = MOVE_MIN_PCT): Promise<Mover[]> {
@@ -31,7 +33,7 @@ export async function weekMovers(sql: postgres.Sql, dir: "down" | "up", limit = 
     select p.external_id as "externalId", p.title, p.title_kk as "titleKk", p.image_url as "imageUrl",
            s.current_min_price as now, ${down ? sql`pr.high` : sql`pr.low`} as was,
            round((s.current_min_price - ${down ? sql`pr.high` : sql`pr.low`}) * 100.0 / ${down ? sql`pr.high` : sql`pr.low`})::int as pct,
-           coalesce(s.offer_count, 0) as "offerCount", s.last_checked_at as "checkedAt"
+           coalesce(s.offer_count, 0) as "offerCount", s.last_checked_at as "checkedAt", s.current_min_price as current
     from prior pr
     join product_state s on s.product_id = pr.product_id
     join products p on p.id = pr.product_id, today
@@ -82,7 +84,7 @@ export async function dayMoves(sql: postgres.Sql, now = new Date()): Promise<Day
     r as (select product_id, day, p, row_number() over (partition by product_id order by day desc) as rn from d)
     select p.external_id as "externalId", p.title, p.title_kk as "titleKk", p.image_url as "imageUrl",
            a.p as now, b.p as was, round((a.p - b.p) * 100.0 / b.p)::int as pct,
-           coalesce(s.offer_count, 0) as "offerCount", s.last_checked_at as "checkedAt"
+           coalesce(s.offer_count, 0) as "offerCount", s.last_checked_at as "checkedAt", s.current_min_price as current
     -- The previous day only (8 Nov owner rule): a product missed yesterday has no "today" move; a change across a gap
     -- (6 Nov → 8 Nov) cannot be dated, so it shows only in the week lists.
     from r a join r b on b.product_id = a.product_id and b.rn = 2 and b.day = a.day - 1
@@ -91,4 +93,13 @@ export async function dayMoves(sql: postgres.Sql, now = new Date()): Promise<Day
   const by = (dir: -1 | 1) => rows.filter((m) => moveDirection(m.was, m.now) === dir)
     .sort((x, y) => (y.now - y.was) / y.was * dir - (x.now - x.was) / x.was * dir);
   return { day: head.day, checked: head.checked, compared: rows.length, down: by(-1), up: by(1) };
+}
+
+/**
+ * A day move a later check has not undone (owner, 11 Nov: a product listed as «Подешевели» for the last complete
+ * day while its page already showed the price back up). For the displayed lists only; the day's counts keep every move.
+ */
+export function stillMoving(m: Mover): boolean {
+  if (m.current === null) return true;
+  return moveDirection(m.was, m.current) === moveDirection(m.was, m.now);
 }
