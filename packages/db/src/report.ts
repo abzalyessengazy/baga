@@ -26,7 +26,7 @@ export interface OwnerReport {
   utmVisitors: number;
   sources: { source: string; n: number }[];
   /** Today's Kaspi collection: runs started since Almaty midnight. */
-  collector: { runs: number; requests: number; checked: number; changed: number; failed: number; aborted: string[] };
+  collector: { runs: number; requests: number; running: boolean; checked: number; changed: number; failed: number; aborted: string[] };
   catalog: { products: number; fresh3d: number; inStock: number; history7d: number; history30d: number; seedQueue: number; linksWaiting: number };
   /** Technodom: requests, priced and failed over the last 24 h; startedAt is the latest run ever. */
   store: { startedAt: string | null; requests: number; priced: number; failed: number; aborted: string | null; pendingMatches: number;
@@ -77,17 +77,27 @@ export async function ownerReport(sql: postgres.Sql): Promise<OwnerReport> {
   const sources = await sql<{ source: string; n: number }[]>`
     select coalesce(source, 'direct') as source, count(distinct sid)::int as n from events
     where name = 'visit' and at >= (${day}::timestamp at time zone ${DAY}) and at < ((${day}::date + 1)::timestamp at time zone ${DAY})
-    group by 1 order by 2 desc limit 5`;
+    group by 1 order by 2 desc limit 8`;
   const [utm] = await sql<{ n: number }[]>`
     select count(distinct coalesce(${vid}, sid))::int as n from events
     where name = 'visit' and source is not null and source !~ '\\.' and source <> 'direct'
       and at >= (${day}::timestamp at time zone ${DAY}) and at < ((${day}::date + 1)::timestamp at time zone ${DAY})`;
 
+  // Products checked and lowest prices changed today come from product_state and observations, so a report during a run is already right
+  // (collection_runs.checked is written when a run ends).
   const [collector] = await sql<(Omit<OwnerReport["collector"], "aborted"> & { aborted: string[] | null })[]>`
-    select count(*)::int as runs, coalesce(sum(requests), 0)::int as requests, coalesce(sum(checked), 0)::int as checked,
-      coalesce(sum(changed), 0)::int as changed, coalesce(sum(failed), 0)::int as failed,
-      array_remove(array_agg(distinct aborted_reason), null) as aborted
-    from collection_runs where started_at >= ((now() at time zone ${DAY})::date::timestamp at time zone ${DAY})`;
+    with today as (select ((now() at time zone ${DAY})::date::timestamp at time zone ${DAY}) as t)
+    select count(r.id)::int as runs, coalesce(sum(r.requests), 0)::int as requests,
+      bool_or(r.finished_at is null) is true as running,
+      (select count(*) from product_state, today where last_checked_at >= today.t)::int as checked,
+      -- Products whose lowest price moved today against their previous observation (not seller-count changes).
+      (select count(distinct o.product_id) from (
+         select product_id, observed_at, min_price, lag(min_price) over (partition by product_id order by observed_at) as prev
+         from price_observations where product_id in (select product_id from price_observations, today where observed_at >= today.t)
+       ) o, today where o.observed_at >= today.t and o.prev is not null and o.min_price is distinct from o.prev)::int as changed,
+      coalesce(sum(r.failed), 0)::int as failed,
+      array_remove(array_agg(distinct r.aborted_reason), null) as aborted
+    from today left join collection_runs r on r.started_at >= today.t`;
 
   const [catalog] = await sql<OwnerReport["catalog"][]>`
     select count(*)::int as products,

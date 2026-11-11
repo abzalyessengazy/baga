@@ -3,12 +3,13 @@ import type { OwnerReport } from "@baga/db";
 
 /**
  * The daily owner report as one Telegram message (HTML). For the owner only, so it is in English like the rest of
- * the owner's tooling; every number comes from ownerReport (packages/db/src/report.ts). Issues first, then users,
- * savings, data and code.
+ * the owner's tooling; every number comes from ownerReport (packages/db/src/report.ts). Short blocks the owner can
+ * scan on a phone: what needs attention, the targets as an aligned table, savings, data, code. Details live on the
+ * admin page.
  */
 export interface Commit { hash: string; subject: string }
 
-/** A collection day with fewer requests than this is reported as a problem (a full day is ~1,600). */
+/** A finished collection day with fewer requests than this is reported as a problem (a full day is ~1,600). */
 export const LOW_REQUESTS = 800;
 
 const MARK: Record<TargetMark, string> = { on: "✅", half: "🟡", off: "🔴" };
@@ -17,11 +18,14 @@ const num = (n: number) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g
 const pct = (r: number) => `${Math.round(r * 100)}%`;
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const dayLabel = (iso: string) => `${Number(iso.slice(8, 10))} ${MONTHS[Number(iso.slice(5, 7)) - 1]}`;
+/** A source host without "www.", "l." or "m." and the top-level domain: l.instagram.com → instagram. */
+const sourceName = (s: string) => s.replace(/^(www|l|m|lm)\./, "").replace(/\.(com|ru|kz|org|net)$/, "");
 
-function trend(now: number, avg: number): string {
-  if (avg === 0) return now > 0 ? "↑" : "→";
-  const r = now / avg;
-  return r >= 1.15 ? "↑" : r <= 0.85 ? "↓" : "→";
+/** A commit subject's headline: up to the first ": " or " (", at most 60 characters. */
+export function headline(subject: string): string {
+  const cut = Math.min(...[subject.indexOf(": "), subject.indexOf(" (")].filter((i) => i >= 12), subject.length);
+  const h = subject.slice(0, cut);
+  return h.length > 60 ? `${h.slice(0, 59)}…` : h;
 }
 
 /** What needs the owner's attention; empty on a normal day. */
@@ -29,7 +33,7 @@ export function reportIssues(r: OwnerReport, now = new Date()): string[] {
   const out: string[] = [];
   const c = r.collector;
   if (c.runs === 0) out.push("Kaspi collector did not run today");
-  else if (c.requests < LOW_REQUESTS) out.push(`Kaspi collector sent only ${num(c.requests)} requests today`);
+  else if (!c.running && c.requests < LOW_REQUESTS) out.push(`Kaspi collector sent only ${num(c.requests)} requests today`);
   for (const a of c.aborted) out.push(`Kaspi run stopped: ${a}`);
   if (r.catalog.products > 0 && share(r.catalog.fresh3d, r.catalog.products) < 0.9) {
     out.push(`Only ${pct(share(r.catalog.fresh3d, r.catalog.products))} of products checked in the last 3 days`);
@@ -39,8 +43,13 @@ export function reportIssues(r: OwnerReport, now = new Date()): string[] {
   if (r.store.aborted) out.push(`Technodom run stopped: ${r.store.aborted}`);
   if (r.manual24h.blocked > 0) out.push(`Manual checks blocked by Kaspi (${r.manual24h.blocked})`);
   if (r.alerts.failed24h > 0) out.push(`${r.alerts.failed24h} notifications failed to send`);
-  if (r.store.pendingMatches > 0) out.push(`${r.store.pendingMatches} Technodom matches wait for your review (admin)`);
+  if (r.store.pendingMatches > 0) out.push(`Review ${r.store.pendingMatches} Technodom matches (admin)`);
   return out.map(esc);
+}
+
+/** One aligned row of the targets table: name, value, target, mark. */
+function row(name: string, value: string, target: string, mark: TargetMark): string {
+  return `${name.padEnd(11)}${value.padStart(5)}  🎯${target.padEnd(5)}${MARK[mark]}`;
 }
 
 export function renderOwnerReport(r: OwnerReport, commits: Commit[], now = new Date()): string {
@@ -50,38 +59,39 @@ export function renderOwnerReport(r: OwnerReport, commits: Commit[], now = new D
   const openRate = share(f.productViews, f.tabs);
   const connected = share(r.people.connected, r.people.watchers);
   const utm = share(r.utmVisitors, f.visitors);
-  const lines: string[] = [];
+  const out: string[] = [];
 
-  lines.push(`<b>BAĞA daily · ${dayLabel(r.day)}</b>`);
-  lines.push(issues.length === 0 ? "✅ All normal" : `⚠️ ${issues.length} to look at`);
-  if (issues.length) lines.push(...issues.map((i) => `• ${i}`));
+  out.push(`<b>BAĞA · ${dayLabel(r.day)}</b>`);
+  out.push(issues.length === 0 ? "✅ All normal" : `⚠️ <b>Needs you</b>\n${issues.map((i) => `• ${i}`).join("\n")}`);
 
-  lines.push("", `<b>Users · ${dayLabel(r.day)}</b> (vs 7-day avg) · targets for ${dayLabel(TARGETS.by)}`);
-  lines.push(`Visitors ${num(f.visitors)} ${trend(f.visitors, w.visitors)} (${w.visitors}) · returning ${num(f.returning)} · target ${TARGETS.visitorsPerDay}/day ${MARK[targetMark(w.visitors, TARGETS.visitorsPerDay)]}`);
-  lines.push(`Opened a product ${num(f.productViews)} of ${num(f.tabs)} visits · ${pct(openRate)} ${MARK[targetMark(openRate, TARGETS.productOpenRate)]} (target ${pct(TARGETS.productOpenRate)})`);
-  lines.push(`Pasted a link ${num(f.pastes)} · started tracking ${num(f.tracks)} ${trend(f.tracks, w.tracks)} (${w.tracks})`);
-  lines.push(`New alerts: ${r.people.newTrackings} in 24 h, ${r.people.newTrackings7d} in 7 days ${MARK[targetMark(r.people.newTrackings7d, TARGETS.alertsPerWeek)]} (target ${TARGETS.alertsPerWeek}/week)`);
-  lines.push(`People with alerts ${r.people.watchers} (+${r.people.newWatchers}) · connected ${r.people.connected} (${pct(connected)}) ${MARK[targetMark(connected, TARGETS.connectedRate)]} (target ${pct(TARGETS.connectedRate)})`);
-  lines.push(`From posts (utm) ${num(r.utmVisitors)} · ${pct(utm)} ${MARK[targetMark(utm, TARGETS.utmShare)]} (target ${pct(TARGETS.utmShare)})`);
-  if (r.sources.length) lines.push(`Sources: ${r.sources.map((s) => `${esc(s.source)} ${s.n}`).join(", ")}`);
+  out.push("", `<b>Yesterday</b> · targets for ${dayLabel(TARGETS.by)}`);
+  out.push("<pre>" + [
+    row("Visitors", num(f.visitors), String(TARGETS.visitorsPerDay), targetMark(w.visitors, TARGETS.visitorsPerDay)),
+    row("Open item", pct(openRate), pct(TARGETS.productOpenRate), targetMark(openRate, TARGETS.productOpenRate)),
+    row("Alerts/wk", num(r.people.newTrackings7d), String(TARGETS.alertsPerWeek), targetMark(r.people.newTrackings7d, TARGETS.alertsPerWeek)),
+    row("Connected", pct(connected), pct(TARGETS.connectedRate), targetMark(connected, TARGETS.connectedRate)),
+    row("From posts", pct(utm), pct(TARGETS.utmShare), targetMark(utm, TARGETS.utmShare)),
+    row("Bought", num(r.alerts.boughtYes), String(TARGETS.boughtYes), targetMark(r.alerts.boughtYes, TARGETS.boughtYes)),
+  ].join("\n") + "</pre>");
+  out.push(`Visitors 7-day avg ${num(w.visitors)} · returning ${num(f.returning)} · new alerts ${r.people.newTrackings}`);
+  const sources = new Map<string, number>();
+  for (const s of r.sources) sources.set(sourceName(s.source), (sources.get(sourceName(s.source)) ?? 0) + s.n);
+  if (sources.size) out.push(`From: ${[...sources].map(([k, n]) => `${esc(k)} ${n}`).join(" · ")}`);
 
-  lines.push("", "<b>Savings</b>");
-  lines.push(`Confirmed saved: ${formatTenge(r.savings.confirmed)} · ${r.savings.confirmedCount} purchases · «Да, купил» ${r.alerts.boughtYes} of ${r.alerts.boughtAnswered} answers ${MARK[targetMark(r.alerts.boughtYes, TARGETS.boughtYes)]} (target ${TARGETS.boughtYes})`);
-  lines.push(`Drops caught (not necessarily bought): ${formatTenge(r.savings.dropsCaught)} in ${r.savings.dropsCaughtCount} alerts`);
-  lines.push(`Alerts sent in 24 h: ${r.alerts.targetSent24h} target, ${r.alerts.firstPriceSent24h} first price`);
+  out.push("", "<b>Savings</b>");
+  out.push(`Confirmed: ${formatTenge(r.savings.confirmed)} (${r.savings.confirmedCount} bought)`);
+  out.push(`Drops caught: ${formatTenge(r.savings.dropsCaught)} in ${r.savings.dropsCaughtCount} alerts`);
 
   const c = r.collector;
-  lines.push("", "<b>Data · today</b>");
-  lines.push(`Kaspi: ${num(c.requests)} requests, ${num(c.checked)} checked, ${num(c.changed)} changed, ${num(c.failed)} failed`);
-  lines.push(`Products ${num(r.catalog.products)} · checked ≤3 days ${pct(share(r.catalog.fresh3d, r.catalog.products))} · in stock ${num(r.catalog.inStock)}`);
-  lines.push(`History: ${num(r.catalog.history7d)} with 7+ days, ${num(r.catalog.history30d)} with 30+ days`);
-  lines.push(`Queue: ${num(r.catalog.seedQueue)} new products, ${num(r.catalog.linksWaiting)} links`);
-  lines.push(`Technodom: ${r.store.compared} compared, cheaper there on ${r.store.cheaperThere} · 24 h: ${num(r.store.requests)} requests, ${num(r.store.priced)} priced, ${r.store.failed} failed`);
-  lines.push(`City prices (24 h) ${num(r.cityPrices24h)} · manual checks ${r.manual24h.done} done, ${r.manual24h.failed} failed`);
+  out.push("", "<b>Data today</b>");
+  out.push(`Kaspi ${c.running ? "⏳ running" : c.runs ? "✅" : "❌"} ${num(c.requests)} requests · ${num(c.checked)} checked · ${num(c.changed)} price changes`);
+  out.push(`Technodom ${r.store.aborted ? "⚠️" : "✅"} ${num(r.store.priced)} priced · ${r.store.cheaperThere} cheaper than Kaspi`);
+  out.push(`${pct(share(r.catalog.fresh3d, r.catalog.products))} of ${num(r.catalog.products)} products fresh · ${num(r.catalog.seedQueue)} waiting to be added`);
 
-  lines.push("", `<b>Code · 24 h</b>`);
-  if (commits.length === 0) lines.push("No changes");
-  for (const k of commits.slice(0, 6)) lines.push(`• <code>${esc(k.hash)}</code> ${esc(k.subject.length > 90 ? `${k.subject.slice(0, 89)}…` : k.subject)}`);
-  if (commits.length > 6) lines.push(`… and ${commits.length - 6} more`);
-  return lines.join("\n");
+  if (commits.length) {
+    out.push("", `<b>Code</b> · ${commits.length} change${commits.length === 1 ? "" : "s"}`);
+    for (const k of commits.slice(0, 3)) out.push(`• ${esc(headline(k.subject))}`);
+    if (commits.length > 3) out.push(`  and ${commits.length - 3} more`);
+  }
+  return out.join("\n");
 }
