@@ -16,3 +16,4 @@ export * from "./manual";
 export * from "./cities";
 export * from "./report";
 export * from "./business";
+export * from "./alertStats";

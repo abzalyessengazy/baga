@@ -1,14 +1,18 @@
 import type postgres from "postgres";
+import { personReliable } from "@baga/core";
+import { alertStats, type AlertStats } from "./alertStats";
 
 /**
  * The daily owner report (DECISIONS.md, 2026-11-11 "Daily owner report"): numbers read from the database only,
  * so the report can never state a figure the data does not hold. Read-only queries; days are Almaty days (UTC+5).
+ * Visit-, person- and account-based numbers as in docs/STATS.md, "KPI definitions" (packages/core/src/metrics.ts).
  */
 export interface FunnelDay {
-  /** People: distinct browser ids, or tab ids for events from before the browser id (migration 0025). */
-  visitors: number;
-  /** Visitors whose browser id was already seen on an earlier day. */
+  /** Person-based: browsers (events.vid); reliable only on days from PERSON_METRICS_FROM (`peopleReliable`). */
+  people: number;
+  /** Person-based: browsers already seen on an earlier day. */
   returning: number;
+  /** Visit-based: browser tabs active that day; productViews, pastes, tracks and channels count tabs too. */
   tabs: number;
   productViews: number;
   pastes: number;
@@ -22,8 +26,11 @@ export interface OwnerReport {
   funnel: FunnelDay;
   /** The average of the 7 days before `day`. */
   funnelWeek: FunnelDay;
-  /** Visitors arriving with a utm_source on `day` (posts and campaigns), and the top sources. */
-  utmVisitors: number;
+  /** Whether person numbers can be used for `day`, and for the 7 days before it. */
+  peopleReliable: boolean;
+  weekPeopleReliable: boolean;
+  /** Visits (tabs) arriving with a utm_source on `day` (posts and campaigns), and the top sources. */
+  utmVisits: number;
   sources: { source: string; n: number }[];
   /** Today's Kaspi collection: runs started since Almaty midnight. */
   collector: { runs: number; requests: number; running: boolean; checked: number; changed: number; failed: number; aborted: string[] };
@@ -36,6 +43,8 @@ export interface OwnerReport {
   people: { watchers: number; newWatchers: number; connected: number; activeTrackings: number; newTrackings: number;
     newTrackings7d: number };
   alerts: { targetSent24h: number; firstPriceSent24h: number; failed24h: number; boughtYes: number; boughtAnswered: number };
+  /** Notification numbers of the last 24 h, the same definitions as the dashboard (alertStats). */
+  alerts24h: AlertStats;
   /** Tenge: start price minus alert price, per tracking; "saved" only where the person answered «Да, купил». */
   savings: { confirmed: number; confirmedCount: number; dropsCaught: number; dropsCaughtCount: number };
 }
@@ -53,13 +62,13 @@ export async function ownerReport(sql: postgres.Sql): Promise<OwnerReport> {
   const vid = col!.hasVid ? sql`vid` : sql`null::text`;
   const funnelRows = await sql<(FunnelDay & { d: string })[]>`
     with e as (
-      select (at at time zone ${DAY})::date as d, name, sid, coalesce(${vid}, sid) as who, ${vid} as vid from events
+      select (at at time zone ${DAY})::date as d, name, sid, ${vid} as vid from events
       where at >= ((${day}::date - 7)::timestamp at time zone ${DAY}) and at < ((${day}::date + 1)::timestamp at time zone ${DAY})
     ), firsts as (
       select ${vid} as vid, min((at at time zone ${DAY})::date) as first_day from events where ${vid} is not null group by 1
     )
     select to_char(e.d, 'YYYY-MM-DD') as d,
-      count(distinct e.who)::int as visitors,
+      count(distinct e.vid)::int as people,
       count(distinct e.vid) filter (where f.first_day < e.d)::int as returning,
       count(distinct e.sid)::int as tabs,
       count(distinct e.sid) filter (where e.name = 'product_view')::int as "productViews",
@@ -67,7 +76,7 @@ export async function ownerReport(sql: postgres.Sql): Promise<OwnerReport> {
       count(distinct e.sid) filter (where e.name = 'track')::int as tracks,
       count(distinct e.sid) filter (where e.name = 'channel')::int as channels
     from e left join firsts f on f.vid = e.vid group by e.d`;
-  const empty: FunnelDay = { visitors: 0, returning: 0, tabs: 0, productViews: 0, pastes: 0, tracks: 0, channels: 0 };
+  const empty: FunnelDay = { people: 0, returning: 0, tabs: 0, productViews: 0, pastes: 0, tracks: 0, channels: 0 };
   const funnel = { ...empty, ...stripDay(funnelRows.find((r) => r.d === day)) };
   const week = funnelRows.filter((r) => r.d !== day);
   const funnelWeek = Object.fromEntries(
@@ -79,7 +88,7 @@ export async function ownerReport(sql: postgres.Sql): Promise<OwnerReport> {
     where name = 'visit' and at >= (${day}::timestamp at time zone ${DAY}) and at < ((${day}::date + 1)::timestamp at time zone ${DAY})
     group by 1 order by 2 desc limit 8`;
   const [utm] = await sql<{ n: number }[]>`
-    select count(distinct coalesce(${vid}, sid))::int as n from events
+    select count(distinct sid)::int as n from events
     where name = 'visit' and source is not null and source !~ '\\.' and source <> 'direct'
       and at >= (${day}::timestamp at time zone ${DAY}) and at < ((${day}::date + 1)::timestamp at time zone ${DAY})`;
 
@@ -165,7 +174,10 @@ export async function ownerReport(sql: postgres.Sql): Promise<OwnerReport> {
     from d where drop > 0`;
 
   return {
-    day, funnel, funnelWeek, utmVisitors: utm?.n ?? 0, sources,
+    day, funnel, funnelWeek, utmVisits: utm?.n ?? 0, sources,
+    peopleReliable: personReliable(day),
+    weekPeopleReliable: personReliable(new Date(Date.parse(`${day}T00:00:00Z`) - 7 * 86_400_000).toISOString().slice(0, 10)),
+    alerts24h: await alertStats(sql, { from: new Date(Date.now() - 86_400_000), to: new Date() }),
     collector: { ...collector!, aborted: collector!.aborted ?? [] },
     catalog: catalog!,
     store: { startedAt: lastStore?.startedAt ?? null, requests: lastStore?.requests ?? 0, priced: lastStore?.priced ?? 0,

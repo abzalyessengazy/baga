@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getTranslations, setRequestLocale } from "next-intl/server";
-import { getSql, getAdminHealth, getFunnel, recentFeedback, pendingMatches, latestStoreRuns, manualToday, type AdminRun, RUN_PACE_WARN_S } from "@baga/db";
+import { getSql, getAdminHealth, getFunnel, alertStats, recentFeedback, pendingMatches, latestStoreRuns, manualToday, type AdminRun, RUN_PACE_WARN_S } from "@baga/db";
 import { isInVisitWindow } from "@baga/core";
 import { adminEnabled, isAdmin } from "@/lib/admin";
 import { Link } from "@/i18n/navigation";
@@ -44,6 +44,9 @@ export default async function AdminPage({ params, searchParams }: Props) {
     pendingMatches(sql).catch(() => []), latestStoreRuns(sql).catch(() => [])]);
   // Manual checks on request (migration 0020, DECISIONS 2026-11-09); null before the migration.
   const manual = await manualToday(sql).catch(() => null);
+  // Notification numbers, all time: the same definitions as the report and /admin/business (alertStats).
+  const alerts = await alertStats(sql);
+  const tb = await getTranslations("biz");
   const now = Date.now();
   const state = (r: AdminRun) =>
     r.aborted ? t("runAborted", { reason: r.aborted })
@@ -109,11 +112,11 @@ export default async function AdminPage({ params, searchParams }: Props) {
       {funnel && (
         <section className="receipt admin-card">
           <h2>{t("funnel", { days: funnel.days })}</h2>
-          <p className="admin-muted">{t("funnelNote")}</p>
+          <p className="admin-muted">{t("funnelNote", { days: funnel.days })}</p>
           <div className="admin-scroll">
             <table className="admin-table">
               <tbody>
-                {funnel.steps.map((s) => {
+                {funnel.steps.filter((s) => s.name !== "channel").map((s) => {
                   const visits = funnel.steps[0]!.sessions;
                   const label = { visit: "stepVisit", paste: "stepPaste", product_view: "stepProductView", track: "stepTrack", channel: "stepChannel" }[s.name];
                   return (
@@ -123,6 +126,9 @@ export default async function AdminPage({ params, searchParams }: Props) {
                     </tr>
                   );
                 })}
+                              <tr><td>{t("stepAccounts")}</td><td>{count(funnel.accounts.newPeople)}</td><td /></tr>
+                <tr><td>{t("stepConnected")}</td><td>{count(funnel.accounts.connected)}</td>
+                  <td>{funnel.accounts.newPeople ? `${Math.round((funnel.accounts.connected / funnel.accounts.newPeople) * 100)}%` : "—"}</td></tr>
               </tbody>
             </table>
           </div>
@@ -163,6 +169,10 @@ export default async function AdminPage({ params, searchParams }: Props) {
 
       <section className="receipt admin-card">
         <h2>{t("alerts")}</h2>
+        {kv([[tb("aProducts"), alerts.products], [tb("aPeople"), alerts.people], [tb("aTriggers"), alerts.triggers],
+          [tb("aTargetMessages"), alerts.targetMessages], [tb("aSent"), alerts.messages.sent], [tb("aFailed"), alerts.messages.failed],
+          [tb("aWaiting"), alerts.messages.waiting], [tb("aClicks"), alerts.clicks], [tb("aClickedProducts"), alerts.clickedProducts]])}
+        <h3>{t("messagesTable")}</h3>
         {h.notifications.length === 0 ? <p className="admin-muted">{t("empty")}</p> : (
           <div className="admin-scroll">
             <table className="admin-table">

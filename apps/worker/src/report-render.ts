@@ -1,4 +1,4 @@
-import { formatTenge, share, targetMark, TARGETS, type TargetMark } from "@baga/core";
+import { formatTenge, PERSON_METRICS_FROM, share, targetMark, TARGETS, type TargetMark } from "@baga/core";
 import type { OwnerReport } from "@baga/db";
 
 /**
@@ -58,7 +58,9 @@ export function renderOwnerReport(r: OwnerReport, commits: Commit[], now = new D
   const w = r.funnelWeek;
   const openRate = share(f.productViews, f.tabs);
   const connected = share(r.people.connected, r.people.watchers);
-  const utm = share(r.utmVisitors, f.visitors);
+  const utm = share(r.utmVisits, f.tabs);
+  // Visitors per day: people once the 7 days before have browser ids, visits (tabs) until then.
+  const daily = r.weekPeopleReliable ? { label: "People/day", now: f.people, avg: w.people } : { label: "Visits/day", now: f.tabs, avg: w.tabs };
   const out: string[] = [];
 
   out.push(`<b>BAĞA · ${dayLabel(r.day)}</b>`);
@@ -66,21 +68,23 @@ export function renderOwnerReport(r: OwnerReport, commits: Commit[], now = new D
 
   out.push("", `<b>Yesterday</b> · targets for ${dayLabel(TARGETS.by)}`);
   out.push("<pre>" + [
-    row("Visitors", num(f.visitors), String(TARGETS.visitorsPerDay), targetMark(w.visitors, TARGETS.visitorsPerDay)),
+    row(daily.label, num(daily.now), String(TARGETS.visitorsPerDay), targetMark(daily.avg, TARGETS.visitorsPerDay)),
     row("Open item", pct(openRate), pct(TARGETS.productOpenRate), targetMark(openRate, TARGETS.productOpenRate)),
     row("Alerts/wk", num(r.people.newTrackings7d), String(TARGETS.alertsPerWeek), targetMark(r.people.newTrackings7d, TARGETS.alertsPerWeek)),
     row("Connected", pct(connected), pct(TARGETS.connectedRate), targetMark(connected, TARGETS.connectedRate)),
     row("From posts", pct(utm), pct(TARGETS.utmShare), targetMark(utm, TARGETS.utmShare)),
     row("Bought", num(r.alerts.boughtYes), String(TARGETS.boughtYes), targetMark(r.alerts.boughtYes, TARGETS.boughtYes)),
   ].join("\n") + "</pre>");
-  out.push(`Visitors 7-day avg ${num(w.visitors)} · returning ${num(f.returning)} · new alerts ${r.people.newTrackings}`);
+  out.push(`Visits 7-day avg ${num(w.tabs)} · ${r.peopleReliable ? `people ${num(f.people)} · returning ${num(f.returning)}` : `people from ${dayLabel(PERSON_METRICS_FROM)}`} · new alerts ${r.people.newTrackings}`);
   const sources = new Map<string, number>();
   for (const s of r.sources) sources.set(sourceName(s.source), (sources.get(sourceName(s.source)) ?? 0) + s.n);
   if (sources.size) out.push(`From: ${[...sources].map(([k, n]) => `${esc(k)} ${n}`).join(" · ")}`);
 
   out.push("", "<b>Savings</b>");
   out.push(`Confirmed: ${formatTenge(r.savings.confirmed)} (${r.savings.confirmedCount} bought)`);
-  out.push(`Drops caught: ${formatTenge(r.savings.dropsCaught)} in ${r.savings.dropsCaughtCount} alerts`);
+  out.push(`Drops caught: ${formatTenge(r.savings.dropsCaught)} on ${r.savings.dropsCaughtCount} products`);
+  const a = r.alerts24h;
+  out.push(`Alerts 24 h: ${a.products} products · ${a.messages.sent} messages sent${a.messages.failed ? `, ${a.messages.failed} failed` : ""} · ${a.clicks} clicks`);
 
   const c = r.collector;
   out.push("", "<b>Data today</b>");

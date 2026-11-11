@@ -83,3 +83,32 @@ more on products from 5 000 ₸, and not a product whose cheapest offer needs a 
   ±3% counts as "the same as before the sale" (`packages/core/src/sales.ts`).
 - **Hit rate** (admin): product pages opened, once per visit and product; how many already had an observation,
   and how many had their first observation 7+ days before.
+
+## KPI definitions (Telegram report, /admin, /admin/business; `packages/core/src/metrics.ts`)
+
+Three kinds of numbers, never mixed in one rate:
+
+- **Visit-based**: one browser tab (`events.sid`), all history from 3 Nov 2026. *Visits* = tabs with any event in
+  the window; *opened a product*, *pasted a link*, *started tracking*, *from posts* = visits with that event (posts:
+  the visit's `source` is a utm_source, i.e. not a site host and not "direct"). Rates divide by visits.
+- **Person-based**: one browser (`events.vid`, live since 11 Nov 2026 about 12:45 Almaty). Used only for windows that
+  start on or after `PERSON_METRICS_FROM` (12 Nov 2026, the first full day); earlier windows show «—». *People*,
+  *researchers* (opened a product, pasted or started tracking), *returning* (seen before the window), *Monthly Active
+  Price Researchers* (30 days, counted from 12 Nov until 30 days exist). In-app browsers (Instagram, Telegram) keep
+  their own storage, so returning people are undercounted.
+- **Account-based**: `watchers` and `trackings`, exact for all history. *People with alerts*; *connected* = Telegram
+  linked or email confirmed (now); in a window: people who started their list in it, and of them those connected.
+
+Windows are Almaty days including today (7 days = today and the 6 before). The "visitors per day" target uses people
+once the 7 days before are person-reliable (from 19 Nov 2026), visits until then, and says which.
+
+**Paste outcome** (the `paste` event's `detail`, from 11 Nov 2026; older events have none): `ok`, `queued` (Kaspi app
+link waiting for the collector), `not_a_url`, `not_kaspi`, `not_a_product`, `short_link_failed`, `check_failed`,
+`rate_limited`, `network`, `unknown`. "Product unavailable" is known only later, when the collector fails a queued
+link (`short_link_queue.status = 'failed'`).
+
+**Notifications** (`alertStats`, `packages/db/src/alertStats.ts`): *products with alerts* and *people with alerts* =
+distinct products / watchers with a sent `target_reached`; *triggers* = distinct `tracking:episode`; *target messages*
+= sent `target_reached` rows (one per channel per trigger); *sent / failed / waiting* = all notification rows by status
+("sent" = accepted by Telegram or the email service; inbox delivery is not reported); *clicks* = rows with `clicked_at`,
+and the distinct products behind them. Several messages for one product never count as several products.

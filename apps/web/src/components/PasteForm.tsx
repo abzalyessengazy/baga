@@ -5,6 +5,7 @@ import { useRouter } from "@/i18n/navigation";
 import { Turnstile } from "./Turnstile";
 import { CatalogList, type CatalogListItem } from "./CatalogList";
 import { track } from "@/lib/analytics";
+import { pasteOutcome } from "@baga/core";
 
 const DRAFT_KEY = "baga.pasteDraft";
 const read = () => { try { return sessionStorage.getItem(DRAFT_KEY) ?? ""; } catch { return ""; } };
@@ -122,7 +123,7 @@ export const PasteForm = forwardRef<HTMLInputElement>(function PasteForm(_, ref)
   async function check(q: string) {
     setBusy(true);
     setError(null);
-    track("paste");
+    // The paste event carries its outcome (docs/STATS.md, "KPI definitions"); sent once the answer is known.
     try {
       const short = isShortLink(q);
       const send = async () => {
@@ -137,6 +138,7 @@ export const PasteForm = forwardRef<HTMLInputElement>(function PasteForm(_, ref)
       // One quiet retry with a fresh check before telling the visitor anything.
       if (short && data.error === "check_failed" && !blocked.current) data = await send();
       if (data.error === "check_failed" && blocked.current) data.error = "check_blocked";
+      track("paste", { detail: pasteOutcome(data) });
       if (data.productId) {
         write("");
         router.push(`/p/${data.productId}${data.slug ? `?s=${encodeURIComponent(data.slug)}` : ""}`);
@@ -145,6 +147,7 @@ export const PasteForm = forwardRef<HTMLInputElement>(function PasteForm(_, ref)
       if (data.pendingLink) { write(""); router.push(`/l/${encodeURIComponent(data.pendingLink)}`); return; }
       setError(data.error ?? "generic");
     } catch {
+      track("paste", { detail: pasteOutcome("network") });
       setError("generic");
     }
     setBusy(false);

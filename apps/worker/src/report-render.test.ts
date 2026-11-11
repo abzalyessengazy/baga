@@ -3,9 +3,11 @@ import type { OwnerReport } from "@baga/db";
 import { headline, renderOwnerReport, reportIssues } from "./report-render";
 
 const now = new Date("2026-11-12T09:45:00Z");
-const day = { visitors: 30, returning: 4, tabs: 32, productViews: 16, pastes: 3, tracks: 2, channels: 1 };
+const day = { people: 30, returning: 4, tabs: 32, productViews: 16, pastes: 3, tracks: 2, channels: 1 };
 const base: OwnerReport = {
-  day: "2026-11-11", funnel: day, funnelWeek: { ...day, visitors: 25, tracks: 1.4 }, utmVisitors: 6,
+  day: "2026-11-11", funnel: day, funnelWeek: { ...day, people: 25, tabs: 26, tracks: 1.4 }, utmVisits: 6,
+  peopleReliable: true, weekPeopleReliable: true,
+  alerts24h: { products: 1, people: 1, triggers: 1, targetMessages: 2, messages: { sent: 3, failed: 0, waiting: 0 }, clicks: 1, clickedProducts: 1 },
   sources: [{ source: "direct", n: 20 }, { source: "insta<post>", n: 6 }],
   collector: { runs: 1, requests: 1650, running: false, checked: 1600, changed: 40, failed: 2, aborted: [] },
   catalog: { products: 1534, fresh3d: 1460, inStock: 1400, history7d: 640, history30d: 0, seedQueue: 1200, linksWaiting: 0 },
@@ -60,15 +62,22 @@ describe("renderOwnerReport", () => {
     const html = renderOwnerReport(base, [{ hash: "abc1234", subject: "Fix <b> & more" }], now);
     expect(html).toContain("<b>BAĞA · 11 Nov</b>");
     expect(html).toContain("✅ All normal");
-    expect(html).toContain("Visitors      30  🎯100  🔴");
+    expect(html).toContain("People/day    30  🎯100  🔴");
     expect(html).toContain("Open item    50%  🎯50%  ✅");
-    expect(html).toContain("From posts   20%  🎯40%  🟡");
+    expect(html).toContain("From posts   19%  🎯40%  🔴");
     expect(html).toContain("From: direct 20 · insta&lt;post&gt; 6");
     expect(html).toMatch(/Confirmed: 0\s₸ \(0 bought\)/);
-    expect(html).toMatch(/Drops caught: 480\s389\s₸ in 3 alerts/);
+    expect(html).toMatch(/Drops caught: 480\s389\s₸ on 3 products/);
+    expect(html).toContain("Alerts 24 h: 1 products · 3 messages sent · 1 clicks");
     expect(html).toContain("Kaspi ✅ 1 650 requests");
     expect(html).toContain("• Fix &lt;b&gt; &amp; more");
     expect(html.length).toBeLessThan(4096);
+  });
+  it("counts visits, not people, until browser ids cover the days", () => {
+    const html = renderOwnerReport({ ...base, peopleReliable: false, weekPeopleReliable: false }, [], now);
+    expect(html).toContain("Visits/day    32  🎯100  🔴");
+    expect(html).toContain("people from 12 Nov");
+    expect(html).not.toContain("returning 4");
   });
   it("leaves the code block out when nothing was pushed and lists at most three", () => {
     expect(renderOwnerReport(base, [], now)).not.toContain("<b>Code</b>");

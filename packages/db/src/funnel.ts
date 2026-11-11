@@ -73,12 +73,20 @@ export interface FunnelStats {
    * visit and product), how many already had a price when opened, and how many had a week of history.
    */
   views: { total: number; priced: number; week: number };
+  /** Account-based: people who started their alert list in the window, of them with Telegram or a confirmed email now. */
+  accounts: { newPeople: number; connected: number };
 }
 
-/** Visits that reached each step in the last `days` days, counted once per visit. */
+/**
+ * Visits (tabs) that reached each step in the last `days` Almaty days including today, counted once per visit: the
+ * same window as /admin/business (docs/STATS.md, "KPI definitions"). Connecting alerts is account-based: people who
+ * started their list in the window, and of them those with Telegram or a confirmed email now.
+ */
 export async function getFunnel(sql: postgres.Sql, days = 7): Promise<FunnelStats> {
   // A plain timestamp parameter: a shared sql`` fragment reused across parallel queries made postgres.js hang.
-  const since = new Date(Date.now() - days * 86_400_000);
+  const [w] = await sql<{ since: Date }[]>`
+    select (((now() at time zone 'Asia/Almaty')::date - ${days - 1}::int)::timestamp at time zone 'Asia/Almaty') as since`;
+  const since = w!.since;
   const steps = await sql<{ name: EventName; sessions: number }[]>`
     select name, count(distinct sid)::int as sessions from events where at > ${since} group by name`;
   const visits = (col: "locale" | "device" | "source") => sql<{ label: string; n: number }[]>`
@@ -101,8 +109,13 @@ export async function getFunnel(sql: postgres.Sql, days = 7): Promise<FunnelStat
     from v left join lateral (
       select min(o.observed_at) as first from products p join price_observations o on o.product_id = p.id
       where p.external_id = v.external_id) f on true`;
+  const [accounts] = await sql<{ newPeople: number; connected: number }[]>`
+    select count(*)::int as "newPeople",
+      count(*) filter (where telegram_chat_id is not null or email_confirmed_at is not null)::int as connected
+    from watchers where created_at >= ${since}`;
   const by = new Map(steps.map((s) => [s.name, s.sessions]));
   return {
+    accounts: accounts ?? { newPeople: 0, connected: 0 },
     days, steps: EVENT_NAMES.map((name) => ({ name, sessions: by.get(name) ?? 0 })),
     byLocale, byDevice, sources, bought, asked: asked!.n, returned: returned!.n,
     views: views ?? { total: 0, priced: 0, week: 0 },
