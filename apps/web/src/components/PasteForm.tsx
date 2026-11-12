@@ -207,6 +207,8 @@ export const PasteForm = forwardRef<HTMLInputElement>(function PasteForm(_, ref)
               </li>
             ))}
           </ul>
+          {/* Only once a short link is really slow: the full link from the browser never waits for Kaspi (12 Nov). */}
+          {(steps.includes("waitSlow") || steps.includes("waitRetry")) && <p className="paste-tip">{t("waitTip")}</p>}
         </div>
       ) : (
         <p id={`${id}-msg`} className={error ? "paste-error" : "paste-hint"} role={error ? "alert" : undefined}>

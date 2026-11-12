@@ -125,7 +125,7 @@ a { color: inherit; }
 .btn-stamp { background: var(--stamp); }
 .paste-hint { font-size: var(--step--1); color: var(--ink-soft); margin: 10px 2px 0; }
 .paste-error { font-size: var(--step--1); color: var(--stamp-red); margin: 10px 2px 0; font-weight: 600; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .paste-hint { color: #a9adb4; } :root:not([data-theme="light"]) .paste-error { color: #ff8f80; } }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .paste-hint, :root:not([data-theme="light"]) .paste-tip { color: #a9adb4; } :root:not([data-theme="light"]) .paste-error { color: #ff8f80; } }
 
 /* ---------- receipt ---------- */
 .printer { position: relative; }
@@ -660,6 +660,7 @@ a { color: inherit; }
 .paste-wait { margin: 12px 2px 0; }
 .paste-wait .print-head { margin-bottom: 10px; }
 .paste-wait .print-lines { font-size: var(--step--1); gap: 6px; }
+.paste-tip { font-family: var(--font-ui); font-size: var(--step--1); color: var(--ink-soft); margin: 10px 0 0; padding-top: 8px; border-top: 1.5px dashed var(--rule); animation: pop-in 0.3s both; }
 .untracked-status { animation: pop-in 0.35s 0.5s both; }
 .untracked-status.is-working { animation: none; }
 .dots::after { content: "…"; display: inline-block; width: 1.2em; overflow: hidden; vertical-align: bottom; animation: dots 1.2s steps(4) infinite; }
