@@ -1,9 +1,7 @@
 import type { Market } from "@baga/db";
+import { remembered } from "./remembered";
 
-let pending: Promise<Market | null> | null = null;
-
-/** One /api/market request per page, shared by the hero receipt and the Z-report slips. */
-export function loadMarket(): Promise<Market | null> {
-  pending ??= fetch("/api/market").then((r) => (r.ok ? (r.json() as Promise<Market | null>) : null)).catch(() => null);
-  return pending;
-}
+/** One /api/market request, shared by the hero receipt and the Z-report slips and kept across page changes. */
+const market = remembered<Market>("/api/market");
+export const loadMarket = market.load;
+export const cachedMarket = market.peek;

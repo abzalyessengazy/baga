@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import type { Market } from "@baga/db";
 import { Link } from "@/i18n/navigation";
-import { loadMarket } from "@/lib/market";
+import { cachedMarket, loadMarket } from "@/lib/market";
 import { Wordmark } from "./Wordmark";
 import { StatIcon } from "./StatIcon";
 import { PickSlider } from "./PickSlider";
@@ -32,7 +32,9 @@ export function MarketReceipt() {
   const t = useTranslations("market");
   const td = useTranslations("dates") as unknown as DatesT;
   const reduce = useReducedMotion();
-  const [m, setM] = useState<Market | null | undefined>(undefined);
+  // Back from a product page the numbers are already here: drawn at once, without printing again.
+  const [m, setM] = useState<Market | null | undefined>(cachedMarket);
+  const [still] = useState(() => cachedMarket() !== undefined);
   // On a phone the receipt sits under the form: print it when it comes into view, not unseen.
   const ref = useRef<HTMLDivElement>(null);
   const seen = useInView(ref, { once: true, amount: 0.15 });
@@ -49,7 +51,7 @@ export function MarketReceipt() {
     <div className="printer market-printer" ref={ref}>
       <div className="printer-slot" aria-hidden />
       <div className="printer-mouth">
-        <motion.div initial={reduce ? false : { y: "-101%" }} animate={seen || reduce ? { y: 0 } : {}} transition={{ duration: 1.6, ease: printerEase }}>
+        <motion.div initial={reduce || still ? false : { y: "-101%" }} animate={seen || reduce ? { y: 0 } : {}} transition={{ duration: 1.6, ease: printerEase }}>
           <section className="receipt market" aria-label={t("title")}>
             <div className="market-head">
               <span className="market-brand"><Wordmark /></span>

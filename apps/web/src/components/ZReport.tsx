@@ -5,7 +5,8 @@ import { useLocale, useTranslations } from "next-intl";
 import { formatTenge, shortTitle } from "@baga/core";
 import type { Market } from "@baga/db";
 import { Link } from "@/i18n/navigation";
-import { loadMarket } from "@/lib/market";
+import { cachedMarket, loadMarket } from "@/lib/market";
+import { remembered } from "@/lib/remembered";
 import { dayMonth, type DatesT } from "@/lib/dayMonth";
 
 type L = "ru" | "kk";
@@ -34,14 +35,27 @@ const ROWS = 5;
 const ROWS_TWO = 4; // packages/db market.ts DAY_ROWS_SHOWN: the find of the day skips these rows
 const ROWS_THREE = 3;
 
+const TABS_KEY = "baga.moves";
+/** The moves tabs last chosen in this browser tab; Подешевели + День by default. */
+function savedTabs(): [keyof Moves, keyof Stats["moves"]] {
+  let v = "";
+  try { v = sessionStorage.getItem(TABS_KEY) ?? ""; } catch { /* no storage */ }
+  const [d, p] = v.split(":");
+  return [d === "rises" ? "rises" : "drops", p === "week" ? "week" : "day"];
+}
+
 /* 2. Price moves (docs/STATS.md rules D and W): biggest drops or rises in percent, one line per product, the top line inked. */
-function MovesSlip({ moves, locale }: { moves: Stats["moves"]; locale: L }) {
+function MovesSlip({ moves, locale, still }: { moves: Stats["moves"]; locale: L; still: boolean }) {
   const t = useTranslations("home");
   const ref = useRef<HTMLDivElement>(null);
-  const reduce = useReducedMotion();
-  const go = useInView(ref, { once: true, amount: 0.4 }) || !!reduce;
-  const [dir, setDir] = useState<keyof Moves>("drops");
-  const [period, setPeriod] = useState<keyof Stats["moves"]>("day");
+  const reduce = useReducedMotion() || still;
+  const go = useInView(ref, { once: true, amount: 0.4 }) || reduce;
+  // The tabs chosen stay chosen for this browser tab: back from a product, the same list is there (the owner, 12 Nov).
+  const [dir, setDir] = useState<keyof Moves>(() => savedTabs()[0]);
+  const [period, setPeriod] = useState<keyof Stats["moves"]>(() => savedTabs()[1]);
+  useEffect(() => {
+    try { sessionStorage.setItem(TABS_KEY, `${dir}:${period}`); } catch { /* private mode: the tabs reset, nothing else */ }
+  }, [dir, period]);
   const rows = moves[period][dir].slice(0, ROWS_TWO);
   const tab = <K extends string>(on: boolean, label: string, set: () => void, key: K) => (
     <button key={key} type="button" className={`z-tab${on ? " is-on" : ""}`} aria-pressed={on} onClick={set}>{label}</button>
@@ -69,12 +83,12 @@ function MovesSlip({ moves, locale }: { moves: Stats["moves"]; locale: L }) {
 }
 
 /* Plain product lists: most tracked, and newly added to the catalog. */
-function ListSlip({ items, locale, dated, more }: { items: Item[]; locale: L; dated?: boolean; more?: string }) {
+function ListSlip({ items, locale, dated, more, still }: { items: Item[]; locale: L; dated?: boolean; more?: string; still: boolean }) {
   const t = useTranslations("home");
   const td = useTranslations("dates") as unknown as DatesT;
   const ref = useRef<HTMLDivElement>(null);
-  const reduce = useReducedMotion();
-  const go = useInView(ref, { once: true, amount: 0.4 }) || !!reduce;
+  const reduce = useReducedMotion() || still;
+  const go = useInView(ref, { once: true, amount: 0.4 }) || reduce;
   return (
     <div className="slip-screen" ref={ref}>
       {items.slice(0, ROWS).map((d, i) => (
@@ -109,12 +123,12 @@ function SpreadSlip({ rows, locale }: { rows: Market["spread"]["top"]; locale: L
 }
 
 /* 3. The biggest drop: the old price, the new one, and a stamp with the difference. */
-function BestSlip({ d, locale }: { d: Drop; locale: L }) {
+function BestSlip({ d, locale, still }: { d: Drop; locale: L; still: boolean }) {
   const td = useTranslations("dates") as unknown as DatesT;
   const t = useTranslations("home");
   const ref = useRef<HTMLAnchorElement>(null);
-  const reduce = useReducedMotion();
-  const go = useInView(ref, { once: true, amount: 0.4 }) || !!reduce;
+  const reduce = useReducedMotion() || still;
+  const go = useInView(ref, { once: true, amount: 0.4 }) || reduce;
   return (
     <Link href={`/p/${d.externalId}`} className="slip-screen z-best" ref={ref}>
       <div className="z-best-head">
@@ -139,25 +153,29 @@ function BestSlip({ d, locale }: { d: Drop; locale: L }) {
  * "Kaspi today" receipt at the top (MarketReceipt); the method notes live on /explore, not here. Nothing is shown
  * until there is a finished collector run, and never sample numbers in its place.
  */
+const stats = remembered<Stats>("/api/stats");
+
 export function ZReport() {
   const t = useTranslations("home");
   const locale = useLocale() as L;
-  const [s, setS] = useState<Stats | null>(null);
-  const [m, setM] = useState<Market | null>(null);
+  // Back from a product page the lists are drawn at once and at full height, so the browser returns to the same spot.
+  const [s, setS] = useState<Stats | null>(() => stats.peek() ?? null);
+  const [m, setM] = useState<Market | null>(() => cachedMarket() ?? null);
+  const [still] = useState(() => stats.peek() !== undefined);
   useEffect(() => {
     let live = true;
-    fetch("/api/stats").then((r) => (r.ok ? r.json() : null)).then((j: Stats | null) => { if (live) setS(j); }).catch(() => {});
+    stats.load().then((j) => { if (live) setS(j); });
     loadMarket().then((x) => { if (live) setM(x); });
     return () => { live = false; };
   }, []);
   if (!s?.lastRun || !s.days.length) return null;
   const best = s.moves.week.drops[0];
   const slips = [
-    { title: t("movesTitle"), el: <MovesSlip moves={s.moves} locale={locale} /> },
+    { title: t("movesTitle"), el: <MovesSlip moves={s.moves} locale={locale} still={still} /> },
     ...(m?.spread.top.length ? [{ title: t("spreadTitle"), el: <SpreadSlip rows={m.spread.top} locale={locale} /> }] : []),
-    ...(best ? [{ title: t("bestTitle"), el: <BestSlip d={best} locale={locale} /> }] : []),
-    ...(s.mostTracked.length ? [{ title: t("trackedTitle"), el: <ListSlip items={s.mostTracked} locale={locale} more="/explore?list=all&sort=tracked" /> }] : []),
-    ...(s.newest.length ? [{ title: t("newTitle"), el: <ListSlip items={s.newest} locale={locale} dated more="/explore?list=all&sort=new" /> }] : []),
+    ...(best ? [{ title: t("bestTitle"), el: <BestSlip d={best} locale={locale} still={still} /> }] : []),
+    ...(s.mostTracked.length ? [{ title: t("trackedTitle"), el: <ListSlip items={s.mostTracked} locale={locale} still={still} more="/explore?list=all&sort=tracked" /> }] : []),
+    ...(s.newest.length ? [{ title: t("newTitle"), el: <ListSlip items={s.newest} locale={locale} still={still} dated more="/explore?list=all&sort=new" /> }] : []),
   ];
   return (
     <section className="wrap section">
