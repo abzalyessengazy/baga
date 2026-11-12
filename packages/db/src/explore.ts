@@ -100,7 +100,8 @@ export async function exploreCatalog(sql: postgres.Sql, x: ExploreQuery): Promis
     cheap: sql`price asc`,
     dear: sql`price desc`,
     popular: sql`reviews desc, offer_count desc`,
-    new: sql`by_person desc, first_seen_at desc`,
+    // Same as the home list (NEWEST_ORDER): newest Almaty day first, people's products first within the day.
+    new: sql`(first_seen_at at time zone 'Asia/Almaty')::date desc, by_person desc, first_seen_at desc`,
     tracked: sql`watchers desc, reviews desc`,
   }[sort];
   const cat = x.category ? sql`where category = ${x.category}` : sql``;
