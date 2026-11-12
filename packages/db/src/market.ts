@@ -1,5 +1,6 @@
 import type postgres from "postgres";
-import { pickOrder, priceNote, sellerLabel, type PriceNote, type SellerLabel } from "@baga/core";
+import { computeVerdict, liveShiftDay, pickOrder, priceNote, sellerLabel, KASPI_VISIT_WINDOW_UTC, type PriceNote, type SellerLabel } from "@baga/core";
+import { getDailyLows } from "./queries";
 import { dayMoves, stillMoving, weekMovers, type Mover } from "./movers";
 
 /** One product where sellers ask very different prices right now (offers of its latest check). */
@@ -29,6 +30,11 @@ export interface Market {
   /** Rule D (docs/STATS.md): the latest shift, products checked, compared with an earlier day, and changed by MOVE_MIN_PCT. */
   day: string | null;
   checked: number;
+  /** `day` is today while it is still being checked (the live day), with its latest check time (ISO). */
+  live: boolean; asOf: string | null;
+  /** When `day` is an earlier day: today's check starts later ("later", before 09:00 Almaty) or has started but is not
+   * shown yet ("running", fewer than LIVE_MIN_CHECKED products so far). Null otherwise. */
+  todayCheck: "later" | "running" | null;
   compared: number; down: number; up: number; same: number;
   /** Products seen in stock on the latest shift and on MARKET_CONFIG.lowsMinDays or more days, whose latest daily low is below every earlier one. */
   newLows: number;
@@ -63,9 +69,15 @@ export const MARKET_CONFIG = {
  * Everything is counted from observed prices and current offers; nothing is estimated. Queries run one at a time
  * (parallel queries beyond the pool size stall the Supabase pooler).
  */
-export async function getMarket(sql: postgres.Sql): Promise<Market> {
+export async function getMarket(sql: postgres.Sql, now = new Date()): Promise<Market> {
   const c = MARKET_CONFIG;
-  const moves = await dayMoves(sql);
+  const moves = await dayMoves(sql, now);
+  const almatyToday = new Date(now.getTime() + 5 * 3_600_000).toISOString().slice(0, 10);
+  // Almaty minute of the day (UTC+5): before Visit-time opens (09:00 Almaty) today's check is still to come.
+  const almatyMinute = (now.getUTCHours() * 60 + now.getUTCMinutes() + 300) % 1440;
+  const todayCheck = moves.live || !moves.day || moves.day >= almatyToday ? null
+    : liveShiftDay(now) ? "running" as const
+    : almatyMinute < KASPI_VISIT_WINDOW_UTC.startMinute + 300 ? "later" as const : null;
   const [catalog] = await sql<{ products: number; sellers: number; firstDay: string | null }[]>`
     select (select count(*)::int from products p join product_state s on s.product_id = p.id
             where p.status = 'active' and s.current_min_price is not null) as products,
@@ -149,7 +161,7 @@ export async function getMarket(sql: postgres.Sql): Promise<Market> {
   const down = moves.down.length, up = moves.up.length;
   return {
     catalog: catalog ?? { products: 0, sellers: 0, firstDay: null },
-    day: moves.day, checked: moves.checked,
+    day: moves.day, checked: moves.checked, live: moves.live, asOf: moves.asOf?.toISOString() ?? null, todayCheck,
     compared: moves.compared, down, up, same: moves.compared - down - up,
     newLows: lows?.n ?? 0,
     spread: { products: spread?.products ?? 0, over10: spread?.over10 ?? 0, over25: spread?.over25 ?? 0, medianPct: spread?.median ?? null, top },
@@ -171,6 +183,10 @@ async function picksOfDay(sql: postgres.Sql, moves: Awaited<ReturnType<typeof da
       where p.external_id = ${m.externalId}`;
     const note = o?.prices?.length ? priceNote(o.prices[0]!, o.prices.slice(1), o.rating, o.reviews) : null;
     if (note?.kind === "check") continue;
+    // Never a find whose own page says «Дороже обычного» (owner, 12 Nov): the same daily lows and current price as
+    // the product page's verdict.
+    const [p] = await sql<{ id: number }[]>`select id from products where external_id = ${m.externalId}`;
+    if (p && computeVerdict(await getDailyLows(sql, p.id), m.now).kind === "high") continue;
     out.push({ kind: "drop", externalId: m.externalId, title: m.title, titleKk: m.titleKk, imageUrl: m.imageUrl,
       price: m.now, ref: m.was, pct: m.pct, sellers: m.offerCount, note });
   }

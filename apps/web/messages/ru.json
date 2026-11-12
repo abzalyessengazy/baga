@@ -663,7 +663,10 @@
     "shopsMixed": "смешанные оценки",
     "shopsUnknown": "мало отзывов",
     "shopsAll": "Все продавцы",
-    "shopsTitle": "Продавцы"
+    "shopsTitle": "Продавцы",
+    "dayLive": "{day} · идёт проверка · на {time}",
+    "dayEarlier": "Итоги {day} · сегодня проверка с 09:00",
+    "dayRunning": "Итоги {day} · сегодняшняя проверка уже идёт"
   },
   "dates": {
     "day": "{d} {month}",

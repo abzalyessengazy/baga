@@ -1,5 +1,5 @@
 import type postgres from "postgres";
-import { lastCompleteShiftDay, MOVE_MIN_PCT, moveDirection } from "@baga/core";
+import { lastCompleteShiftDay, liveShiftDay, LIVE_MIN_CHECKED, MOVE_MIN_PCT, moveDirection } from "@baga/core";
 
 /**
  * Price moves, by the rules in docs/STATS.md. Prices are compared as daily lows (the lowest price of an Almaty
@@ -66,6 +66,8 @@ export interface DayMoves {
   compared: number;
   /** Cheaper / dearer than their previous daily low by MOVE_MIN_PCT or more; biggest percent first. */
   down: Mover[]; up: Mover[];
+  /** Today while it is still being checked (the live day), with the time of its latest check; false for a complete day. */
+  live: boolean; asOf: Date | null;
 }
 
 /**
@@ -73,6 +75,15 @@ export interface DayMoves {
  * (a product not seen in stock the day before is not compared). Used by "Kaspi сегодня", the Z-report totals and its "day" lists.
  */
 export async function dayMoves(sql: postgres.Sql, now = new Date()): Promise<DayMoves> {
+  // The live day (owner, 12 Nov 2026): during Visit-time, today once LIVE_MIN_CHECKED products were checked.
+  const today = liveShiftDay(now);
+  if (today) {
+    const [c] = await sql<{ n: number; at: Date | null }[]>`
+      select count(distinct o.product_id)::int as n, max(o.observed_at) as at
+      from price_observations o join products p on p.id = o.product_id
+      where p.status = 'active' and o.observed_at >= (${today}::date)::timestamp at time zone 'Asia/Almaty'`;
+    if (c && c.n >= LIVE_MIN_CHECKED) return liveDayMoves(sql, today, c.n, c.at);
+  }
   // The latest complete shift (docs/STATS.md): a run still in progress is not a day yet. Every checked product has an
   // observation on each checked day (the daily heartbeat), so observations count the products checked that day.
   const cutoff = lastCompleteShiftDay(now);
@@ -86,7 +97,7 @@ export async function dayMoves(sql: postgres.Sql, now = new Date()): Promise<Day
     select to_char(latest.day, 'YYYY-MM-DD') as day,
            (select count(distinct product_id)::int from days where days.day = latest.day) as checked
     from latest`;
-  if (!head?.day) return { day: null, checked: 0, compared: 0, down: [], up: [] };
+  if (!head?.day) return { day: null, checked: 0, compared: 0, down: [], up: [], live: false, asOf: null };
   const rows = await sql<Mover[]>`
     with d as (
       select product_id, (observed_at at time zone 'Asia/Almaty')::date as day, min(min_price)::int as p
@@ -103,7 +114,31 @@ export async function dayMoves(sql: postgres.Sql, now = new Date()): Promise<Day
     where a.rn = 1 and a.day = ${head.day}::date and p.status = 'active'`;
   const by = (dir: -1 | 1) => rows.filter((m) => moveDirection(m.was, m.now) === dir)
     .sort((x, y) => (y.now - y.was) / y.was * dir - (x.now - x.was) / x.was * dir);
-  return { day: head.day, checked: head.checked, compared: rows.length, down: by(-1), up: by(1) };
+  return { day: head.day, checked: head.checked, compared: rows.length, down: by(-1), up: by(1), live: false, asOf: null };
+}
+
+/**
+ * Today so far (the live day): each product checked today, in stock, at its current lowest price (the price its page
+ * shows) against its daily low of yesterday, so a product listed as cheaper never shows a higher price on its page.
+ * A product not in stock yesterday is not compared, as on a complete day.
+ */
+async function liveDayMoves(sql: postgres.Sql, day: string, checked: number, asOf: Date | null): Promise<DayMoves> {
+  const rows = await sql<Mover[]>`
+    with y as (
+      select product_id, min(min_price)::int as p from price_observations
+      where min_price is not null
+        and observed_at >= ((${day}::date - 1)::timestamp at time zone 'Asia/Almaty')
+        and observed_at < (${day}::date::timestamp at time zone 'Asia/Almaty')
+      group by 1)
+    select p.external_id as "externalId", p.title, p.title_kk as "titleKk", p.image_url as "imageUrl",
+           s.current_min_price as now, y.p as was, round((s.current_min_price - y.p) * 100.0 / y.p)::int as pct,
+           coalesce(s.offer_count, 0) as "offerCount", s.last_checked_at as "checkedAt", s.current_min_price as current
+    from y join product_state s on s.product_id = y.product_id join products p on p.id = y.product_id
+    where p.status = 'active' and s.in_stock and s.current_min_price is not null
+      and s.last_checked_at >= (${day}::date::timestamp at time zone 'Asia/Almaty')`;
+  const by = (dir: -1 | 1) => rows.filter((m) => moveDirection(m.was, m.now) === dir)
+    .sort((x, y) => (y.now - y.was) / y.was * dir - (x.now - x.was) / x.was * dir);
+  return { day, checked, compared: rows.length, down: by(-1), up: by(1), live: true, asOf };
 }
 
 /**

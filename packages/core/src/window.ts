@@ -68,6 +68,27 @@ export function lastCompleteShiftDay(now: Date): string {
   return new Date(now.getTime() - KASPI_VISIT_WINDOW_UTC.endMinute * 60_000).toISOString().slice(0, 10);
 }
 
+/**
+ * The live day (owner, 12 Nov 2026; docs/STATS.md "Shift"): during Kaspi's Visit-time (04:00–08:45 UTC = 09:00–13:45
+ * Almaty) today's checks so far are shown as today, once LIVE_MIN_CHECKED products were checked, instead of yesterday
+ * until 13:45. Returns today's Almaty day inside Visit-time, else null (then the latest complete day is shown).
+ */
+export function liveShiftDay(now: Date): string | null {
+  const m = minuteOfDayUtc(now);
+  if (m < KASPI_VISIT_WINDOW_UTC.startMinute || m >= KASPI_VISIT_WINDOW_UTC.endMinute) return null;
+  // Visit-time lies within one UTC day, and Almaty (UTC+5) is on the same date then.
+  return now.toISOString().slice(0, 10);
+}
+
+/** Today is shown live from this many products checked today (about 50 minutes into the run). */
+export const LIVE_MIN_CHECKED = 300;
+
+/** How long a copy of the home page's day numbers may live: 5 minutes while today is checked, else until the day completes. */
+export function dailyCacheSeconds(now: Date): number {
+  const untilEnd = secondsUntilShiftEnds(now);
+  return liveShiftDay(now) ? Math.min(300, untilEnd) : untilEnd;
+}
+
 /** Seconds until the next shift day completes (08:45 UTC): CDN copies of daily numbers should not outlive it. */
 export function secondsUntilShiftEnds(now: Date): number {
   const end = KASPI_VISIT_WINDOW_UTC.endMinute * 60;

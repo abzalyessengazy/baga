@@ -12,9 +12,13 @@ import { PickSlider } from "./PickSlider";
 import { dayMonth, type DatesT } from "@/lib/dayMonth";
 
 const count = (n: number) => new Intl.NumberFormat("ru-RU").format(n);
-/** Calendar days from the first observed day to the latest complete shift, both included. */
+/** Calendar days from the first observed day to the shown day (the live day included), both included. */
 const historyDays = (first: string | null, last: string) =>
   first ? Math.round((Date.parse(last) - Date.parse(first)) / 86_400_000) + 1 : 0;
+
+/** "12:35", Almaty time. */
+const almatyTime = (iso: string) =>
+  new Intl.DateTimeFormat("ru-RU", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "Asia/Almaty" }).format(new Date(iso));
 
 // Printer feed: the paper advances in small steps, like a thermal printer.
 const printerEase = (t: number) => Math.round(t * 28) / 28;
@@ -64,7 +68,12 @@ export function MarketReceipt() {
                 </dl>
                 {m!.day && (
                   <p className="mk-line">
-                    <span className="mk-when">{dayMonth(m!.day!, td)}</span>
+                    {/* The live day says it is still being checked; an earlier day says when today's check comes (12 Nov). */}
+                    <span className="mk-when">{
+                      m!.live && m!.asOf ? t("dayLive", { day: dayMonth(m!.day!, td), time: almatyTime(m!.asOf) })
+                      : m!.todayCheck === "later" ? t("dayEarlier", { day: dayMonth(m!.day!, td) })
+                      : m!.todayCheck === "running" ? t("dayRunning", { day: dayMonth(m!.day!, td) })
+                      : dayMonth(m!.day!, td)}</span>
                     <span className="mk-pair"><span className="mk-n is-down">↓ {count(m!.down)}</span> {t("dayDown")}</span>
                     <span className="mk-pair"><span className="mk-n is-up">↑ {count(m!.up)}</span> {t("dayUp")}</span>
                   </p>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isInVisitWindow, isInStoreWindow, isManualCheckTime, lastCompleteShiftDay, msUntilVisitWindow, secondsUntilShiftEnds, nextVisitWindowDay, VISIT_WINDOW_MINUTES } from "./window";
+import { isInVisitWindow, isInStoreWindow, isManualCheckTime, lastCompleteShiftDay, liveShiftDay, dailyCacheSeconds, msUntilVisitWindow, secondsUntilShiftEnds, nextVisitWindowDay, VISIT_WINDOW_MINUTES } from "./window";
 
 const utc = (hhmm: string) => new Date(`2026-11-02T${hhmm}:00Z`);
 
@@ -85,5 +85,20 @@ describe("other stores' window (Technodom, 10 Nov 2026)", () => {
   it("does not start a request that would run past 03:50", () => {
     expect(isInStoreWindow(utc("03:49"), 60_000)).toBe(false);
     expect(isInStoreWindow(utc("23:59"), 60_000)).toBe(true);
+  });
+});
+
+describe("liveShiftDay", () => {
+  it("is today during Kaspi's Visit-time only", () => {
+    expect(liveShiftDay(new Date("2026-11-12T03:59:00Z"))).toBeNull(); // 08:59 Almaty: before the check
+    expect(liveShiftDay(new Date("2026-11-12T04:00:00Z"))).toBe("2026-11-12");
+    expect(liveShiftDay(new Date("2026-11-12T07:35:00Z"))).toBe("2026-11-12"); // 12:35 Almaty
+    expect(liveShiftDay(new Date("2026-11-12T08:45:00Z"))).toBeNull(); // 13:45: the day is complete
+    expect(liveShiftDay(new Date("2026-11-12T20:00:00Z"))).toBeNull(); // 01:00 Almaty on 13 Nov
+  });
+  it("keeps cached day numbers for 5 minutes while today is checked", () => {
+    expect(dailyCacheSeconds(new Date("2026-11-12T07:35:00Z"))).toBe(300);
+    expect(dailyCacheSeconds(new Date("2026-11-12T08:43:00Z"))).toBe(120);
+    expect(dailyCacheSeconds(new Date("2026-11-12T02:45:00Z"))).toBe(6 * 3600);
   });
 });

@@ -17,11 +17,15 @@ select product_id, (observed_at at time zone 'Asia/Almaty')::date as day, min(mi
 from price_observations where min_price is not null group by 1, 2
 ```
 
-**Shift.** The latest **complete** Almaty day with checks: today once Kaspi's Visit-time is over (13:45 Almaty,
-`lastCompleteShiftDay` in `packages/core/src/window.ts`), yesterday before that. A run still in progress is never
-shown as a day, so a morning visitor never sees "checked 29". Products checked on the shift = active products with a
-price observation that day (each check writes at least the daily heartbeat). One collector run a day, 09:05–13:30
-Almaty. `/api/stats` and `/api/market` are cached by the CDN for up to an hour but never past 13:45 Almaty.
+**Shift.** The day the home page shows. During Kaspi's Visit-time (09:00–13:45 Almaty), once `LIVE_MIN_CHECKED`
+(300) products were checked today, it is **today, live** (owner, 12 Nov 2026: visitors saw yesterday until 14:00):
+the receipt says «12 ноя · идёт проверка · на 12:48» and the numbers grow until the run ends (`liveShiftDay`,
+`packages/core/src/window.ts`). Otherwise it is the latest **complete** Almaty day with checks (`lastCompleteShiftDay`):
+today after 13:45, yesterday before; before 09:00 the receipt adds «сегодня проверка с 09:00», and during the run's
+first ~300 checks «сегодняшняя проверка уже идёт». Products checked on the shift = active products with a price
+observation that day (each check writes at least the daily heartbeat). One collector run a day, 09:05–13:42 Almaty.
+`/api/stats` and `/api/market` are cached by the CDN for up to an hour but never past 13:45 Almaty, and for 5 minutes
+during Visit-time.
 
 **Catalog first.** "Kaspi сегодня" leads with the whole catalog (priced active products, sellers in current offers,
 days since the first observation); the shift's changes are one line under it.
@@ -38,6 +42,9 @@ change as today's drop; such a change cannot be dated, so it appears only in the
 - **Checked**: active products with a check on the shift day (in stock or not).
 - **Compared**: of those, products with a daily low on the shift and on the day before.
 - **Cheaper / dearer**: compared products whose change is a Change down / up. **Same** = compared − cheaper − dearer.
+- **Live day** (`liveDayMoves`): each product checked today and in stock now, at its **current** lowest price (what its
+  page shows) against its daily low of yesterday (its chart's last point), so a product listed as cheaper can never show
+  a higher price on its page. Checked so far 845, compared 786 at 12:47 on 12 Nov; 24 of 24 listed rows matched their pages.
 
 Used by: "Kaspi сегодня" (checked, ↓, ↑, compared), the Z-report totals (checked in the shift, price changed,
 of them cheaper) and the Z-report "День" lists (biggest percent first).
@@ -65,7 +72,8 @@ keep every move.
 
 One of the week's best drops (rule W), a different one each day: the best 5 eligible drops in turn. Never a product
 the home page already shows (the week's biggest drop and the 4 visible rows of the day list), only drops of 10% or
-more on products from 5 000 ₸, and not a product whose cheapest offer needs a seller check.
+more on products from 5 000 ₸, not a product whose cheapest offer needs a seller check, and never a product whose own
+page says «Дороже обычного» (the page's verdict on the same daily lows and current price; owner, 12 Nov 2026).
 
 ## Other numbers
 

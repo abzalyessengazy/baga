@@ -663,7 +663,10 @@
     "shopsMixed": "бағалары аралас",
     "shopsUnknown": "пікірі аз",
     "shopsAll": "Барлық сатушылар",
-    "shopsTitle": "Сатушылар"
+    "shopsTitle": "Сатушылар",
+    "dayLive": "{day} · тексеру жүріп жатыр · {time}",
+    "dayEarlier": "{day} қорытындысы · бүгін тексеру 09:00-ден",
+    "dayRunning": "{day} қорытындысы · бүгінгі тексеру басталды"
   },
   "dates": {
     "day": "{d} {month}",

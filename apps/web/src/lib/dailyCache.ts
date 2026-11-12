@@ -1,12 +1,13 @@
 import { unstable_cache } from "next/cache";
-import { secondsUntilShiftEnds } from "@baga/core";
+import { dailyCacheSeconds } from "@baga/core";
 
 /**
  * Cache-Control for numbers that change once a day: the CDN keeps a copy for up to an hour, but never past the moment
- * the day's collection completes (docs/STATS.md, "Shift"), so the new day appears for everyone at once.
+ * the day's collection completes (docs/STATS.md, "Shift"), so the new day appears for everyone at once; while today
+ * is being checked (the live day), 5 minutes.
  */
 export function dailyCacheControl(now = new Date()): string {
-  const age = Math.max(30, Math.min(3600, secondsUntilShiftEnds(now)));
+  const age = Math.max(30, Math.min(3600, dailyCacheSeconds(now)));
   return `public, s-maxage=${age}, stale-while-revalidate=60`;
 }
 
@@ -16,6 +17,6 @@ export function dailyCacheControl(now = new Date()): string {
  * value must be plain JSON (no Dates).
  */
 export function cachedDaily<T>(key: string[], load: () => Promise<T>, now = new Date()): Promise<T> {
-  const revalidate = Math.max(60, Math.min(900, secondsUntilShiftEnds(now)));
+  const revalidate = Math.max(60, Math.min(900, dailyCacheSeconds(now)));
   return unstable_cache(load, ["daily", ...key], { revalidate })();
 }
