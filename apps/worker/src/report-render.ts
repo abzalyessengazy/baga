@@ -37,7 +37,8 @@ export function reportIssues(r: OwnerReport, now = new Date(), failures: Workflo
   const c = r.collector;
   if (c.runs === 0) out.push("Kaspi collector did not run today");
   else if (!c.running && c.requests < LOW_REQUESTS) out.push(`Kaspi collector sent only ${num(c.requests)} requests today`);
-  for (const a of c.aborted) out.push(`Kaspi run stopped: ${a}`);
+  // Stops behind a clean later run are history, shown under «Data today» (12 Nov: the morning stops stayed in «Needs you»).
+  if (!c.lastOk) for (const a of c.aborted) out.push(`Kaspi run stopped: ${a}`);
   if (r.catalog.products > 0 && share(r.catalog.fresh3d, r.catalog.products) < 0.9) {
     out.push(`Only ${pct(share(r.catalog.fresh3d, r.catalog.products))} of products checked in the last 3 days`);
   }
@@ -108,6 +109,7 @@ export function renderOwnerReport(r: OwnerReport, commits: Commit[], now = new D
   const c = r.collector;
   out.push("", "<b>Data today</b>");
   out.push(`Kaspi ${c.running ? "⏳ running" : c.runs ? "✅" : "❌"} ${num(c.requests)} requests · ${num(c.checked)} checked · ${num(c.changed)} price changes`);
+  if (c.lastOk && c.aborted.length) out.push(`Kaspi: ${c.aborted.length} earlier stop${c.aborted.length > 1 ? "s" : ""} (${c.aborted.map(esc).join("; ")}), last run ok`);
   out.push(`Technodom ${r.store.aborted ? "⚠️" : "✅"} ${num(r.store.priced)} priced · ${r.store.cheaperThere} cheaper than Kaspi`);
   const recovered = failures.filter((f) => f.recovered);
   if (recovered.length) out.push(`GitHub: ${recovered.map((f) => `${esc(f.name)} failed ${f.failed}×, then ok`).join(" · ")}`);

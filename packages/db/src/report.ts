@@ -33,7 +33,8 @@ export interface OwnerReport {
   utmVisits: number;
   sources: { source: string; n: number }[];
   /** Today's Kaspi collection: runs started since Almaty midnight. */
-  collector: { runs: number; requests: number; running: boolean; checked: number; changed: number; failed: number; aborted: string[] };
+  /** `lastOk`: the latest run today finished without stopping, so earlier stops (`aborted`) are already behind. */
+  collector: { runs: number; requests: number; running: boolean; checked: number; changed: number; failed: number; aborted: string[]; lastOk: boolean };
   catalog: { products: number; fresh3d: number; inStock: number; history7d: number; history30d: number; seedQueue: number; linksWaiting: number };
   /** Technodom: requests, priced and failed over the last 24 h; startedAt is the latest run ever. */
   store: { startedAt: string | null; requests: number; priced: number; failed: number; aborted: string | null; pendingMatches: number;
@@ -105,7 +106,9 @@ export async function ownerReport(sql: postgres.Sql): Promise<OwnerReport> {
          from price_observations where product_id in (select product_id from price_observations, today where observed_at >= today.t)
        ) o, today where o.observed_at >= today.t and o.prev is not null and o.min_price is distinct from o.prev)::int as changed,
       coalesce(sum(r.failed), 0)::int as failed,
-      array_remove(array_agg(distinct r.aborted_reason), null) as aborted
+      array_remove(array_agg(distinct r.aborted_reason), null) as aborted,
+      coalesce((select l.finished_at is not null and l.aborted_reason is null from collection_runs l, today
+        where l.started_at >= today.t order by l.started_at desc limit 1), false) as "lastOk"
     from today left join collection_runs r on r.started_at >= today.t`;
 
   const [catalog] = await sql<OwnerReport["catalog"][]>`

@@ -9,7 +9,7 @@ const base: OwnerReport = {
   peopleReliable: true, weekPeopleReliable: true,
   alerts24h: { products: 1, people: 1, triggers: 1, targetMessages: 2, messages: { sent: 3, failed: 0, waiting: 0 }, clicks: 1, clickedProducts: 1 },
   sources: [{ source: "direct", n: 20 }, { source: "insta<post>", n: 6 }],
-  collector: { runs: 1, requests: 1650, running: false, checked: 1600, changed: 40, failed: 2, aborted: [] },
+  collector: { runs: 1, requests: 1650, running: false, checked: 1600, changed: 40, failed: 2, aborted: [], lastOk: true },
   catalog: { products: 1534, fresh3d: 1460, inStock: 1400, history7d: 640, history30d: 0, seedQueue: 1200, linksWaiting: 0 },
   store: { startedAt: "2026-11-12T08:50:00Z", requests: 210, priced: 164, failed: 0, aborted: null, pendingMatches: 0, compared: 160, cheaperThere: 12 },
   cityPrices24h: 40, manual24h: { done: 2, failed: 0, blocked: 0 },
@@ -25,7 +25,7 @@ describe("reportIssues", () => {
   it("flags a missing or short collector day, a stop, stale data and a quiet store", () => {
     const issues = reportIssues({
       ...base,
-      collector: { ...base.collector, requests: 300, aborted: ["429 <Too Many>"] },
+      collector: { ...base.collector, requests: 300, aborted: ["429 <Too Many>"], lastOk: false },
       catalog: { ...base.catalog, fresh3d: 1000 },
       store: { ...base.store, startedAt: "2026-11-10T08:50:00Z", pendingMatches: 22 },
       alerts: { ...base.alerts, failed24h: 1 },
@@ -94,5 +94,11 @@ describe("renderOwnerReport", () => {
     expect(html.split("\n").slice(0, 3).join("\n")).toBe("<b>BAĞA · 11 Nov</b>\n🧠 <b>CTO</b>\n• Backup &lt;failed&gt;: run it again (you).");
     expect(renderOwnerReport(base, [], now, { cto: { withheld: "it cited 70, not in the data" } })).toContain("<i>CTO note withheld: it cited 70, not in the data.</i>");
     expect(renderOwnerReport(base, [], now, { cto: null })).not.toContain("CTO");
+  });
+  it("moves Kaspi stops behind a clean later run out of «Needs you»", () => {
+    const r = { ...base, collector: { ...base.collector, aborted: ["failure share 25% over 12 checks"], lastOk: true } };
+    expect(reportIssues(r, now)).toEqual([]);
+    expect(renderOwnerReport(r, [], now)).toContain("Kaspi: 1 earlier stop (failure share 25% over 12 checks), last run ok");
+    expect(reportIssues({ ...r, collector: { ...r.collector, lastOk: false } }, now)).toEqual(["Kaspi run stopped: failure share 25% over 12 checks"]);
   });
 });

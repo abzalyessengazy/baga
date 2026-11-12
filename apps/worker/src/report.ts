@@ -1,11 +1,11 @@
 import { execFileSync } from "node:child_process";
 import { appendFileSync } from "node:fs";
 import postgres from "postgres";
-import { connectionOptions, ownerReport } from "@baga/db";
-import { TARGETS } from "@baga/core";
+import { connectionOptions, ownerReport, type OwnerReport } from "@baga/db";
+import { PERSON_METRICS_FROM, TARGETS } from "@baga/core";
 import { ctoNote } from "./cto";
-import { headline, renderOwnerReport, reportIssues, reportRates, type Commit } from "./report-render";
-import { recentRuns, workflowFailures } from "./workflows";
+import { renderOwnerReport, reportIssues, reportRates, type Commit } from "./report-render";
+import { recentRuns, workflowFailures, type WorkflowFailure } from "./workflows";
 import { sendTelegram } from "./telegram";
 
 /**
@@ -31,6 +31,27 @@ function commits(): Commit[] {
   }
 }
 
+/**
+ * What the CTO note reads. Person counts that are not measured yet are left out rather than handed over as zeros
+ * (12 Nov: the note read the week's 0 people as a tracking bug), and commits keep their full subject (cut at 300
+ * characters) so a fix pushed after a failure is recognised as one.
+ */
+function ctoInput(report: OwnerReport, now: Date, failures: WorkflowFailure[] | null, log: Commit[]) {
+  const unmeasured = (f: OwnerReport["funnel"], ok: boolean) => (ok ? f : { ...f, people: "not measured yet", returning: "not measured yet" });
+  return {
+    now: now.toISOString(),
+    report: { ...report, funnel: unmeasured(report.funnel, report.peopleReliable), funnelWeek: unmeasured(report.funnelWeek, report.weekPeopleReliable) },
+    rates: reportRates(report), targets: TARGETS,
+    notes: [
+      `Person counts (people, returning) start on ${PERSON_METRICS_FROM} by design; before that only visits (tabs) exist. This is expected, not a bug.`,
+      "issues is what the report lists under «Needs you». Collector stops behind a clean later run and workflows that failed and then succeeded are already resolved.",
+      "commits are the last 24 h, newest first. A failure followed by a commit that fixes it is fixed in code; what remains is a successful run to confirm it.",
+    ],
+    issues: reportIssues(report, now, failures ?? []), workflowFailures: failures ?? "unknown",
+    commits: log.map((c) => c.subject.slice(0, 300)),
+  };
+}
+
 try {
   const report = await sql.begin("read only", (tx) => ownerReport(tx as unknown as postgres.Sql));
   const now = new Date();
@@ -38,11 +59,7 @@ try {
   const runs = await recentRuns(process.env.GITHUB_REPOSITORY, process.env.GH_TOKEN?.trim());
   const failures = runs ? workflowFailures(runs) : null;
   // The CTO note sees exactly what the report holds, plus the runs; no tools and no other source (cto.ts).
-  const cto = await ctoNote({
-    now: now.toISOString(), report, rates: reportRates(report), targets: TARGETS,
-    issues: reportIssues(report, now, failures ?? []), workflowFailures: failures ?? "unknown",
-    commits: log.map((c) => headline(c.subject)),
-  }, process.env.ANTHROPIC_API_KEY?.trim());
+  const cto = await ctoNote(ctoInput(report, now, failures, log), process.env.ANTHROPIC_API_KEY?.trim());
   let html = renderOwnerReport(report, log, now, { failures, cto });
   if (!process.env.REPORT_DATABASE_URL) html += "\n\n<i>Read with the main database user: set REPORT_DATABASE_URL.</i>";
   const summary = process.env.GITHUB_STEP_SUMMARY;
