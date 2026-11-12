@@ -465,7 +465,7 @@ async function reschedule(productId: number, minPrice: number | null) {
   // The last CALM.days days of daily lows, each with its day: STABLE reads the last STABLE.days of them, CALM all
   // (10 Nov 2026: calm for 2 weeks = every 5 days; no offers = every 3 days, unless someone tracks it).
   const lows14 = await sql<{ p: number; old: boolean }[]>`
-    select min(min_price)::int as p, (observed_at at time zone 'Asia/Almaty')::date < (now() at time zone 'Asia/Almaty')::date - ${STABLE.days - 1} as old
+    select min(min_price)::int as p, (observed_at at time zone 'Asia/Almaty')::date < (now() at time zone 'Asia/Almaty')::date - ${STABLE.days - 1}::int as old
     from price_observations
     where product_id = ${productId} and min_price is not null and observed_at > now() - make_interval(days => ${CALM.days})
     group by (observed_at at time zone 'Asia/Almaty')::date`;
