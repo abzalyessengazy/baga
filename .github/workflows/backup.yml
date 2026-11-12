@@ -78,7 +78,8 @@ jobs:
           psql "$scratch" -q -v ON_ERROR_STOP=1 -c "create schema auth" \
             -c "create table auth.users (id uuid primary key, email text)" \
             -c "create function auth.uid() returns uuid language sql stable as 'select null::uuid'" \
-            -c "create role anon" -c "create role authenticated" -c "create role service_role"
+            -c "create role anon" -c "create role authenticated" -c "create role service_role" \
+            -c "create role baga_reporter" # migration 0024: its read-only policies name this role
           if pg_restore -l "$DUMP" | grep -qE 'SCHEMA - public( |$)'; then psql "$scratch" -q -c "drop schema public cascade"; fi
           pg_restore --no-owner --no-privileges --exit-on-error -d "$scratch" "$DUMP"
           bad=0
