@@ -47,3 +47,7 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           OWNER_TELEGRAM_CHAT_ID: ${{ secrets.OWNER_TELEGRAM_CHAT_ID }}
           SITE_URL: ${{ vars.SITE_URL || 'https://bagaapp.com' }}
+          # The CTO note (DECISIONS.md 2026-11-12): without the key the report goes out without it.
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Read the last 24 h of workflow runs (permissions: actions: read).
+          GH_TOKEN: ${{ github.token }}

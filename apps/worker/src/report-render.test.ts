@@ -84,4 +84,15 @@ describe("renderOwnerReport", () => {
     const many = Array.from({ length: 5 }, (_, i) => ({ hash: `h${i}`, subject: `Change number ${i}` }));
     expect(renderOwnerReport(base, many, now)).toContain("and 2 more");
   });
+  it("flags a failed workflow with no good run since and notes a recovered one", () => {
+    const failures = [{ name: "Nightly backup", failed: 1, recovered: false }, { name: "Collect prices", failed: 2, recovered: true }];
+    expect(reportIssues(base, now, failures)).toEqual(["GitHub: Nightly backup failed, no good run since"]);
+    expect(renderOwnerReport(base, [], now, { failures })).toContain("GitHub: Collect prices failed 2×, then ok");
+  });
+  it("puts the CTO note on top, escaped, or says why it was withheld", () => {
+    const html = renderOwnerReport(base, [], now, { cto: { note: "• Backup <failed>: run it again (you)." } });
+    expect(html.split("\n").slice(0, 3).join("\n")).toBe("<b>BAĞA · 11 Nov</b>\n🧠 <b>CTO</b>\n• Backup &lt;failed&gt;: run it again (you).");
+    expect(renderOwnerReport(base, [], now, { cto: { withheld: "it cited 70, not in the data" } })).toContain("<i>CTO note withheld: it cited 70, not in the data.</i>");
+    expect(renderOwnerReport(base, [], now, { cto: null })).not.toContain("CTO");
+  });
 });

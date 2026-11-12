@@ -2,7 +2,10 @@ import { execFileSync } from "node:child_process";
 import { appendFileSync } from "node:fs";
 import postgres from "postgres";
 import { connectionOptions, ownerReport } from "@baga/db";
-import { renderOwnerReport, type Commit } from "./report-render";
+import { TARGETS } from "@baga/core";
+import { ctoNote } from "./cto";
+import { headline, renderOwnerReport, reportIssues, reportRates, type Commit } from "./report-render";
+import { recentRuns, workflowFailures } from "./workflows";
 import { sendTelegram } from "./telegram";
 
 /**
@@ -30,7 +33,17 @@ function commits(): Commit[] {
 
 try {
   const report = await sql.begin("read only", (tx) => ownerReport(tx as unknown as postgres.Sql));
-  let html = renderOwnerReport(report, commits());
+  const now = new Date();
+  const log = commits();
+  const runs = await recentRuns(process.env.GITHUB_REPOSITORY, process.env.GH_TOKEN?.trim());
+  const failures = runs ? workflowFailures(runs) : null;
+  // The CTO note sees exactly what the report holds, plus the runs; no tools and no other source (cto.ts).
+  const cto = await ctoNote({
+    now: now.toISOString(), report, rates: reportRates(report), targets: TARGETS,
+    issues: reportIssues(report, now, failures ?? []), workflowFailures: failures ?? "unknown",
+    commits: log.map((c) => headline(c.subject)),
+  }, process.env.ANTHROPIC_API_KEY?.trim());
+  let html = renderOwnerReport(report, log, now, { failures, cto });
   if (!process.env.REPORT_DATABASE_URL) html += "\n\n<i>Read with the main database user: set REPORT_DATABASE_URL.</i>";
   const summary = process.env.GITHUB_STEP_SUMMARY;
   if (summary) appendFileSync(summary, `${html.replace(/<[^>]+>/g, "")}\n`);

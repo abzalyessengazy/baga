@@ -16,11 +16,12 @@
     "report": "node --env-file-if-exists=../../.env --env-file-if-exists=../web/.env.local --import tsx src/report.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.8.0",
     "@baga/core": "workspace:^",
     "@baga/db": "workspace:^",
     "@baga/kaspi": "workspace:^",
-    "postgres": "^3.4.5",
-    "@baga/stores": "workspace:^"
+    "@baga/stores": "workspace:^",
+    "postgres": "^3.4.5"
   },
   "devDependencies": {
     "tsx": "^4.19.2"

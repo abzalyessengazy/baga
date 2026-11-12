@@ -1,5 +1,7 @@
 import { formatTenge, PERSON_METRICS_FROM, share, targetMark, TARGETS, type TargetMark } from "@baga/core";
 import type { OwnerReport } from "@baga/db";
+import type { CtoResult } from "./cto";
+import type { WorkflowFailure } from "./workflows";
 
 /**
  * The daily owner report as one Telegram message (HTML). For the owner only, so it is in English like the rest of
@@ -29,8 +31,9 @@ export function headline(subject: string): string {
 }
 
 /** What needs the owner's attention; empty on a normal day. */
-export function reportIssues(r: OwnerReport, now = new Date()): string[] {
+export function reportIssues(r: OwnerReport, now = new Date(), failures: WorkflowFailure[] = []): string[] {
   const out: string[] = [];
+  for (const f of failures) if (!f.recovered) out.push(`GitHub: ${f.name} failed${f.failed > 1 ? ` ${f.failed}×` : ""}, no good run since`);
   const c = r.collector;
   if (c.runs === 0) out.push("Kaspi collector did not run today");
   else if (!c.running && c.requests < LOW_REQUESTS) out.push(`Kaspi collector sent only ${num(c.requests)} requests today`);
@@ -52,8 +55,21 @@ function row(name: string, value: string, target: string, mark: TargetMark): str
   return `${name.padEnd(11)}${value.padStart(5)}  🎯${target.padEnd(5)}${MARK[mark]}`;
 }
 
-export function renderOwnerReport(r: OwnerReport, commits: Commit[], now = new Date()): string {
-  const issues = reportIssues(r, now);
+/** The rates the report shows, rounded as shown: also handed to the CTO note so it never computes its own. */
+export function reportRates(r: OwnerReport) {
+  return {
+    openItemPct: Math.round(share(r.funnel.productViews, r.funnel.tabs) * 100),
+    connectedPct: Math.round(share(r.people.connected, r.people.watchers) * 100),
+    fromPostsPct: Math.round(share(r.utmVisits, r.funnel.tabs) * 100),
+    fresh3dPct: Math.round(share(r.catalog.fresh3d, r.catalog.products) * 100),
+  };
+}
+
+export interface ReportExtras { failures?: WorkflowFailure[] | null; cto?: CtoResult }
+
+export function renderOwnerReport(r: OwnerReport, commits: Commit[], now = new Date(), extras: ReportExtras = {}): string {
+  const failures = extras.failures ?? [];
+  const issues = reportIssues(r, now, failures);
   const f = r.funnel;
   const w = r.funnelWeek;
   const openRate = share(f.productViews, f.tabs);
@@ -64,6 +80,9 @@ export function renderOwnerReport(r: OwnerReport, commits: Commit[], now = new D
   const out: string[] = [];
 
   out.push(`<b>BAĞA · ${dayLabel(r.day)}</b>`);
+  const cto = extras.cto;
+  if (cto && "note" in cto) out.push(`🧠 <b>CTO</b>\n${esc(cto.note)}`, "");
+  else if (cto) out.push(`<i>CTO note withheld: ${esc(cto.withheld)}.</i>`, "");
   out.push(issues.length === 0 ? "✅ All normal" : `⚠️ <b>Needs you</b>\n${issues.map((i) => `• ${i}`).join("\n")}`);
 
   out.push("", `<b>Yesterday</b> · targets for ${dayLabel(TARGETS.by)}`);
@@ -90,6 +109,8 @@ export function renderOwnerReport(r: OwnerReport, commits: Commit[], now = new D
   out.push("", "<b>Data today</b>");
   out.push(`Kaspi ${c.running ? "⏳ running" : c.runs ? "✅" : "❌"} ${num(c.requests)} requests · ${num(c.checked)} checked · ${num(c.changed)} price changes`);
   out.push(`Technodom ${r.store.aborted ? "⚠️" : "✅"} ${num(r.store.priced)} priced · ${r.store.cheaperThere} cheaper than Kaspi`);
+  const recovered = failures.filter((f) => f.recovered);
+  if (recovered.length) out.push(`GitHub: ${recovered.map((f) => `${esc(f.name)} failed ${f.failed}×, then ok`).join(" · ")}`);
   out.push(`${pct(share(r.catalog.fresh3d, r.catalog.products))} of ${num(r.catalog.products)} products fresh · ${num(r.catalog.seedQueue)} waiting to be added`);
 
   if (commits.length) {
