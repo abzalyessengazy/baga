@@ -656,6 +656,10 @@ a { color: inherit; }
 .print-skeleton span:nth-child(2) { width: 70%; }
 .print-skeleton span:nth-child(3) { width: 45%; }
 @keyframes shimmer { to { background-position: -150% 0; } }
+/* The same printer under the paste field while a link is checked (PasteForm). */
+.paste-wait { margin: 12px 2px 0; }
+.paste-wait .print-head { margin-bottom: 10px; }
+.paste-wait .print-lines { font-size: var(--step--1); gap: 6px; }
 .untracked-status { animation: pop-in 0.35s 0.5s both; }
 .untracked-status.is-working { animation: none; }
 .dots::after { content: "…"; display: inline-block; width: 1.2em; overflow: hidden; vertical-align: bottom; animation: dots 1.2s steps(4) infinite; }

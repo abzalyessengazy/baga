@@ -11,6 +11,11 @@ const DRAFT_KEY = "baga.pasteDraft";
 const read = () => { try { return sessionStorage.getItem(DRAFT_KEY) ?? ""; } catch { return ""; } };
 const write = (v: string) => { try { sessionStorage.setItem(DRAFT_KEY, v); } catch { /* storage unavailable */ } };
 
+/** The waiting steps under the field, each shown when it really starts (the owner, 12 Nov: a short link left the button on «Проверяем…» for up to a minute with nothing else moving). */
+type WaitStep = "waitRead" | "waitBot" | "waitKaspi" | "waitSlow" | "waitRetry";
+/** After this long waiting for Kaspi's answer to a short link, say that Kaspi is slow. */
+const SLOW_MS = 6000;
+
 type ErrorCode = "not_a_url" | "not_kaspi" | "not_a_product" | "short_link" | "check_failed" | "check_blocked" | "too_many" | "generic";
 /** Links that need the bot check: short links, and variant links (id ending in letters) the collector resolves. */
 const isShortLink = (v: string) => /l\.kaspi\.kz\/|\/shop\/p\/[^\s?#]*\d{5,12}[a-z]{1,3}\/?(?:[?#\s]|$)/i.test(v);
@@ -28,6 +33,9 @@ export const PasteForm = forwardRef<HTMLInputElement>(function PasteForm(_, ref)
   const [value, setValue] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<ErrorCode | null>(null);
+  const [steps, setSteps] = useState<WaitStep[]>([]);
+  // Each step once: a retry shows «Пробуем ещё раз» as the current line rather than repeating the earlier steps.
+  const step = (s: WaitStep) => setSteps((l) => (l.includes(s) ? l : [...l, s]));
   // Search results for typed text: null = not searched (or a link); [] = nothing found.
   const [results, setResults] = useState<CatalogListItem[] | null>(null);
   // Turnstile is only needed for l.kaspi.kz short links; armed on first focus, so visitors who never use the
@@ -123,21 +131,34 @@ export const PasteForm = forwardRef<HTMLInputElement>(function PasteForm(_, ref)
   async function check(q: string) {
     setBusy(true);
     setError(null);
+    setSteps(["waitRead"]);
+    let slow: ReturnType<typeof setTimeout> | undefined;
     // The paste event carries its outcome (docs/STATS.md, "KPI definitions"); sent once the answer is known.
     try {
       const short = isShortLink(q);
       const send = async () => {
+        let token: string | null | undefined;
+        if (short) {
+          clearTimeout(slow); // the slow note is about Kaspi's answer only, never the bot check
+          step("waitBot");
+          token = await takeToken();
+          // A short link is opened by the server with one request to Kaspi, which is often slow to answer it.
+          step("waitKaspi");
+          clearTimeout(slow);
+          slow = setTimeout(() => step("waitSlow"), SLOW_MS);
+        }
         const res = await fetch("/api/resolve", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ input: q, token: short ? await takeToken() : undefined }),
+          body: JSON.stringify({ input: q, token }),
         });
         return (await res.json()) as { productId?: string; slug?: string | null; pendingLink?: string; error?: ErrorCode };
       };
       let data = await send();
       // One quiet retry with a fresh check before telling the visitor anything.
-      if (short && data.error === "check_failed" && !blocked.current) data = await send();
+      if (short && data.error === "check_failed" && !blocked.current) { step("waitRetry"); data = await send(); }
       if (data.error === "check_failed" && blocked.current) data.error = "check_blocked";
+      clearTimeout(slow);
       track("paste", { detail: pasteOutcome(data) });
       if (data.productId) {
         write("");
@@ -150,6 +171,8 @@ export const PasteForm = forwardRef<HTMLInputElement>(function PasteForm(_, ref)
       track("paste", { detail: pasteOutcome("network") });
       setError("generic");
     }
+    clearTimeout(slow);
+    setSteps([]);
     setBusy(false);
   }
 
@@ -173,9 +196,23 @@ export const PasteForm = forwardRef<HTMLInputElement>(function PasteForm(_, ref)
         </div>
         <button className="btn" type="submit" disabled={busy}>{busy ? t("checking") : t("pasteButton")}</button>
       </div>
-      <p id={`${id}-msg`} className={error ? "paste-error" : "paste-hint"} role={error ? "alert" : undefined}>
-        {error ? te(error) : clipFailed && !value ? t("pasteManual") : t("pasteHint")}
-      </p>
+      {busy && steps.length > 0 ? (
+        // The receipt printer of the product page's loading screen (PrintWait), with the steps really under way.
+        <div id={`${id}-msg`} className="paste-wait print-wait" role="status" aria-live="polite">
+          <div className="print-head" aria-hidden><span /></div>
+          <ul className="print-lines">
+            {steps.map((k, i) => (
+              <li key={`${k}${i}`} className={i < steps.length - 1 ? "is-done" : "is-now"}>
+                <span className="print-mark" aria-hidden>{i < steps.length - 1 ? "✓" : ""}</span>{t(k)}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : (
+        <p id={`${id}-msg`} className={error ? "paste-error" : "paste-hint"} role={error ? "alert" : undefined}>
+          {error ? te(error) : clipFailed && !value ? t("pasteManual") : t("pasteHint")}
+        </p>
+      )}
       {showSearch && (
         <div id={`${id}-results`} className="search-panel" aria-live="polite">
           {results.length > 0 ? (
