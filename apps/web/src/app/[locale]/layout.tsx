@@ -24,7 +24,8 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
     description: t("description"),
     metadataBase: new URL(siteUrl()),
     alternates: { languages: { "ru-KZ": "/ru", "kk-KZ": "/kk" } },
-    openGraph: { title: t("title"), description: t("description"), locale: locale === "kk" ? "kk_KZ" : "ru_KZ" },
+    openGraph: { title: t("title"), description: t("description"), type: "website", siteName: "BAĞA", locale: locale === "kk" ? "kk_KZ" : "ru_KZ" },
+    twitter: { card: "summary_large_image" },
   };
 }
 

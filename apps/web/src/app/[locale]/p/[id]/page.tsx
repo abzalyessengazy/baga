@@ -34,9 +34,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   // Lookup and error screens are not product pages: keep them out of search results.
   if (!r.ok) return { title: t("title"), robots: { index: false, follow: false } };
   const price = r.view.minPrice ? formatTenge(r.view.minPrice, locale as "ru" | "kk") : "—";
+  const title = t("productTitle", { title: r.view.title });
+  const description = t("productDescription", { price });
   return {
-    title: t("productTitle", { title: r.view.title }),
-    description: t("productDescription", { price }),
+    title, description,
+    // Shared links show the product, not the site (opengraph-image.tsx draws the picture).
+    openGraph: { title, description, type: "website", url: `/${locale}/p/${id}`, siteName: "BAĞA", locale: locale === "kk" ? "kk_KZ" : "ru_KZ" },
+    twitter: { card: "summary_large_image", title, description },
     // Canonical on bagaapp.com (metadataBase), so the vercel.app copy and ?s= variants are not indexed twice.
     alternates: { canonical: `/${locale}/p/${id}`, languages: { "ru-KZ": `/ru/p/${id}`, "kk-KZ": `/kk/p/${id}`, "x-default": `/ru/p/${id}` } },
   };
