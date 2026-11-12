@@ -65,7 +65,7 @@ function Frame({ tag, site, children, footer }: { tag: string; site: string; chi
 }
 
 export interface ProductCard {
-  tag: string; site: string; title: string;
+  locale: "ru" | "kk"; tag: string; site: string; title: string;
   /** "Самая низкая цена сейчас" with the price, or "Сейчас нет в продаже" with the last price (smaller). */
   label: string; price: string | null; note: string | null;
   /** The verdict's short label; red only for "high" (design language). */
@@ -81,20 +81,20 @@ export function productCard(p: ProductCard) {
     <Frame tag={p.tag} site={p.site} footer={p.footer}>
       <div style={{ display: "flex", fontSize: 44, fontWeight: 700, lineHeight: 1.18, maxHeight: 106, overflow: "hidden" }}>{p.title}</div>
       <div style={{ display: "flex", flex: 1, alignItems: "flex-end", justifyContent: "space-between", paddingBottom: 24 }}>
-        <div style={{ display: "flex", flexDirection: "column" }}>
+        <div style={{ display: "flex", flexDirection: "column", flexShrink: 0, paddingRight: 24 }}>
           <span style={{ fontSize: 24, color: C.soft }}>{p.label}</span>
           {p.price && <span style={{ fontFamily: "Mono", fontSize: 84, fontWeight: 700, letterSpacing: -2, lineHeight: 1.1 }}>{p.price}</span>}
           {p.note && <span style={{ fontFamily: "Mono", fontSize: 28, color: C.soft, marginTop: 6 }}>{p.note}</span>}
           {p.verdict && (
             <div style={{ display: "flex", marginTop: 14 }}>
-              <span style={{ fontFamily: "Mono", fontSize: 26, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1,
+              <span style={{ fontSize: 26, fontWeight: 700, letterSpacing: 1,
                 color: p.verdict.high ? C.red : C.stamp, border: `4px solid ${p.verdict.high ? C.red : C.stamp}`, borderRadius: 6,
-                padding: "6px 16px", transform: "rotate(-3deg)" }}>{p.verdict.text}</span>
+                padding: "6px 16px", whiteSpace: "nowrap", transform: "rotate(-3deg)" }}>{p.verdict.text.toLocaleUpperCase(p.locale === "kk" ? "kk-KZ" : "ru-RU")}</span>
             </div>
           )}
         </div>
         {p.spark && (
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", flexShrink: 1, overflow: "hidden" }}>
             <svg width={CHART.w} height={CHART.h} viewBox={`0 0 ${CHART.w} ${CHART.h}`}>
               {p.spark.lines.map((pts) => <polyline key={pts} points={pts} fill="none" stroke={C.ink} strokeWidth={4} strokeLinejoin="round" strokeLinecap="round" />)}
               {p.spark.dots.map((d) => <circle key={`${d.x}`} cx={d.x} cy={d.y} r={4} fill={C.ink} />)}

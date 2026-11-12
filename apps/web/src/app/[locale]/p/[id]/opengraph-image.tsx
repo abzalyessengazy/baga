@@ -41,7 +41,7 @@ export default async function Image({ params }: Props) {
   const footer = [t("checked", { date: `${dayMonth(v.checkedAt, td as unknown as DatesT)}, ${time}` }),
     v.history.length > 1 ? t("observed", { days: v.history.length }) : null].filter(Boolean).join(" · ");
   const card = productCard({
-    tag: t("tag"), site: t("site"), title: shortTitle(v.title),
+    locale: L, tag: t("tag"), site: t("site"), title: shortTitle(v.title),
     label: v.minPrice !== null ? t("lowestNow") : t("notSold"),
     price: v.minPrice !== null ? f(v.minPrice) : null,
     note: v.minPrice === null && v.lastPrice ? t("lastPrice", { price: f(v.lastPrice) }) : null,
