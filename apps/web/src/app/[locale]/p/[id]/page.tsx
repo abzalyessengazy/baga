@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import type { Metadata } from "next";
-import { isCityDependent, REFERENCE_CITY, priceNotes, computeVerdict, formatTenge, moveDirection, nextVisitWindowDay, isValidSlug, slugName, isInVisitWindow } from "@baga/core";
+import { isCityDependent, REFERENCE_CITY, CITY_LIST, type City, priceNotes, computeVerdict, formatTenge, moveDirection, nextVisitWindowDay, isValidSlug, slugName, isInVisitWindow } from "@baga/core";
 import { getProductView, queuedSlug, collectorRunning } from "@/lib/product";
 import { manualRunning } from "@/lib/manual";
 import { QueuedWatcher } from "@/components/QueuedWatcher";
@@ -17,6 +17,7 @@ import { dayMonth, type DatesT } from "@/lib/dayMonth";
 import { jsonLdHtml } from "@/lib/jsonLd";
 import { SellerTable, type SellerRow } from "@/components/SellerTable";
 import { CityPicker } from "@/components/CityPicker";
+import { CityProvider, CityOnly } from "@/components/CityView";
 import { visitorCity, cityPrice } from "@/lib/city";
 
 type Props = { params: Promise<{ locale: string; id: string }>; searchParams: Promise<{ s?: string | string[]; city?: string | string[] }> };
@@ -108,9 +109,9 @@ export default async function ProductPage({ params, searchParams }: Props) {
   // city replaces Almaty's price and sellers; history, verdict and alerts stay Almaty's (the reference city).
   const local = !v.delisted && isCityDependent(v.categoryPath);
   const city = local ? await visitorCity((await searchParams).city) : REFERENCE_CITY;
-  const inCity = city !== REFERENCE_CITY;
-  const cp = inCity ? await cityPrice(v.externalId, city) : null;
-  const cityName = t(`cityIn.${city}`);
+  // Every city's prices are on the page (CityView): a tap on another city switches without a request (12 Nov 2026).
+  const cities: City[] = local ? [...CITY_LIST] : [REFERENCE_CITY];
+  const cityPrices = new Map(await Promise.all(cities.map(async (c) => [c, await cityPrice(v.externalId, c)] as const)));
   const f = (n: number) => formatTenge(n, L);
   const verdict = v.minPrice !== null ? computeVerdict(v.history, v.minPrice) : null;
   const verdictText = !verdict ? null
@@ -150,20 +151,34 @@ export default async function ProductPage({ params, searchParams }: Props) {
     sellerId: o.sellerId, sellerName: o.sellerName, sellerRating: o.sellerRating, sellerReviews: o.sellerReviews,
     price: o.price, priceText: f(o.price), deliveryText: delivery(o.deliveryDuration), note: notes[i] ?? null,
   }));
-  const cityOffers = (cp?.sellers ?? []).map((o) => ({ sellerId: o.id, sellerName: o.name, sellerRating: o.rating, sellerReviews: o.reviews, price: o.price, deliveryDuration: o.delivery }));
-  const cityNotes = priceNotes(cityOffers);
-  const cityRows: SellerRow[] = cityOffers.map((o, i) => ({
-    ...o, priceText: f(o.price), deliveryText: delivery(o.deliveryDuration), note: cityNotes[i] ?? null,
-  }));
-  // The city view only once that city was checked; until then Almaty's, with a line saying so.
-  const showCity = inCity && cp !== null;
-  const sellerRows = showCity ? cityRows : almatyRows;
-  const shownCount = showCity ? cityRows.length : shown.length;
-  const offerCount = showCity ? cp.offerCount : v.offerCount;
-  const totalPrice = showCity ? cp.minPrice : v.minPrice;
-  const checkedAt = showCity ? new Date(cp.observedAt).toISOString() : v.checkedAt;
-  // The city the shown prices are from: Almaty until the chosen city was checked.
-  const shownIn = showCity ? cityName : t("cityIn.almaty");
+  /** What the page shows for one city. */
+  const forCity = (city: City) => {
+    const inCity = city !== REFERENCE_CITY;
+    const cp = cityPrices.get(city) ?? null;
+    const cityName = t(`cityIn.${city}`);
+    const cityOffers = (cp?.sellers ?? []).map((o) => ({ sellerId: o.id, sellerName: o.name, sellerRating: o.rating, sellerReviews: o.reviews, price: o.price, deliveryDuration: o.delivery }));
+    const cityNotes = priceNotes(cityOffers);
+    const cityRows: SellerRow[] = cityOffers.map((o, i) => ({
+      ...o, priceText: f(o.price), deliveryText: delivery(o.deliveryDuration), note: cityNotes[i] ?? null,
+    }));
+    // The city view only once that city was checked; until then Almaty's, with a line saying so.
+    const showCity = inCity && cp !== null;
+    return {
+      city, inCity, cityName, showCity,
+      sellerRows: showCity ? cityRows : almatyRows,
+      shownCount: showCity ? cityRows.length : shown.length,
+      offerCount: showCity ? cp.offerCount : v.offerCount,
+      totalPrice: showCity ? cp.minPrice : v.minPrice,
+      checkedAt: showCity ? new Date(cp.observedAt).toISOString() : v.checkedAt,
+      // The city the shown prices are from: Almaty until the chosen city was checked.
+      shownIn: showCity ? cityName : t("cityIn.almaty"),
+    };
+  };
+  type Shown = ReturnType<typeof forCity>;
+  /** A city-dependent part of the page: one copy per city on city goods (the chosen one shown), else Almaty's. */
+  const perCity = (part: (s: Shown) => React.ReactNode) => local
+    ? cities.map((c) => <CityOnly key={c} city={c}>{part(forCity(c))}</CityOnly>)
+    : part(forCity(REFERENCE_CITY));
   const jsonLd = {
     "@context": "https://schema.org", "@type": "Product", name: v.title, image: v.imageUrl ?? undefined,
     offers: v.minPrice ? { "@type": "AggregateOffer", priceCurrency: "KZT", lowPrice: v.minPrice, offerCount: v.offerCount } : undefined,
@@ -172,6 +187,7 @@ export default async function ProductPage({ params, searchParams }: Props) {
   return (
     <main className="wrap product-grid">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdHtml(jsonLd) }} />
+      <CityScope local={local} city={city}>
       <article className="receipt product-receipt">
         {/* Top row: people watching (real active trackings, from the first one) and the way to Kaspi. */}
         <div className="product-top">
@@ -195,10 +211,11 @@ export default async function ProductPage({ params, searchParams }: Props) {
         <hr className="rule" />
         <div className="meta-row">
           <span>{tr("observedSince", { date: fmtDate(v.observedSince, locale) })}</span>
-          <strong>{tr("checkedAt", { time: fmtTime(checkedAt, td) })}</strong>
+          {perCity(({ checkedAt }) => <strong>{tr("checkedAt", { time: fmtTime(checkedAt, td) })}</strong>)}
         </div>
         <hr className="rule" />
-        {local && <CityPicker city={city} />}
+        {local && <CityPicker />}
+        {perCity(({ city, inCity, cityName, showCity, totalPrice, offerCount, shownIn }) => (<>
         {inCity && !showCity && <p className="note city-note">{t("cityNotChecked", { city: cityName })}</p>}
         <div className="total">
           <span className="total-label">{tr("total")}</span>
@@ -241,16 +258,19 @@ export default async function ProductPage({ params, searchParams }: Props) {
             <p className="verdict-text">{verdictText}{verdictWas && <> <strong>{verdictWas}</strong></>}</p>
           </>
         )}
+        </>))}
         <SaleCheck history={v.history} locale={L} />
         <hr className="rule" />
         <h2 className="receipt-caption" style={{ fontSize: "inherit", fontWeight: 400, margin: "0 0 6px" }}>{t("historyTitle")}</h2>
         <PriceChart history={v.history} />
         <hr className="rule" />
         <h2 className="receipt-caption" style={{ fontSize: "inherit", fontWeight: 400, margin: "0 0 6px" }}>{t("sellersTitle")}</h2>
+        {perCity(({ city, sellerRows, shownCount, checkedAt, shownIn, offerCount }) => (<>
         {sellerRows.length > 0
           ? <SellerTable key={city} rows={sellerRows} shown={shownCount} ratedAt={dayMonth(checkedAt, td)} />
           : <p className="verdict-text">{v.delisted ? t("delisted") : local ? t("cityNotSold", { city: shownIn }) : t("outOfStockCity")}</p>}
         {offerCount > shownCount && <p className="note">{t("moreSellers", { count: offerCount - shownCount })}</p>}
+        </>))}
         <p className="note">{local ? t("cityPrice") : t("nationalPrice")}</p>
         {/* Other stores, exact matches only (DECISIONS.md, 2026-11-07): the store's own price, never adjusted. */}
         {v.elsewhere.length > 0 && v.minPrice !== null && (
@@ -286,6 +306,7 @@ export default async function ProductPage({ params, searchParams }: Props) {
         )}
         <div className="barcode" aria-hidden />
       </article>
+      </CityScope>
       {/* Nothing to track on a delisted product: no alert can ever fire. */}
       {!v.delisted && (
         <TrackPanel productId={v.externalId} current={v.minPrice} initial={await trackInitial(v.externalId)}
@@ -293,4 +314,9 @@ export default async function ProductPage({ params, searchParams }: Props) {
       )}
     </main>
   );
+}
+
+/** The city choice for the receipt, only on city-dependent goods. */
+function CityScope({ local, city, children }: { local: boolean; city: City; children: React.ReactNode }) {
+  return local ? <CityProvider initial={city}>{children}</CityProvider> : <>{children}</>;
 }

@@ -16,11 +16,16 @@ export const OG_SIZE = { width: 1200, height: 630 };
 const C = { counter: "#dde0e4", paper: "#fbfbf7", ink: "#1d2025", soft: "#5d6168", faint: "#8b8f96", stamp: "#4b3fd1", red: "#c23b2c" };
 const dir = () => join(process.cwd(), "src", "og", "fonts");
 
-/** The `og` messages for generateImageMetadata, which runs outside the request scope getTranslations needs. */
-export function ogT(locale: string) {
+/**
+ * Messages for the image files. Never getTranslations there: Next also resolves image metadata while it streams a
+ * page's metadata to the browser, outside the request scope getTranslations needs, and that error stopped every
+ * product page's scripts (12 Nov 2026).
+ */
+export function ogMessages(locale: string, namespace: "og" | "verdict" | "dates") {
   const L = locale === "kk" ? "kk" : "ru";
-  return createTranslator({ locale: L, messages: L === "kk" ? kk : ru, namespace: "og" });
+  return createTranslator({ locale: L, messages: L === "kk" ? kk : ru, namespace });
 }
+export const ogT = (locale: string) => ogMessages(locale, "og");
 
 export async function ogFonts() {
   const f = (name: string) => readFile(join(dir(), name));

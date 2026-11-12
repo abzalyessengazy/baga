@@ -763,19 +763,6 @@ span.z-thumb { display: block; background: var(--paper-shade); box-shadow: none;
   border: 1px solid var(--rule); color: var(--ink-soft);
 }
 .city-picker a.is-on { border-color: var(--stamp); color: var(--stamp); font-weight: 650; }
-/* While a new city's prices load (CityPicker): a spinner in the tapped city, the prices below fade. */
-.city-picker a.is-loading { display: inline-flex; align-items: center; gap: 6px; }
-.city-picker a.is-loading::after {
-  content: ""; width: 9px; height: 9px; border-radius: 50%;
-  border: 1.5px solid currentColor; border-right-color: transparent; animation: city-spin 0.7s linear infinite;
-}
-@keyframes city-spin { to { transform: rotate(360deg); } }
-/* filter, not opacity: the receipt's print-in animation holds opacity on these rows. */
-.city-picker ~ * { transition: filter 0.15s ease; }
-.city-picker[aria-busy="true"] ~ * { filter: opacity(0.35); transition-delay: 0.1s; pointer-events: none; }
-@media (prefers-reduced-motion: reduce) {
-  .city-picker a.is-loading::after { animation: none; border-right-color: currentColor; opacity: 0.6; }
-}
 .city-note { margin: 0 0 8px; }
 .shop-kicker { margin: 0 0 4px; color: var(--ink-soft); }
 .shop .receipt { margin-bottom: 24px; }

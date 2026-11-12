@@ -1,10 +1,9 @@
 import { ImageResponse } from "next/og";
-import { getTranslations } from "next-intl/server";
 import { computeVerdict, formatTenge } from "@baga/core";
 import { getProductView } from "@/lib/product";
 import { sparkline } from "@/lib/ogSpark";
 import { dayMonth, type DatesT } from "@/lib/dayMonth";
-import { OG_CHART, OG_SIZE, ogFonts, ogT, productCard, shortTitle, homeCard } from "@/og/card";
+import { OG_CHART, OG_SIZE, ogFonts, ogMessages, ogT, productCard, shortTitle, homeCard } from "@/og/card";
 
 /**
  * The product page's link preview (Telegram, WhatsApp, Instagram DMs): title, today's lowest price, the verdict's
@@ -27,9 +26,8 @@ export async function generateImageMetadata({ params }: Props) {
 export default async function Image({ params }: Props) {
   const { locale, id } = await params;
   const L = locale === "kk" ? "kk" : "ru";
-  const [t, tv, td, fonts] = await Promise.all([
-    getTranslations({ locale: L, namespace: "og" }), getTranslations({ locale: L, namespace: "verdict" }),
-    getTranslations({ locale: L, namespace: "dates" }), ogFonts()]);
+  const t = ogT(L), tv = ogMessages(L, "verdict"), td = ogMessages(L, "dates");
+  const fonts = await ogFonts();
   const r = /^\d{5,12}$/.test(id) ? await getProductView(id) : null;
   if (!r?.ok) {
     return new ImageResponse(homeCard({ tag: t("tag"), site: t("site"), headline: t("homeHeadline"), sub: t("homeSub") }), { ...OG_SIZE, fonts });

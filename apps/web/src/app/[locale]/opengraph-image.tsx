@@ -1,5 +1,4 @@
 import { ImageResponse } from "next/og";
-import { getTranslations } from "next-intl/server";
 import { OG_SIZE, ogFonts, ogT, homeCard } from "@/og/card";
 
 /** The site's link preview (home and every page without its own): the question BAĞA answers. */
@@ -16,6 +15,7 @@ export async function generateImageMetadata({ params }: Props) {
 export default async function Image({ params }: Props) {
   const { locale } = await params;
   const L = locale === "kk" ? "kk" : "ru";
-  const [t, fonts] = await Promise.all([getTranslations({ locale: L, namespace: "og" }), ogFonts()]);
+  const t = ogT(L);
+  const fonts = await ogFonts();
   return new ImageResponse(homeCard({ tag: t("tag"), site: t("site"), headline: t("homeHeadline"), sub: t("homeSub") }), { ...OG_SIZE, fonts });
 }
