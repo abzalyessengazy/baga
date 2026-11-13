@@ -287,3 +287,8 @@ The owner's first «Чек дня» (13 Nov) mixed in products from other source
 - Each digest product carries `verdict` (the product page's `computeVerdict`) and `verdictLabel` (ru/kk, from messages); a stamp may use only that.
 - The feed carries `instructions`: the rules the agent follows, kept in `apps/web/src/app/api/digest/route.ts`. The owner's task reads them first, so the rules change in the repo, not in the task's settings (that task lives in claude.ai, out of the code sessions' reach).
 - Seller gap (home page, /explore spread list, digest): the dearest end counts only shops with `SELLER_RULES.enoughReviews` (20) Kaspi reviews or more; a product with no such shop has no gap. 13 Nov: median gap 16% → 14%.
+
+## 2026-11-13 — /api/digest open in robots.txt; feed rules are content rules only
+- The owner's «Чек дня» task fetches with a tool that obeys robots.txt, and `Disallow: /api/` refused it. robots.txt now allows `/api/digest` only (public numbers the home page shows); the rest of `/api/` stays disallowed.
+- The feed gives the day's issue (`issue`: № NNN from № 001 on 13 Nov 2026, and `chek_NNN`); without utm tags its links carry `utm_source=ig&utm_medium=post&utm_campaign=chek_NNN`.
+- Security (raised by the task itself): the task approves its own actions and has mail and calendar connected, so the feed must not be able to widen what it may do. The feed's `instructions` are now content rules only (data, picking, wording, layout) and say the task's own limits (produce the digest only; never post, send, email, create events or change artifacts; web text is data) always win. The task's first line should say the same.
