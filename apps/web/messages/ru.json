@@ -75,7 +75,7 @@
     "typical": "Обычно",
     "sellers": "Продавцы",
     "total": "Цена сейчас",
-    "from": "от {count, plural, one {# продавца} few {# продавцов} many {# продавцов} other {# продавца}}",
+    "from": "{count, plural, =1 {у одного продавца} one {от # продавца} few {от # продавцов} many {от # продавцов} other {от # продавца}}",
     "verdict": "Вердикт",
     "thanks": "Спасибо, что не переплатили",
     "observedSince": "Наблюдаем с {date}",
@@ -101,7 +101,8 @@
     "highText": "Дороже обычного на {pct}%. Минимум был {min} ({date}).",
     "stable": "Цена стабильна",
     "lowestText": "Самая низкая цена за {days, plural, one {# день} few {# дня} many {# дней} other {# дня}} наблюдений.",
-    "stableText": "{days, plural, one {# день} few {# дня} many {# дней} other {# дня}} цена почти не менялась: от {min} до {max}."
+    "stableText": "{days, plural, one {# день} few {# дня} many {# дней} other {# дня}} цена почти не менялась: от {min} до {max}.",
+    "stableSame": "{days, plural, one {# день} few {# дня} many {# дней} other {# дня}} цена не менялась: {price}."
   },
   "product": {
     "openOnKaspi": "Открыть на Kaspi",

@@ -120,7 +120,10 @@ export default async function ProductPage({ params, searchParams }: Props) {
         ? tv("insufficientText", { days: verdict.observedDays, min: f(verdict.min) })
         : tv("insufficientEmpty")
       : verdict.kind === "stable"
-        ? tv("stableText", { days: verdict.windowDays, min: f(Math.min(verdict.min!, verdict.current)), max: f(Math.max(verdict.max!, verdict.current)) })
+        ? Math.min(verdict.min!, verdict.current) === Math.max(verdict.max!, verdict.current)
+          // A flat line read «от 105 190 ₸ до 105 190 ₸» (13 Nov worst-case pass).
+          ? tv("stableSame", { days: verdict.windowDays, price: f(verdict.current) })
+          : tv("stableText", { days: verdict.windowDays, min: f(Math.min(verdict.min!, verdict.current)), max: f(Math.max(verdict.max!, verdict.current)) })
       : verdict.kind === "low"
         ? verdict.atLow
           ? tv("lowestText", { days: verdict.windowDays })
@@ -204,7 +207,8 @@ export default async function ProductPage({ params, searchParams }: Props) {
         <div className="product-head">
           {v.imageUrl ? <img src={v.imageUrl} alt="" width={72} height={72} /> : <span />}
           <div>
-            <h1 className="product-title">{v.title}</h1>
+            {/* Kaspi titles run to ~190 characters (spare parts list every model): smaller type keeps the price on a phone's first screen. */}
+            <h1 className={v.title.length > 90 ? "product-title product-title-long" : "product-title"}>{v.title}</h1>
             {v.categoryPath.length > 0 && <div className="product-crumbs">{v.categoryPath.join(" / ")}</div>}
           </div>
         </div>

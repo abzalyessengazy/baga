@@ -75,7 +75,7 @@
     "typical": "Әдетте",
     "sellers": "Сатушылар",
     "total": "Қазіргі баға",
-    "from": "{count} сатушыдан",
+    "from": "{count, plural, =1 {бір сатушыда} other {# сатушыдан}}",
     "verdict": "Қорытынды",
     "thanks": "Артық төлемегеніңізге рақмет",
     "observedSince": "{date} бастап бақылаудамыз",
@@ -101,7 +101,8 @@
     "highText": "Әдеттегіден {pct}% қымбат. Ең төмен баға {min} болған ({date}).",
     "stable": "Баға тұрақты",
     "lowestText": "{days} күн бақылаудағы ең төмен баға.",
-    "stableText": "{days} күн баға дерлік өзгерген жоқ: {min} – {max}."
+    "stableText": "{days} күн баға дерлік өзгерген жоқ: {min} – {max}.",
+    "stableSame": "{days} күн баға өзгерген жоқ: {price}."
   },
   "product": {
     "openOnKaspi": "Kaspi-де ашу",
