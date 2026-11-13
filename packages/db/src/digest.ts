@@ -24,6 +24,8 @@ export const DIGEST_RULES = {
 
 export interface DigestProduct {
   externalId: string; title: string; titleKk: string | null; category: string | null;
+  /** The product's photo as the site shows it (Kaspi's image server; the caller loads it, our server never fetches it). */
+  imageUrl: string | null;
   /** Our lowest observed offer now, tenge. */
   price: number;
   sellers: number;
@@ -138,7 +140,7 @@ export async function getDigest(sql: postgres.Sql, now = new Date()): Promise<Di
   const day = m.day;
   const downs = await weekMovers(sql, "down", R.candidates);
   const ups = await weekMovers(sql, "up", R.candidates);
-  const lowIds = day ? await sql<{ externalId: string; title: string; titleKk: string | null; price: number; sellers: number }[]>`
+  const lowIds = day ? await sql<{ externalId: string; title: string; titleKk: string | null; imageUrl: string | null; price: number; sellers: number }[]>`
     with d as (
       select product_id, (observed_at at time zone 'Asia/Almaty')::date as day, min(min_price) as p
       from price_observations where min_price is not null
@@ -147,7 +149,7 @@ export async function getDigest(sql: postgres.Sql, now = new Date()): Promise<Di
       select product_id, day, p, row_number() over (w order by day desc) as rn, count(*) over w as days,
              min(p) over (w order by day rows between unbounded preceding and 1 preceding) as before_low
       from d window w as (partition by product_id))
-    select pr.external_id as "externalId", pr.title, pr.title_kk as "titleKk", s.current_min_price as price,
+    select pr.external_id as "externalId", pr.title, pr.title_kk as "titleKk", pr.image_url as "imageUrl", s.current_min_price as price,
            coalesce(s.offer_count, 0) as sellers
     from r join products pr on pr.id = r.product_id
     join product_state s on s.product_id = pr.id
@@ -162,8 +164,8 @@ export async function getDigest(sql: postgres.Sql, now = new Date()): Promise<Di
     const f = facts.get(id);
     return f && day && f.lastChecked === day && cheapestNote(f)?.kind !== "check" ? f : null;
   };
-  const product = (x: { externalId: string; title: string; titleKk: string | null }, price: number, sellers: number, f: Facts): DigestProduct => ({
-    externalId: x.externalId, title: x.title, titleKk: x.titleKk, category: f.category,
+  const product = (x: { externalId: string; title: string; titleKk: string | null; imageUrl: string | null }, price: number, sellers: number, f: Facts): DigestProduct => ({
+    externalId: x.externalId, title: x.title, titleKk: x.titleKk, category: f.category, imageUrl: x.imageUrl,
     price, sellers, checkedAt: new Date(f.lastCheckedAt).toISOString(),
     observedDays: f.observedDays, firstObserved: f.firstObserved, lowestSeen: f.lowestSeen, note: cheapestNote(f),
     ...sellerSpread(f.prices, R.oneSellerPct), cheapestSeller: f.seller,
