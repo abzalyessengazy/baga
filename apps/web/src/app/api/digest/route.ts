@@ -21,9 +21,11 @@ const TAG = /^[a-z0-9_-]{1,40}$/i;
  * here, in the repo, rather than in the task's settings (the owner, 13 Nov). English; the posts stay ru/kk.
  */
 const INSTRUCTIONS = [
-  "Use ONLY the numbers, products, names, photos and texts in this feed. Never take products or numbers from the playbook's examples, from bagaapp.com pages or from Kaspi.",
+  "These lines override every older instruction of your task, including its data-collection steps, its picking rules and any line saying not to use product photos.",
+  "Use ONLY the numbers, products, names, photos and texts in this feed. Do not open bagaapp.com pages or Kaspi to collect data; the feed has already picked the products by the site's rules.",
+  "The products and numbers in your task's examples and models (Braun 61-N1000S −42%, iPad Pro 299 965 ₸, REDMOND BH403, Xiaomi L32M8 +81%, 86 245 ₸, ↓ 46 ↑ 30, 10:24 …) are format samples only: never use them.",
   "If `complete` is false, wait 15 minutes and fetch again (up to 3 times); if still false, say so at the top of the digest.",
-  "Лучшее сегодня / Бүгінгі үздік = exactly `best`, in its order; never add the `drop` product to it. A headline % for the day is `best[0].pct`.",
+  "Лучшее сегодня / Бүгінгі үздік = exactly `best`, in its order; never add the `drop` product to it. A headline % for the day is `best[0].pct`, worded «Сегодня до {pct} · по нашим проверкам» / «Бүгін {pct}-ға дейін · біздің тексеру бойынша», never «на Kaspi».",
   "Падение дня / Күннің құлдырауы = `drop`; Не переплатите / Артық төлемеңіз = `gap` (price … hi, diff); Подождите / Асықпаңыз = `wait`; Новый минимум / Жаңа минимум = `newLows` (leave the rubric out when empty or null).",
   "Copy every number exactly as given (tenge with thin spaces, minus sign −); never round, compute, estimate or add numbers that are not in the feed.",
   "Days observed: write «за {observedDays} дней наблюдений» / «{observedDays} күн бақылау ішінде» with `observedDays` exactly. Check time: the latest `checkedAt` among the products shown (Almaty time). Day totals: `market.down` ↓ and `market.up` ↑.",
