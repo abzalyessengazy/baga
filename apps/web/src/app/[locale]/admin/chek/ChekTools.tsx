@@ -1,9 +1,9 @@
 "use client";
 
-import { createContext, useContext, useRef, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 
-type Labels = { download: string; downloadAll: string; saving: string; saveFailed: string; copy: string; copied: string };
-type Ctx = { labels: Labels; run: (nodes: HTMLElement[]) => Promise<void>; busy: boolean };
+type Labels = { download: string; downloadAll: string; saving: string; saveFailed: string; copy: string; copied: string; fullView: string; fullViewAll: string; phoneHint: string };
+type Ctx = { labels: Labels; run: (nodes: HTMLElement[]) => Promise<void>; busy: boolean; canCapture: boolean };
 const ToolsCtx = createContext<Ctx | null>(null);
 
 const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
@@ -34,11 +34,7 @@ async function captureSlides(nodes: HTMLElement[], prefix: string): Promise<bool
   try {
     for (const node of nodes) {
       const w = node.offsetWidth, h = node.offsetHeight;
-      const clone = node.cloneNode(true) as HTMLElement;
-      const s = Math.min(innerWidth / w, innerHeight / h);
-      clone.style.transform = `scale(${s})`;
-      clone.style.transformOrigin = "0 0";
-      stage.replaceChildren(clone);
+      const { clone, s } = stageSlide(stage, node);
       await Promise.all([...clone.querySelectorAll("img")].map((i) => i.decode().catch(() => undefined)));
       await frame();
       await sleep(600); // let the captured stream catch up with the new picture
@@ -63,13 +59,41 @@ async function captureSlides(nodes: HTMLElement[], prefix: string): Promise<bool
   }
 }
 
+/** Places a copy of the slide on a full-screen stage, scaled to fit, top left. */
+function stageSlide(stage: HTMLElement, node: HTMLElement) {
+  const clone = node.cloneNode(true) as HTMLElement;
+  const s = Math.min(innerWidth / node.offsetWidth, innerHeight / node.offsetHeight);
+  clone.style.transform = `scale(${s})`;
+  clone.style.transformOrigin = "0 0";
+  stage.replaceChildren(clone);
+  return { clone, s };
+}
+
+/**
+ * Phones cannot share a tab (iOS has no tab capture), so there the slides open full screen one by one for a
+ * screenshot: a tap shows the next slide, a tap on the last one closes the view.
+ */
+function viewSlides(nodes: HTMLElement[]) {
+  const stage = document.createElement("div");
+  stage.className = "chek-stage chek-view-only";
+  let i = 0;
+  const show = () => stageSlide(stage, nodes[i]!);
+  stage.addEventListener("click", () => { i += 1; if (i < nodes.length) show(); else stage.remove(); });
+  document.body.append(stage);
+  show();
+}
+
 /** The slide list with a download button per slide and for all, and the caption and links with copy buttons. */
 export function ChekTools({ labels, prefix, texts, children }: { labels: Labels; prefix: string; texts: { title: string; text: string }[]; children: ReactNode }) {
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
   const list = useRef<HTMLDivElement>(null);
+  // Known only in the browser: decided after the first render so server and client markup match.
+  const [canCapture, setCanCapture] = useState(true);
+  useEffect(() => setCanCapture(typeof navigator.mediaDevices?.getDisplayMedia === "function"), []);
   const run = async (nodes: HTMLElement[]) => {
     if (busy || !nodes.length) return;
+    if (!canCapture) return viewSlides(nodes);
     setBusy(true);
     setFailed(false);
     try {
@@ -82,8 +106,9 @@ export function ChekTools({ labels, prefix, texts, children }: { labels: Labels;
   };
   const all = () => run([...(list.current?.querySelectorAll<HTMLElement>("[data-slide]") ?? [])]);
   return (
-    <ToolsCtx.Provider value={{ labels, run, busy }}>
-      <p><button type="button" className="btn" onClick={all} disabled={busy}>{busy ? labels.saving : labels.downloadAll}</button></p>
+    <ToolsCtx.Provider value={{ labels, run, busy, canCapture }}>
+      {!canCapture && <p>{labels.phoneHint}</p>}
+      <p><button type="button" className="btn" onClick={all} disabled={busy}>{busy ? labels.saving : canCapture ? labels.downloadAll : labels.fullViewAll}</button></p>
       {failed && <p className="paste-error" role="alert">{labels.saveFailed}</p>}
       <div className="chek-list" ref={list}>{children}</div>
       {texts.map((x) => <CopyBlock key={x.title} title={x.title} text={x.text} labels={labels} />)}
@@ -102,7 +127,7 @@ export function SlideFrame({ label, story, children }: { label: string; story?: 
   return (
     <figure className={story ? "chek-frame chek-frame-story" : "chek-frame"}>
       <div className="chek-view"><div className="chek-scale" ref={box}>{children}</div></div>
-      <figcaption><span>{label}</span><button type="button" className="btn btn-ghost" onClick={go} disabled={ctx.busy}>{ctx.busy ? ctx.labels.saving : ctx.labels.download}</button></figcaption>
+      <figcaption><span>{label}</span><button type="button" className="btn btn-ghost" onClick={go} disabled={ctx.busy}>{ctx.busy ? ctx.labels.saving : ctx.canCapture ? ctx.labels.download : ctx.labels.fullView}</button></figcaption>
     </figure>
   );
 }

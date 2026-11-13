@@ -54,7 +54,7 @@ export default async function ChekPage({ params }: Props) {
       <p>{ui("pageLead")}</p>
       {!d.complete && <p className="paste-error" role="alert">{ui("notReady")}</p>}
       {!lead ? <p>{ui("empty")}</p> : (
-        <ChekTools labels={{ download: ui("download"), downloadAll: ui("downloadAll"), saving: ui("saving"), saveFailed: ui("saveFailed"), copy: ui("copy"), copied: ui("copied") }}
+        <ChekTools labels={{ download: ui("download"), downloadAll: ui("downloadAll"), saving: ui("saving"), saveFailed: ui("saveFailed"), copy: ui("copy"), copied: ui("copied"), fullView: ui("fullView"), fullViewAll: ui("fullViewAll"), phoneHint: ui("phoneHint") }}
           prefix={`chek-${issue.campaign.slice(5)}-${d.date}`}
           texts={[{ title: ui("caption"), text: caption(d, t, meta, issue.label) }, { title: ui("linksTitle"), text: links }]}>
           <SlideFrame label={ui("slideCover")}><Cover d={d} t={t} meta={meta} /></SlideFrame>

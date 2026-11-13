@@ -9,7 +9,7 @@
 .chek-frame figcaption { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 8px; font: 500 var(--step--1)/1.2 var(--font-receipt); }
 .chek-frame figcaption .btn { padding: 8px 14px; font-size: var(--step--1); }
 .chek-copy { margin: 24px 0; }
-.chek-copy textarea { width: 100%; box-sizing: border-box; font: 400 0.8125rem/1.45 var(--font-receipt); padding: 12px; border-radius: 6px; border: 1px solid var(--rule); background: var(--paper, #fff); color: inherit; }
+.chek-copy textarea { width: 100%; box-sizing: border-box; font: 400 0.8125rem/1.45 var(--font-receipt); padding: 12px; border-radius: 6px; border: 1px solid var(--rule); background: var(--paper); color: var(--ink); -webkit-text-fill-color: var(--ink); opacity: 1; }
 .chek-copy .btn { margin-top: 8px; }
 
 .ck-root {
@@ -67,3 +67,4 @@
 
 /* Capture stage: one slide alone at the top left while the shared tab is recorded (ChekTools). */
 .chek-stage { position: fixed; inset: 0; z-index: 2147483647; background: #000; overflow: hidden; }
+.chek-stage.chek-view-only { cursor: pointer; touch-action: manipulation; }
