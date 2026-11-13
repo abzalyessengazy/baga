@@ -82,7 +82,8 @@ page says «Дороже обычного» (the page's verdict on the same dail
 - **Sellers with offers**: distinct sellers in `offers_current` of active products (each product's latest check).
 - **Seller gap** ("Разница у продавцов"): one product's cheapest and dearest current offer; in stock, 2+ sellers,
   checked in the last 3 days. Offers above twice the product's median offer are left out (11 Nov: one shop at
-  759 990 ₸ beside four at 185–203k). The median gap and the share above 25% are over those products.
+  759 990 ₸ beside four at 185–203k), and the dearest end counts only shops with 20+ Kaspi reviews (13 Nov: a
+  1-review shop at 1 399 858 ₸ beside six at 699 990–839 990 ₸). The median gap and the share above 25% are over those products.
 - **Categories**: Kaspi leaf category, 8+ priced in-stock products checked today or yesterday; lowest and median
   current price. The week change, once 5+ of them have one, is the median over products of the current price
   against their earliest daily low 2–7 days ago.

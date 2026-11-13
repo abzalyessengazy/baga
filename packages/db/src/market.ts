@@ -1,5 +1,5 @@
 import type postgres from "postgres";
-import { computeVerdict, liveShiftDay, pickOrder, priceNote, sellerLabel, KASPI_VISIT_WINDOW_UTC, type PriceNote, type SellerLabel } from "@baga/core";
+import { computeVerdict, liveShiftDay, pickOrder, priceNote, sellerLabel, KASPI_VISIT_WINDOW_UTC, SELLER_RULES, type PriceNote, type SellerLabel } from "@baga/core";
 import { getDailyLows } from "./queries";
 import { dayMoves, stillMoving, weekMovers, type Mover } from "./movers";
 
@@ -109,17 +109,20 @@ export async function getMarket(sql: postgres.Sql, now = new Date()): Promise<Ma
     select count(*)::int as n from r
     where rn = 1 and day = ${moves.day}::date and days >= ${c.lowsMinDays} and p < before_low` : [];
   // Seller gap (docs/STATS.md): an offer above twice the product's median offer is left out (owner, 11 Nov: one
-  // small shop at 759 990 ₸ next to four at 185-203k read as our error, not as a gap a buyer could use).
+  // small shop at 759 990 ₸ next to four at 185-203k read as our error, not as a gap a buyer could use). The dearest
+  // end only counts shops with enough Kaspi reviews to judge (13 Nov: a 1-review shop at 1 399 858 ₸ next to six
+  // shops at 699 990–839 990 ₸ made a "переплата" of 699 868 ₸ nobody would pay).
   const offers = sql`
     with b as (
-      select o.product_id, o.price from offers_current o join product_state s on s.product_id = o.product_id
-      join products p on p.id = o.product_id
+      select o.product_id, o.price, coalesce(se.reviews, 0) >= ${SELLER_RULES.enoughReviews} as known
+      from offers_current o join product_state s on s.product_id = o.product_id
+      join products p on p.id = o.product_id join sellers se on se.id = o.seller_id
       where p.status = 'active' and s.in_stock and s.last_checked_at > now() - interval '3 days'),
     m as (select product_id, percentile_cont(0.5) within group (order by price) as med from b group by 1)
-    select b.product_id, min(b.price)::int as lo, max(b.price)::int as hi, count(*)::int as sellers, round(m.med)::int as med
+    select b.product_id, min(b.price)::int as lo, (max(b.price) filter (where b.known))::int as hi, count(*)::int as sellers, round(m.med)::int as med
     from b join m on m.product_id = b.product_id
     where b.price <= m.med * ${c.spreadOutlier}
-    group by b.product_id, m.med having count(*) >= 2`;
+    group by b.product_id, m.med having count(*) >= 2 and max(b.price) filter (where b.known) is not null`;
   const [spread] = await sql<{ products: number; over10: number; over25: number; median: number | null }[]>`
     with x as (${offers})
     select count(*)::int as products,

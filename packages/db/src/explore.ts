@@ -1,5 +1,5 @@
 import type postgres from "postgres";
-import { MOVE_MIN_PCT } from "@baga/core";
+import { MOVE_MIN_PCT, SELLER_RULES } from "@baga/core";
 import { likePattern } from "./like";
 import { addedByPerson } from "./stats";
 import { MARKET_CONFIG } from "./market";
@@ -10,7 +10,8 @@ import { MARKET_CONFIG } from "./market";
  * - drops / rises: rule W, the current lowest price against the price a week ago (the earliest daily low 2–7
  *   Almaty days before today that held two days in a row; a check today or yesterday, in stock, MOVE_MIN_PCT or more);
  * - spread: the cheapest and the dearest seller of the latest check (2+ sellers, checked in the last 3 days),
- *   leaving out offers above MARKET_CONFIG.spreadOutlier times the product's median offer;
+ *   leaving out offers above MARKET_CONFIG.spreadOutlier times the product's median offer, the dearest end from
+ *   shops with SELLER_RULES.enoughReviews Kaspi reviews or more;
  * - all: every active product with a price.
  * Only observed prices; nothing is estimated.
  */
@@ -65,9 +66,11 @@ export async function exploreCatalog(sql: postgres.Sql, x: ExploreQuery): Promis
         and ((d2.prev is not null and abs(d2.p - d2.prev) <= d2.prev * 0.01) or (d2.next is not null and abs(d2.p - d2.next) <= d2.next * 0.01))
       order by d2.product_id, d2.day),
     om as (select product_id, percentile_cont(0.5) within group (order by price) as med from offers_current group by 1),
+    -- The dearest end counts only shops with enough Kaspi reviews to judge (market.ts, seller gap; 13 Nov).
     o as (
-      select oc.product_id, min(oc.price)::int as lo, max(oc.price)::int as hi, count(*)::int as n
-      from offers_current oc join om on om.product_id = oc.product_id
+      select oc.product_id, min(oc.price)::int as lo,
+             (max(oc.price) filter (where coalesce(se.reviews, 0) >= ${SELLER_RULES.enoughReviews}))::int as hi, count(*)::int as n
+      from offers_current oc join om on om.product_id = oc.product_id join sellers se on se.id = oc.seller_id
       where oc.price <= om.med * ${MARKET_CONFIG.spreadOutlier} group by 1),
     -- People with an active tracking (the «tracked» order: the home page's «Чаще всего отслеживают» in full).
     w as (
@@ -89,7 +92,7 @@ export async function exploreCatalog(sql: postgres.Sql, x: ExploreQuery): Promis
           and s.current_min_price <= pr.was * (1 - ${min}::numeric / 100)` : sql``}
         ${list === "rises" ? sql`and s.in_stock and (s.last_checked_at at time zone 'Asia/Almaty')::date >= today.day - 1
           and s.current_min_price >= pr.was * (1 + ${min}::numeric / 100)` : sql``}
-        ${list === "spread" ? sql`and s.in_stock and o.n >= 2 and o.lo >= ${EXPLORE.spreadMinPrice}
+        ${list === "spread" ? sql`and s.in_stock and o.n >= 2 and o.hi > o.lo and o.lo >= ${EXPLORE.spreadMinPrice}
           and s.last_checked_at > now() - interval '3 days'` : sql``}
         ${words.length ? sql`and ${words.map((w) => sql`(p.title ilike ${likePattern(w)} or p.title_kk ilike ${likePattern(w)})`)
           .reduce((a, c) => sql`${a} and ${c}`)}` : sql``})`;

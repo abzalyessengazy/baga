@@ -1,5 +1,6 @@
 import type postgres from "postgres";
-import { priceNote, type PriceNote } from "@baga/core";
+import { computeVerdict, priceNote, type PriceNote, type VerdictKind } from "@baga/core";
+import { getDailyLows } from "./queries";
 import { getMarket, MARKET_CONFIG } from "./market";
 import { weekMovers, type Mover } from "./movers";
 
@@ -36,6 +37,8 @@ export interface DigestProduct {
   lowestSeen: boolean;
   /** The cheapest offer is far below the others from an established shop ("fact"); never "check" here. */
   note: PriceNote;
+  /** The product page's verdict for this price (computeVerdict on our daily lows): the only source for a verdict stamp. */
+  verdict: VerdictKind;
   /** The shop with the cheapest offer, and the next-cheapest offer (null with one seller). */
   cheapestSeller: string | null; nextPrice: number | null;
   /**
@@ -86,7 +89,7 @@ export function biggestDrop<T extends { diff: number; pct: number }>(items: T[])
 }
 
 interface Facts {
-  category: string | null; observedDays: number; firstObserved: string; lowestSeen: boolean;
+  id: number; category: string | null; observedDays: number; firstObserved: string; lowestSeen: boolean;
   prices: number[]; rating: number | null; reviews: number | null; seller: string | null;
   /** The latest check: its Almaty day (YYYY-MM-DD) and the moment. */
   lastChecked: string; lastCheckedAt: Date;
@@ -111,7 +114,7 @@ async function factsFor(sql: postgres.Sql, ids: string[]): Promise<Map<string, F
              (array_agg(se.rating order by o.price, se.id))[1] as rating, (array_agg(se.reviews order by o.price, se.id))[1] as reviews,
              (array_agg(se.name order by o.price, se.id))[1] as seller
       from offers_current o join sellers se on se.id = o.seller_id join p on p.id = o.product_id group by 1)
-    select p.external_id as "externalId", p.category_path[array_length(p.category_path, 1)] as category,
+    select p.id::int as id, p.external_id as "externalId", p.category_path[array_length(p.category_path, 1)] as category,
            coalesce(h.days, 0) as "observedDays", h.first as "firstObserved",
            (e.low is not null and s.current_min_price < e.low) as "lowestSeen",
            coalesce(o.prices, '{}') as prices, o.rating, o.reviews, o.seller,
@@ -167,7 +170,7 @@ export async function getDigest(sql: postgres.Sql, now = new Date()): Promise<Di
   const product = (x: { externalId: string; title: string; titleKk: string | null; imageUrl: string | null }, price: number, sellers: number, f: Facts): DigestProduct => ({
     externalId: x.externalId, title: x.title, titleKk: x.titleKk, category: f.category, imageUrl: x.imageUrl,
     price, sellers, checkedAt: new Date(f.lastCheckedAt).toISOString(),
-    observedDays: f.observedDays, firstObserved: f.firstObserved, lowestSeen: f.lowestSeen, note: cheapestNote(f),
+    observedDays: f.observedDays, firstObserved: f.firstObserved, lowestSeen: f.lowestSeen, note: cheapestNote(f), verdict: "insufficient",
     ...sellerSpread(f.prices, R.oneSellerPct), cheapestSeller: f.seller,
   });
   const move = (x: Mover): DigestMove | null => {
@@ -191,15 +194,20 @@ export async function getDigest(sql: postgres.Sql, now = new Date()): Promise<Di
     return f ? [product(x, x.price, x.sellers, f)] : [];
   });
   const best = onePerCategory(drops).slice(0, R.best);
+  const drop = biggestDrop(drops.filter((x) => !best.some((b) => b.externalId === x.externalId))) ?? biggestDrop(drops);
+  const wait = rises[0] ?? null;
+  const newLows = lowsList.slice(0, R.newLows);
+  // The product page's verdict, for the products listed only (one daily-lows read each).
+  for (const x of [...best, drop, gap, wait, ...newLows]) {
+    if (!x) continue;
+    const f = facts.get(x.externalId)!;
+    x.verdict = computeVerdict(await getDailyLows(sql, f.id), x.price).kind;
+  }
   return {
     date, day, city: "Алматы", complete: !!day && day === date && !m.live && m.todayCheck === null,
     live: m.live, asOf: m.asOf,
     market: { products: m.catalog.products, sellers: m.catalog.sellers, checked: m.checked, compared: m.compared, down: m.down, up: m.up, spreadMedianPct: m.spread.medianPct },
-    best,
-    // A different product from the % list where there is one, so the two drop rubrics show two products.
-    drop: biggestDrop(drops.filter((x) => !best.some((b) => b.externalId === x.externalId))) ?? biggestDrop(drops),
-    gap,
-    wait: rises[0] ?? null,
-    newLows: lowsList.slice(0, R.newLows),
+    // «Падение дня» is a different product from the % list where there is one, so the two drop rubrics show two.
+    best, drop, gap, wait, newLows,
   };
 }

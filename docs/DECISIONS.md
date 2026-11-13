@@ -281,3 +281,9 @@ Expected: ~450 more requests a day for new products and fresher checks, about 30
 
 ## 2026-11-13 — Product photos in the digest feed (amends "Digest feed")
 The owner (13 Nov): the «Чек дня» cards are all text, they need the products. Each digest product now carries `imageUrl`, the product photo the site already shows in its lists and in «Находка дня» (Kaspi's image server, `resources.cdn-kaspi.kz`). As on the site, our server only hands over the link and never downloads the image (the preview card stays photo-free for that reason: rendering it would make our server fetch from Kaspi). The photos are the brands' and Kaspi's, not ours: shown as the product, on a white square, never edited or cropped into.
+
+## 2026-11-13 — Digest: verdicts, instructions in the feed; seller gap ignores unreviewed dear shops
+The owner's first «Чек дня» (13 Nov) mixed in products from other sources, stamped a verdict nobody had checked, and showed «Не переплатите» at 699 868 ₸ from a 1-review shop at 1 399 858 ₸ beside six shops at 699 990–839 990 ₸.
+- Each digest product carries `verdict` (the product page's `computeVerdict`) and `verdictLabel` (ru/kk, from messages); a stamp may use only that.
+- The feed carries `instructions`: the rules the agent follows, kept in `apps/web/src/app/api/digest/route.ts`. The owner's task reads them first, so the rules change in the repo, not in the task's settings (that task lives in claude.ai, out of the code sessions' reach).
+- Seller gap (home page, /explore spread list, digest): the dearest end counts only shops with `SELLER_RULES.enoughReviews` (20) Kaspi reviews or more; a product with no such shop has no gap. 13 Nov: median gap 16% → 14%.
