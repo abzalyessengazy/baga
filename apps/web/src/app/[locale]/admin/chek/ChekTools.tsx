@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 
-type Labels = { download: string; downloadAll: string; saving: string; saveFailed: string; copy: string; copied: string; fullView: string; fullViewAll: string; phoneHint: string };
+type Labels = { download: string; downloadAll: string; saving: string; saveFailed: string; fullView: string; fullViewAll: string; phoneHint: string };
 type Ctx = { labels: Labels; run: (nodes: HTMLElement[]) => Promise<void>; busy: boolean; canCapture: boolean };
 const ToolsCtx = createContext<Ctx | null>(null);
 
@@ -84,7 +84,7 @@ function viewSlides(nodes: HTMLElement[]) {
 }
 
 /** The slide list with a download button per slide and for all, and the caption and links with copy buttons. */
-export function ChekTools({ labels, prefix, texts, children }: { labels: Labels; prefix: string; texts: { title: string; text: string }[]; children: ReactNode }) {
+export function ChekTools({ labels, prefix, children }: { labels: Labels; prefix: string; children: ReactNode }) {
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
   const list = useRef<HTMLDivElement>(null);
@@ -111,7 +111,6 @@ export function ChekTools({ labels, prefix, texts, children }: { labels: Labels;
       <p><button type="button" className="btn" onClick={all} disabled={busy}>{busy ? labels.saving : canCapture ? labels.downloadAll : labels.fullViewAll}</button></p>
       {failed && <p className="paste-error" role="alert">{labels.saveFailed}</p>}
       <div className="chek-list" ref={list}>{children}</div>
-      {texts.map((x) => <CopyBlock key={x.title} title={x.title} text={x.text} labels={labels} />)}
     </ToolsCtx.Provider>
   );
 }
@@ -127,12 +126,13 @@ export function SlideFrame({ label, story, children }: { label: string; story?: 
   return (
     <figure className={story ? "chek-frame chek-frame-story" : "chek-frame"}>
       <div className="chek-view"><div className="chek-scale" ref={box}>{children}</div></div>
-      <figcaption><span>{label}</span><button type="button" className="btn btn-ghost" onClick={go} disabled={ctx.busy}>{ctx.busy ? ctx.labels.saving : ctx.canCapture ? ctx.labels.download : ctx.labels.fullView}</button></figcaption>
+      <figcaption><span>{label}</span><button type="button" className="btn" onClick={go} disabled={ctx.busy}>{ctx.busy ? ctx.labels.saving : ctx.canCapture ? ctx.labels.download : ctx.labels.fullView}</button></figcaption>
     </figure>
   );
 }
 
-function CopyBlock({ title, text, labels }: { title: string; text: string; labels: Labels }) {
+/** One ready-to-paste text with its copy button. */
+export function CopyField({ title, text, labels }: { title: string; text: string; labels: { copy: string; copied: string } }) {
   const [done, setDone] = useState(false);
   const copy = async () => {
     try {
@@ -141,11 +141,11 @@ function CopyBlock({ title, text, labels }: { title: string; text: string; label
       setTimeout(() => setDone(false), 2000);
     } catch { /* the text stays selectable */ }
   };
+  const rows = text.split("\n").length;
   return (
-    <section className="chek-copy">
-      <h2>{title}</h2>
-      <textarea readOnly value={text} rows={Math.min(24, text.split("\n").length + 1)} />
-      <button type="button" className="btn" onClick={copy}>{done ? labels.copied : labels.copy}</button>
-    </section>
+    <div className="chek-copy">
+      <div className="chek-copy-head"><span>{title}</span><button type="button" className="btn btn-ghost" onClick={copy}>{done ? labels.copied : labels.copy}</button></div>
+      <textarea readOnly value={text} rows={Math.min(rows > 2 ? 12 : rows, rows + 1)} />
+    </div>
   );
 }

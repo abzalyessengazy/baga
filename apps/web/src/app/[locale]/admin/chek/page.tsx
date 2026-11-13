@@ -1,26 +1,24 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getTranslations, setRequestLocale } from "next-intl/server";
-import { formatTenge } from "@baga/core";
-import { getSql, type Digest } from "@baga/db";
+import { getSql } from "@baga/db";
 import { adminEnabled, isAdmin } from "@/lib/admin";
 import { todayDigest } from "@/lib/digest";
 import { issueOf } from "@/lib/issue";
 import { siteUrl } from "@/lib/site";
 import { Link } from "@/i18n/navigation";
-import { Best, Cover, Cta, Drop, Gap, Story, Wait, almatyTime, dmy, shortName, type Pair, type Tr } from "./Slides";
-import { ChekTools, SlideFrame } from "./ChekTools";
+import { Best, Cover, Cta, Drop, Gap, Story, Wait, almatyTime, dmy, type Pair, type Tr } from "./Slides";
+import { ChekTools, CopyField, SlideFrame } from "./ChekTools";
+import { packFor, type Pack, type TextCtx } from "./texts";
 import "./chek.css";
 
 type Props = { params: Promise<{ locale: string }> };
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { robots: { index: false, follow: false } };
 
-const pct = (n: number) => (n < 0 ? `−${-n}%` : `+${n}%`);
-
 /**
  * «Чек дня» slides for the owner (DECISIONS.md, 2026-11-13 "Slide page"): today's digest drawn in the brand
- * templates, each slide downloadable as a PNG in the browser, plus the caption in both languages. Replaces the
+ * templates, each slide downloadable as a PNG in the browser, with ready-to-paste texts per platform under it. Replaces the
  * claude.ai scheduled task, which could not use the product photos. Behind the admin sign-in; read-only.
  */
 export default async function ChekPage({ params }: Props) {
@@ -43,9 +41,33 @@ export default async function ChekPage({ params }: Props) {
   const meta = { date: d.date, issue: issue.label, time: latest ? almatyTime(latest) : "—" };
   const lead = d.best[0];
   const verdict = lead && lead.verdict !== "insufficient" ? { kk: vk(lead.verdict), ru: vr(lead.verdict) } : null;
-  const utm = `?utm_source=ig&utm_medium=post&utm_campaign=${issue.campaign}`;
-  const site = siteUrl();
-  const links = shown.map((x) => `${shortName(x.title)}\n${site}/ru/p/${x.externalId}${utm}\n${site}/kk/p/${x.externalId}${utm}`).join("\n\n");
+  const c: TextCtx = { d, t, site: siteUrl(), campaign: issue.campaign, issue: issue.label, time: meta.time };
+  const f = { hook: ui("fieldHook"), caption: ui("caption"), sticker: ui("fieldSticker"), linkRu: ui("fieldLinkRu"), linkKk: ui("fieldLinkKk"),
+    post: ui("platPost"), reel: ui("platReel"), tiktok: ui("platTiktok"), story: ui("platStory") };
+  const Sec = ({ title, slide, story, pack, storyOnly }: { title: string; slide?: React.ReactNode; story?: boolean; pack?: Pack | null; storyOnly?: boolean }) => (
+    <section className="chek-sec">
+      <h2>{title}</h2>
+      <div className="chek-sec-body">
+        {slide && <SlideFrame label={title} story={story}>{slide}</SlideFrame>}
+        {pack && <div className="chek-texts">
+          {!storyOnly && (["post", "reel", "tiktok"] as const).map((p, i) => (
+            <details key={p} open={i === 0}>
+              <summary>{f[p]}</summary>
+              {p !== "post" && <CopyField title={f.hook} text={pack.hook} labels={copyLabels} />}
+              <CopyField title={f.caption} text={pack.caption[p]} labels={copyLabels} />
+            </details>
+          ))}
+          <details open={storyOnly}>
+            <summary>{f.story}</summary>
+            <CopyField title={f.sticker} text={pack.story.sticker} labels={copyLabels} />
+            <CopyField title={f.linkRu} text={pack.story.linkRu} labels={copyLabels} />
+            <CopyField title={f.linkKk} text={pack.story.linkKk} labels={copyLabels} />
+          </details>
+        </div>}
+      </div>
+    </section>
+  );
+  const copyLabels = { copy: ui("copy"), copied: ui("copied") };
 
   return (
     <main className="wrap admin chek">
@@ -54,39 +76,18 @@ export default async function ChekPage({ params }: Props) {
       <p>{ui("pageLead")}</p>
       {!d.complete && <p className="paste-error" role="alert">{ui("notReady")}</p>}
       {!lead ? <p>{ui("empty")}</p> : (
-        <ChekTools labels={{ download: ui("download"), downloadAll: ui("downloadAll"), saving: ui("saving"), saveFailed: ui("saveFailed"), copy: ui("copy"), copied: ui("copied"), fullView: ui("fullView"), fullViewAll: ui("fullViewAll"), phoneHint: ui("phoneHint") }}
-          prefix={`chek-${issue.campaign.slice(5)}-${d.date}`}
-          texts={[{ title: ui("caption"), text: caption(d, t, meta, issue.label) }, { title: ui("linksTitle"), text: links }]}>
-          <SlideFrame label={ui("slideCover")}><Cover d={d} t={t} meta={meta} /></SlideFrame>
-          <SlideFrame label={t.ru("best")}><Best d={d} t={t} meta={meta} /></SlideFrame>
-          {d.drop && <SlideFrame label={t.ru("drop")}><Drop x={d.drop} t={t} meta={meta} /></SlideFrame>}
-          {d.gap && <SlideFrame label={t.ru("gap")}><Gap x={d.gap} t={t} meta={meta} /></SlideFrame>}
-          {d.wait && <SlideFrame label={t.ru("wait")}><Wait x={d.wait} t={t} meta={meta} /></SlideFrame>}
-          <SlideFrame label={ui("slideCta")}><Cta t={t} meta={meta} /></SlideFrame>
-          <SlideFrame label={ui("slideStory")} story><Story d={d} t={t} meta={meta} verdict={verdict} /></SlideFrame>
+        <ChekTools labels={{ download: ui("download"), downloadAll: ui("downloadAll"), saving: ui("saving"), saveFailed: ui("saveFailed"), fullView: ui("fullView"), fullViewAll: ui("fullViewAll"), phoneHint: ui("phoneHint") }}
+          prefix={`chek-${issue.campaign.slice(5)}-${d.date}`}>
+          <Sec title={ui("secDay")} slide={<Cover d={d} t={t} meta={meta} />} pack={packFor(c, "day")} />
+          <Sec title={t.ru("best")} slide={<Best d={d} t={t} meta={meta} />} pack={packFor(c, "best")} />
+          {d.drop && <Sec title={t.ru("drop")} slide={<Drop x={d.drop} t={t} meta={meta} />} pack={packFor(c, "drop")} />}
+          {d.gap && <Sec title={t.ru("gap")} slide={<Gap x={d.gap} t={t} meta={meta} />} pack={packFor(c, "gap")} />}
+          {d.wait && <Sec title={t.ru("wait")} slide={<Wait x={d.wait} t={t} meta={meta} />} pack={packFor(c, "wait")} />}
+          {d.newLows.length > 0 && <Sec title={ui("secNewLows")} pack={packFor(c, "newLows")} />}
+          <Sec title={ui("secCta")} slide={<Cta t={t} meta={meta} />} />
+          <Sec title={ui("secStory")} slide={<Story d={d} t={t} meta={meta} verdict={verdict} />} story pack={packFor(c, "day")} storyOnly />
         </ChekTools>
       )}
     </main>
   );
-}
-
-/** The post caption: Kazakh block, then Russian, then the not-affiliated line and tags. Numbers as in the digest. */
-function caption(d: Digest, t: Pair, meta: { date: string; time: string }, issue: string): string {
-  const block = (l: Tr) => {
-    const lines = [l("capTitle", { issue, date: `${meta.date.slice(8, 10)}.${meta.date.slice(5, 7)}` }), l("capIntro"), l("capChecked", { date: dmy(meta.date), time: meta.time }), "", `↓ ${l("best")}`];
-    d.best.forEach((x, i) => {
-      const row = l("capRow", { i: String(i + 1).padStart(2, "0"), name: shortName(x.title), price: formatTenge(x.price), pct: pct(x.pct), days: x.observedDays });
-      lines.push(x.oneSeller && x.cheapestSeller ? `${row} · ${l("capOneSeller", { shop: x.cheapestSeller })}` : row);
-    });
-    lines.push("");
-    const shop = (x: { oneSeller: boolean; cheapestSeller: string | null }, line: string) =>
-      x.oneSeller && x.cheapestSeller ? `${line} (${l("capOneSeller", { shop: x.cheapestSeller })})` : line;
-    if (d.drop) lines.push(shop(d.drop, l("capDrop", { name: shortName(d.drop.title), diff: formatTenge(d.drop.diff), price: formatTenge(d.drop.price) })));
-    if (d.gap) lines.push(l("capGap", { name: shortName(d.gap.title), lo: formatTenge(d.gap.price), hi: formatTenge(d.gap.hi), diff: formatTenge(d.gap.diff) }));
-    if (d.wait) lines.push(shop(d.wait, l("capWait", { name: shortName(d.wait.title), pct: pct(d.wait.pct), price: formatTenge(d.wait.price) })));
-    if (d.newLows.length) lines.push(l("capNewLows", { names: d.newLows.map((x) => shortName(x.title)).join(", ") }));
-    lines.push(l("capMarket", { down: d.market.down, up: d.market.up }), "", l("capEnd"));
-    return lines.join("\n");
-  };
-  return [block(t.kk), "—", block(t.ru), "", `${t.kk("disclaimer")} · ${t.ru("disclaimer")}`, "", t.ru("capTags")].join("\n");
 }
