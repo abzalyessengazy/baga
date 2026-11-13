@@ -5,6 +5,15 @@ import { formatTenge, shortTitle } from "@baga/core";
 import { Link } from "@/i18n/navigation";
 import { cachedStats, loadStats, type Stats } from "@/lib/market";
 
+/** The tape's short name: the first three words of the title, 26 characters at most, beside the product's picture (the owner, 14 Nov). */
+function tapeName(title: string): string {
+  // A third word that is only a number is a size cut off from its unit («… 165 см»): two words say it better.
+  const first = title.split(/\s+/).slice(0, 3);
+  if (first.length === 3 && /^[\d.,]+$/.test(first[2]!)) first.pop();
+  const words = first.join(" ").replace(/[\s,/(\-–]+$/, "");
+  return words.length > 26 ? `${words.slice(0, 25).trimEnd()}…` : words;
+}
+
 /**
  * A receipt tape that keeps moving under the hero: the day's biggest moves in tenge, real ones from /api/stats. It
  * pauses under the pointer or a finger, and stands still (scrollable by hand) with reduced motion. Hidden until
@@ -32,15 +41,16 @@ export function Ticker() {
       {items.map((d) => (
         <li key={d.externalId}>
           <Link href={`/p/${d.externalId}`} tabIndex={hidden ? -1 : undefined} className={d.up ? "is-up" : "is-down"}>
-            <b>{d.up ? "↑" : "↓"} {formatTenge(Math.abs(d.to - d.from), locale)}</b>
-            <span>{shortTitle((locale === "kk" && d.titleKk) || d.title)}</span>
+            <b><span className="ticker-arrow" aria-hidden>{d.up ? "↑" : "↓"}</span> {formatTenge(Math.abs(d.to - d.from), locale)}</b>
+            {d.imageUrl ? <img className="ticker-thumb" src={d.imageUrl} alt="" width={22} height={22} loading="lazy" /> : <span className="ticker-thumb" aria-hidden />}
+            <span>{tapeName(shortTitle((locale === "kk" && d.titleKk) || d.title))}</span>
           </Link>
         </li>
       ))}
     </ul>
   );
   return (
-    <section className="ticker" aria-label={t("tickerLabel")} style={{ "--ticker-s": `${items.length * 5}s` } as React.CSSProperties}>
+    <section className="ticker" aria-label={t("tickerLabel")} style={{ "--ticker-s": `${items.length * 4}s` } as React.CSSProperties}>
       <span className="ticker-tag">{t("tickerTag")}</span>
       <div className="ticker-track">{run(false)}{run(true)}</div>
     </section>
