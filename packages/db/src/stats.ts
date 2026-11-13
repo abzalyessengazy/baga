@@ -52,7 +52,21 @@ export interface PlatformStats {
   moves: { day: StatsMoves; week: StatsMoves };
   mostTracked: StatsProduct[];
   newest: StatsProduct[];
+  /** The day's moves again (rule D), ordered by the difference in tenge instead of percent (the owner, 13 Nov). */
+  tenge: StatsMoves;
+  /** Products whose daily low has not changed for the most observed days in a row, up to today. */
+  stable: StatsStable[];
+  /** Shops with offers on our products by Kaspi's own rating, from SHOP_BOARD_MIN_REVIEWS reviews. */
+  shops: { top: StatsShop[]; low: StatsShop[] };
 }
+
+/** A product with one unchanged daily low: `days` observed days in a row, the first of them `since`. */
+export interface StatsStable extends StatsProduct { days: number; since: string }
+export interface StatsShop { externalId: string; name: string; rating: number; reviews: number; products: number }
+/** A shop is listed by rating only with this many Kaspi reviews: fewer say little either way. */
+export const SHOP_BOARD_MIN_REVIEWS = 100;
+/** «Самая стабильная цена» needs this many observed days at one price. */
+export const STABLE_MIN_DAYS = 5;
 
 /**
  * Platform numbers for the home page Z-report, by the rules in docs/STATS.md. Everything is counted from observed
@@ -108,7 +122,31 @@ export async function getPlatformStats(sql: postgres.Sql, dayCount = 14, listCou
     from products p join product_state s on s.product_id = p.id
     where p.status = 'active' and s.current_min_price is not null
     order by ${NEWEST_ORDER(sql)} limit ${listCount}`;
+  // The same daily low on every observed day back from the latest one: the streak ends at the first different day.
+  const stable = await sql<{ external_id: string; title: string; title_kk: string | null; image_url: string | null; price: number; at: Date; days: number; since: string }[]>`
+    with d as (
+      select product_id, (observed_at at time zone 'Asia/Almaty')::date as day, min(min_price)::int as p
+      from price_observations where min_price is not null and observed_at > now() - interval '60 days' group by 1, 2),
+    l as (select product_id, day, p, first_value(p) over (partition by product_id order by day desc) as last from d),
+    r as (select product_id, day, p, last, sum((p <> last)::int) over (partition by product_id order by day desc) as broke from l),
+    k as (select product_id, count(*)::int as days, min(day) as since, max(day) as till, max(last) as p from r where broke = 0 group by 1)
+    select p.external_id, p.title, p.title_kk, p.image_url, s.current_min_price as price, s.last_checked_at as at,
+           k.days, to_char(k.since, 'YYYY-MM-DD') as since
+    from k join products p on p.id = k.product_id join product_state s on s.product_id = p.id
+    where p.status = 'active' and s.in_stock and s.current_min_price = k.p and k.days >= ${STABLE_MIN_DAYS}
+      and k.till >= (now() at time zone 'Asia/Almaty')::date - 1
+    order by k.days desc, coalesce(p.kaspi_reviews, 0) desc, p.id limit ${listCount}`;
+  const shopRows = (best: boolean) => sql<StatsShop[]>`
+    select se.external_id as "externalId", se.name, round(se.rating::numeric, 1)::float8 as rating, se.reviews, count(*)::int as products
+    from sellers se join offers_current o on o.seller_id = se.id join products p on p.id = o.product_id and p.status = 'active'
+    where se.rating is not null and se.rating > 0 and se.reviews >= ${SHOP_BOARD_MIN_REVIEWS}
+    group by se.id
+    order by se.rating ${best ? sql`desc` : sql`asc`}, se.reviews desc, se.id limit ${listCount}`;
+  const byTenge = (rows: Mover[]) => rows.filter(stillMoving).sort((a, b) => Math.abs(b.now - b.was) - Math.abs(a.now - a.was)).slice(0, listCount).map(move);
   return {
+    tenge: { drops: byTenge(day.down), rises: byTenge(day.up) },
+    stable: stable.map((r) => ({ ...product(r), days: r.days, since: r.since })),
+    shops: { top: await shopRows(true), low: await shopRows(false) },
     products: totals!.products,
     sellers: totals!.sellers,
     shiftDay: day.day,

@@ -60,7 +60,7 @@ export const MARKET_CONFIG = {
   /** An offer above this many times the product's median offer is not part of its seller gap. */
   spreadOutlier: 2,
   /** A category is listed from this many priced products; its week change needs this many with history. */
-  categoryMin: 8, categoryCompared: 5, categoryTop: 8,
+  categoryMin: 8, categoryCompared: 5, categoryTop: 10,
   deals: 12,
 } as const;
 

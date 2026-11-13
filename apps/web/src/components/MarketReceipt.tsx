@@ -10,6 +10,7 @@ import { Wordmark } from "./Wordmark";
 import { StatIcon } from "./StatIcon";
 import { PickSlider } from "./PickSlider";
 import { dayMonth, type DatesT } from "@/lib/dayMonth";
+import { CountUp } from "./Motion";
 
 const count = (n: number) => new Intl.NumberFormat("ru-RU").format(n);
 /** Calendar days from the first observed day to the shown day (the live day included), both included. */
@@ -64,9 +65,9 @@ export function MarketReceipt() {
                 {/* The whole catalog, then the latest complete day in one line (docs/STATS.md). Numbers with one- or
                     two-word labels only: the method lives on /explore and /shops, not here. */}
                 <dl className="mk-stats">
-                  <div><dt><StatIcon name="box" />{t("products")}</dt><dd>{count(m!.catalog.products)}</dd></div>
-                  <div><dt><StatIcon name="store" />{t("sellers")}</dt><dd>{count(m!.catalog.sellers)}</dd></div>
-                  <div><dt><StatIcon name="calendar" />{t("days")}</dt><dd>{count(historyDays(m!.catalog.firstDay, m!.day ?? m!.catalog.firstDay ?? ""))}</dd></div>
+                  <div><dt><StatIcon name="box" />{t("products")}</dt><dd><CountUp value={m!.catalog.products} format={count} duration={1.2} /></dd></div>
+                  <div><dt><StatIcon name="store" />{t("sellers")}</dt><dd><CountUp value={m!.catalog.sellers} format={count} duration={1.2} /></dd></div>
+                  <div><dt><StatIcon name="calendar" />{t("days")}</dt><dd><CountUp value={historyDays(m!.catalog.firstDay, m!.day ?? m!.catalog.firstDay ?? "")} format={count} duration={1.2} /></dd></div>
                 </dl>
                 {m!.day && (
                   <p className="mk-line">

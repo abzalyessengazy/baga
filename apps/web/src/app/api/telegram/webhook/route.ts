@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getTranslations } from "next-intl/server";
-import { getSql, linkTelegram, getWatcherByChat, unlinkTelegram, listWatched, answerBought, type BoughtAnswer, type Watcher } from "@baga/db";
+import { getSql, linkTelegram, getWatcherByChat, unlinkTelegram, listWatched, answerBought, stopDigestByChat, type BoughtAnswer, type Watcher } from "@baga/db";
 import { formatTenge, slugName } from "@baga/core";
 import { sendTelegram, telegramCall, tgEscape } from "@/lib/telegram";
 import { siteUrl } from "@/lib/site";
@@ -18,6 +18,18 @@ type Update = {
 };
 
 async function onCallback(q: NonNullable<Update["callback_query"]>) {
+  // «Не присылать сводку» under the 3-day note (DECISIONS.md, 2026-11-13): the note stops, price alerts stay.
+  if (q.data === "d:stop") {
+    const sqlD = getSql();
+    const chat = q.message?.chat?.id;
+    const w = sqlD && chat ? await getWatcherByChat(sqlD, String(chat)) : null;
+    const ok = sqlD && chat ? await stopDigestByChat(sqlD, String(chat)).catch(() => false) : false;
+    const tb = await getTranslations({ locale: w?.locale ?? "ru", namespace: "bot" });
+    await telegramCall("answerCallbackQuery", { callback_query_id: q.id, text: ok ? tb("digestStopped") : undefined });
+    if (ok && chat && q.message?.message_id) await telegramCall("editMessageReplyMarkup", { chat_id: chat, message_id: q.message.message_id, reply_markup: { inline_keyboard: [] } });
+    if (ok && chat) await sendTelegram(String(chat), tgEscape(tb("digestStopped")));
+    return;
+  }
   const m = /^b:([A-Za-z0-9_-]{16,64}):(yes|later|no)$/.exec(q.data ?? "");
   const sql = getSql();
   const r = m && sql ? await answerBought(sql, { code: m[1]! }, m[2] as BoughtAnswer) : null;

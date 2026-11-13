@@ -17,6 +17,8 @@ import { requestManualCheck, finishManualCheck, queuedManualChecks, MANUAL_CHECK
 import { cityChecksDue, saveCityPrice, latestCityPrice } from "./cities";
 import { getShop, productSellers, saveShopFeedback } from "./shops";
 import { decideMatch, matchesToPrice, saveMatch, saveStorePrice, storeMarketplaceId, storeOffers } from "./stores";
+import { claimDigest, digestDue, getBoard, getProfile, getProfileStats, saveProfile, setProfileFlags, stopDigestByChat, suggestFor } from "./profile";
+import { getPlatformStats } from "./stats";
 import type { ProductSnapshot } from "@baga/kaspi";
 
 const url = process.env.TEST_DATABASE_URL;
@@ -410,6 +412,82 @@ describe.skipIf(!url)("database (disposable Postgres)", () => {
       const exact = await saveMatch(sql, { productId: p, marketplaceId: mid, sku: "23", slug: "item-23", title: "Item", method: "exact", status: "confirmed" });
       await saveStorePrice(sql, exact.id, { price: 31_000, oldPrice: null, inStock: true });
       expect((await storeOffers(sql, p)).map((o) => o.kind)).toEqual(["exact"]);
+    });
+  });
+
+  describe("profiles, the board and the 3-day note (migration 0027)", () => {
+    const day = (back: number) => new Date(Date.now() - back * 86_400_000);
+    async function product(externalId: string, prices: [number, number][], category = ["Компьютеры", "Ноутбуки"]) {
+      const [p] = await sql<{ id: number }[]>`insert into products (marketplace_id, external_id, title, category_path)
+        values ((select id from marketplaces where code = 'kaspi'), ${externalId}, ${`Товар ${externalId}`}, ${sql.array(category)}::text[]) returning id`;
+      for (const [back, price] of prices) await sql`insert into price_observations (product_id, observed_at, min_price, offer_count, in_stock)
+        values (${p!.id}, ${day(back)}, ${price}, 1, true)`;
+      const now = prices.at(-1)![1];
+      await sql`insert into product_state (product_id, current_min_price, offer_count, in_stock, last_checked_at) values (${p!.id}, ${now}, 1, true, now())`;
+      return p!.id;
+    }
+    const track = (watcherId: string, productId: number, externalId: string, target: number) =>
+      sql`insert into trackings (watcher_id, product_id, external_id, target_price, status) values (${watcherId}, ${productId}, ${externalId}, ${target}, 'active')`;
+
+    it("ranks by the price above the target, keeps nicknames unique and hides on request", async () => {
+      const a = await watcher({ chat: 11 }), b = await watcher({ email: "b@example.com" }), c = await watcher();
+      const p1 = await product("300000001", [[5, 100_000], [0, 100_000]]);
+      const p2 = await product("300000002", [[5, 50_000], [0, 50_000]]);
+      await track(a, p1, "300000001", 90_000); // wants 10 000
+      await track(b, p1, "300000001", 70_000); // wants 30 000
+      await track(b, p2, "300000002", 60_000); // already below the target: adds nothing
+      expect(await saveProfile(sql, a, { nickname: "Saver", avatar: "cat", visitReason: "gift", interests: ["computers"], saveGoal: 50_000 })).toBe("ok");
+      expect(await saveProfile(sql, b, { nickname: "saver", avatar: "man", visitReason: null, interests: [], saveGoal: null })).toBe("taken");
+      const board = await getBoard(sql);
+      expect(board.total).toBe(2);
+      expect(board.rows.map((r) => [r.rank, r.nickname, r.tracked, r.total, r.potential, r.saved])).toEqual([[1, null, 2, 150_000, 30_000, 0], [2, "Saver", 1, 100_000, 10_000, 0]]);
+      expect(board.rows[0]).not.toHaveProperty("id");
+      const mine = await getProfileStats(sql, a);
+      expect(mine).toMatchObject({ rank: 2, boardSize: 2, tracked: 1, potential: 10_000, ahead: { rank: 1, gap: 20_001 } });
+      expect((await getProfileStats(sql, c)).rank).toBeNull();
+      await setProfileFlags(sql, b, { onBoard: false });
+      expect((await getBoard(sql)).rows.map((r) => r.nickname)).toEqual(["Saver"]);
+      expect((await getProfileStats(sql, b))).toMatchObject({ rank: null, tracked: 2, potential: 30_000 });
+      expect((await getProfile(sql, a))?.profileAt).toBeInstanceOf(Date);
+    });
+
+    it("suggests untracked products from the same category, furthest below their 30-day high first", async () => {
+      const a = await watcher();
+      const mine = await product("300000011", [[4, 100], [0, 100]]);
+      await track(a, mine, "300000011", 90);
+      await product("300000012", [[6, 1000], [4, 1000], [0, 800]]); // same category, 20% below its high
+      await product("300000013", [[6, 1000], [4, 1000], [0, 500]], ["Мебель", "Диваны"]); // a bigger drop, another category
+      await product("300000014", [[1, 1000], [0, 900]]); // two observed days only: too little to compare
+      const s = await suggestFor(sql, a, 5);
+      expect(s.map((x) => [x.externalId, x.pct, x.same])).toEqual([["300000012", 20, true], ["300000013", 50, false]]);
+    });
+
+    it("sends the 3-day note once per period, to people with a channel, and stops on request", async () => {
+      const a = await watcher({ chat: 21 }), b = await watcher(), c = await watcher({ chat: 22 });
+      const p = await product("300000021", [[5, 1000], [0, 900]]);
+      const fresh = await product("300000022", [[1, 500], [0, 500]]); // first seen after the reference: left out
+      for (const w of [a, b, c]) await track(w, p, "300000021", 800);
+      await track(a, fresh, "300000022", 400);
+      await sql`update watchers set created_at = now() - interval '4 days' where id in (${a}, ${b})`; // c came today
+      const due = await digestDue(sql);
+      expect(due.map((d) => d.watcherId)).toEqual([a]);
+      expect(due[0]!.items).toEqual([expect.objectContaining({ externalId: "300000021", was: 1000, now: 900, move: -1, target: 800 })]);
+      expect(await claimDigest(sql, a)).toBe(true);
+      expect(await claimDigest(sql, a)).toBe(false);
+      expect(await digestDue(sql)).toEqual([]);
+      await sql`update watchers set digest_sent_at = now() - interval '3 days' where id = ${a}`;
+      expect((await digestDue(sql)).length).toBe(1);
+      expect(await stopDigestByChat(sql, "21")).toBe(true);
+      expect(await digestDue(sql)).toEqual([]);
+    });
+
+    it("home lists: a price unchanged for days, shops by rating, moves in tenge", async () => {
+      await product("300000031", [[6, 700], [5, 700], [4, 700], [3, 700], [2, 700], [1, 700], [0, 700]]);
+      await product("300000032", [[3, 900], [2, 700], [1, 700], [0, 700]]); // three days at 700: under STABLE_MIN_DAYS
+      const s = await getPlatformStats(sql);
+      expect(s.stable.map((x) => [x.externalId, x.days])).toEqual([["300000031", 7]]);
+      expect(s.shops).toEqual({ top: [], low: [] });
+      expect(s.tenge).toEqual({ drops: [], rises: [] });
     });
   });
 });

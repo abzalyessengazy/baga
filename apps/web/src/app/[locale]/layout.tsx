@@ -10,6 +10,7 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { SaleBanner } from "@/components/SaleBanner";
 import { SiteFooter } from "@/components/SiteFooter";
 import { Analytics } from "@/components/Analytics";
+import { ProfileQuiz } from "@/components/ProfileQuiz";
 import { siteUrl } from "@/lib/site";
 
 /** The browser bar takes the counter's colour in each scheme (globals.css --counter), so the page runs edge to edge. */
@@ -51,6 +52,7 @@ export default async function LocaleLayout({ children, params }: { children: Rea
           {children}
           <SiteFooter />
           <Analytics />
+          <ProfileQuiz />
         </NextIntlClientProvider>
       </body>
     </html>

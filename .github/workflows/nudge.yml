@@ -1,0 +1,35 @@
+name: 3-day note
+on:
+  # Once a day, after the collector's window (ends 08:42 UTC), the Technodom run and the owner's report:
+  # 10:30 UTC = 15:30 Almaty. Everyone whose last note is 3 days old gets one (DECISIONS.md, 2026-11-13 "Profiles,
+  # leaderboard and the 3-day note"). A note is claimed in the database before it is sent, so the backup trigger or
+  # a manual run can never send it twice. No Kaspi request.
+  schedule:
+    - cron: "30 10 * * *"
+    - cron: "30 12 * * *"
+  workflow_dispatch:
+    inputs:
+      dry:
+        description: "Print the notes, send nothing"
+        type: boolean
+        default: false
+concurrency: { group: nudge, cancel-in-progress: false }
+permissions:
+  contents: read
+jobs:
+  nudge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @baga/worker nudge ${{ inputs.dry && '--dry' || '' }}
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          SITE_URL: ${{ vars.SITE_URL || secrets.SITE_URL || 'https://bagaapp.com' }}

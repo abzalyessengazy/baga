@@ -93,6 +93,20 @@ page says «Дороже обычного» (the page's verdict on the same dail
 - **Hit rate** (admin): product pages opened, once per visit and product; how many already had an observation,
   and how many had their first observation 7+ days before.
 
+## Home lists added 13 Nov 2026 (`getPlatformStats`, `packages/db/src/stats.ts`)
+Each home list shows its first ten rows.
+- **Changes in tenge** (`tenge`): the same moves as rule D (the shift against the day before, a later check has not undone them), ordered by the difference in tenge instead of percent.
+- **The most stable price** (`stable`): the same daily low on every observed day back from the latest one, in stock, still at that price, checked today or yesterday; at least `STABLE_MIN_DAYS` (5) observed days. Most days first, then Kaspi reviews. Days we did not observe are not counted. The past, not a forecast.
+- **Shops by Kaspi rating** (`shops`): shops with an offer on an active product and at least `SHOP_BOARD_MIN_REVIEWS` (100) Kaspi reviews; highest rating first (then more reviews) and lowest first. Kaspi's numbers as we last saw them, no judgment of ours.
+- **Categories**: `getMarket().categories`, the ten Kaspi leaf categories we watch the most products in (from 8 priced products).
+
+## Profiles and the board (`packages/db/src/profile.ts`)
+- **Отслеживаю / На сумму**: active trackings and the sum of their current lowest prices.
+- **Хочу сэкономить**: the sum over active trackings of the current lowest price minus the person's own price, where the price is above it. The board ranks by it (then products tracked, then the earlier visitor).
+- **Сэкономил(а)**: the start price minus the lowest alert price, only for trackings with a sent target alert and the answer «Да, купил» (the same rule as "saved" in the owner's report).
+- **Suggestions**: products the person does not track, in stock, with 3+ observed days in the last 30; their categories first, then the interests they named; furthest below their own 30-day highest daily low first.
+- **3-day note**: each tracked product's current lowest price against its last observed price from 3 days ago or earlier; a move needs `MOVE_MIN_PCT`.
+
 ## KPI definitions (Telegram report, /admin, /admin/business; `packages/core/src/metrics.ts`)
 
 Three kinds of numbers, never mixed in one rate:

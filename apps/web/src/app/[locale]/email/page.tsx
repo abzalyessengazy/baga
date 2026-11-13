@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 
-type Props = { params: Promise<{ locale: string }>; searchParams: Promise<{ confirm?: string; stop?: string; done?: string }> };
+type Props = { params: Promise<{ locale: string }>; searchParams: Promise<{ confirm?: string; stop?: string; digest?: string; done?: string }> };
 export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -21,13 +21,13 @@ export default async function EmailPage({ params, searchParams }: Props) {
   const { locale } = await params;
   setRequestLocale(locale);
   const t = await getTranslations("emailPage");
-  const { confirm, stop, done } = await searchParams;
+  const { confirm, stop, digest, done } = await searchParams;
 
   let body: React.ReactNode;
-  if (done === "confirmed" || done === "stopped" || done === "invalid") {
+  if (done === "confirmed" || done === "stopped" || done === "digest_stopped" || done === "invalid") {
     body = (
       <div className="email-page">
-        <p className="untracked-status">{t(done)}</p>
+        <p className="untracked-status">{t(done === "digest_stopped" ? "digestStopped" : done)}</p>
         <Link className="btn" href={done === "confirmed" ? "/my" : "/"}>{done === "confirmed" ? t("toMy") : t("toHome")}</Link>
       </div>
     );
@@ -47,6 +47,16 @@ export default async function EmailPage({ params, searchParams }: Props) {
         <input type="hidden" name="c" value={stop} />
         <input type="hidden" name="l" value={locale} />
         <button className="btn" type="submit">{t("stopButton")}</button>
+      </form>
+    );
+  } else if (isToken(digest)) {
+    // The 3-day note only (DECISIONS.md, 2026-11-13): price alerts keep coming.
+    body = (
+      <form className="email-page" method="post" action="/api/digest-stop">
+        <p className="untracked-status">{t("digestText")}</p>
+        <input type="hidden" name="c" value={digest} />
+        <input type="hidden" name="l" value={locale} />
+        <button className="btn" type="submit">{t("digestButton")}</button>
       </form>
     );
   } else {

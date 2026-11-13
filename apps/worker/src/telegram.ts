@@ -94,12 +94,14 @@ export class DeliveryError extends Error {
   }
 }
 
-export async function sendTelegram(token: string, chatId: string, msg: { html: string; buttons: TelegramButton[] }): Promise<number> {
+/** `previewUrl` shows that link's preview card under the message (the 3-day note); without it no preview is shown. */
+export async function sendTelegram(token: string, chatId: string, msg: { html: string; buttons: TelegramButton[]; previewUrl?: string | null }): Promise<number> {
   const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      chat_id: chatId, text: msg.html, parse_mode: "HTML", link_preview_options: { is_disabled: true },
+      chat_id: chatId, text: msg.html, parse_mode: "HTML",
+      link_preview_options: msg.previewUrl ? { url: msg.previewUrl, prefer_small_media: true, show_above_text: false } : { is_disabled: true },
       reply_markup: { inline_keyboard: msg.buttons.map((b) => [b]) },
     }),
     signal: AbortSignal.timeout(10_000),
