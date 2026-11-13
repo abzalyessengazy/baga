@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { liveShiftDay } from "@baga/core";
-import { getSql, getDigest, DIGEST_RULES, type Digest, type DigestProduct } from "@baga/db";
-import { cachedDaily, dailyCacheControl } from "@/lib/dailyCache";
+import { getSql, DIGEST_RULES, type Digest, type DigestProduct } from "@baga/db";
+import { dailyCacheControl } from "@/lib/dailyCache";
+import { todayDigest } from "@/lib/digest";
 import { siteUrl } from "@/lib/site";
 import { issueOf } from "@/lib/issue";
 import ru from "../../../../messages/ru.json";
@@ -55,11 +55,7 @@ export async function GET(req: Request) {
   if (!sql) return NextResponse.json(null, { headers: { "Cache-Control": "no-store" } });
   let d: Digest;
   try {
-    // One cache entry per Almaty day and phase (check running or ended): the first request after the check ends is
-    // computed afresh (13 Nov: a copy cached during the check said "complete": false for minutes after it ended).
-    const now = new Date();
-    const phase = `${new Date(now.getTime() + 5 * 3_600_000).toISOString().slice(0, 10)}:${liveShiftDay(now) ? "live" : "settled"}`;
-    d = await cachedDaily(["digest", phase], () => getDigest(sql, now));
+    d = await todayDigest(sql);
   } catch (e) {
     console.error(`[digest] ${e}`);
     return NextResponse.json(null, { status: 503, headers: { "Cache-Control": "no-store" } });

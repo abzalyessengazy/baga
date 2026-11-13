@@ -47,6 +47,7 @@ export default async function AdminPage({ params, searchParams }: Props) {
   // Notification numbers, all time: the same definitions as the report and /admin/business (alertStats).
   const alerts = await alertStats(sql);
   const tb = await getTranslations("biz");
+  const tc = await getTranslations("chek");
   const now = Date.now();
   const state = (r: AdminRun) =>
     r.aborted ? t("runAborted", { reason: r.aborted })
@@ -72,7 +73,7 @@ export default async function AdminPage({ params, searchParams }: Props) {
   return (
     <main className="wrap untracked admin">
       <h1 className="product-title" style={{ color: "var(--ink-on-counter, var(--ink))" }}>{t("title")}</h1>
-      <p className="admin-now">{t("now", { time: at(new Date()) })} · <Link href="/admin/business">{t("toBusiness")}</Link></p>
+      <p className="admin-now">{t("now", { time: at(new Date()) })} · <Link href="/admin/business">{t("toBusiness")}</Link> · <Link href="/admin/chek">{tc("toChek")}</Link></p>
 
       <section className={`receipt admin-card${warnings.length ? " is-warn" : ""}`}>
         <h2>{warnings.length ? t("warnings") : t("allGood")}</h2>
