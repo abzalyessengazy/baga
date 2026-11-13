@@ -17,6 +17,8 @@ export const DIGEST_RULES = {
   waitMinPrice: 20_000,
   /** A new low needs this many observed days before it (the playbook: 14). */
   newLowMinDays: 14, newLows: 5,
+  /** The cheapest offer this many percent or more below the next one: the price rests on one seller (`oneSeller`). */
+  oneSellerPct: 10,
   candidates: 80,
 } as const;
 
@@ -32,6 +34,14 @@ export interface DigestProduct {
   lowestSeen: boolean;
   /** The cheapest offer is far below the others from an established shop ("fact"); never "check" here. */
   note: PriceNote;
+  /** The shop with the cheapest offer, and the next-cheapest offer (null with one seller). */
+  cheapestSeller: string | null; nextPrice: number | null;
+  /**
+   * The price rests on one seller: the only offer, or DIGEST_RULES.oneSellerPct below the next one. Seller lists
+   * differ by city (13 Nov: a MacBook at 712 489 ₸ from one Almaty seller; elsewhere Kaspi started at 827 790 ₸), so
+   * a post should name the seller and say the check was in Almaty.
+   */
+  oneSeller: boolean;
 }
 export interface DigestMove extends DigestProduct { was: number; pct: number; diff: number }
 export interface DigestGap extends DigestProduct { hi: number; diff: number; pct: number }
@@ -39,6 +49,8 @@ export interface DigestGap extends DigestProduct { hi: number; diff: number; pct
 export interface Digest {
   /** Almaty today, and the day the numbers describe (the latest check day). */
   date: string; day: string | null;
+  /** Offers are read for this city (CLAUDE.md rule 7); other cities may list other sellers. */
+  city: string;
   /** `day` is today and its check has ended: the numbers will not change again today. */
   complete: boolean;
   live: boolean; asOf: string | null;
@@ -73,7 +85,7 @@ export function biggestDrop<T extends { diff: number; pct: number }>(items: T[])
 
 interface Facts {
   category: string | null; observedDays: number; firstObserved: string; lowestSeen: boolean;
-  prices: number[]; rating: number | null; reviews: number | null;
+  prices: number[]; rating: number | null; reviews: number | null; seller: string | null;
   /** The latest check: its Almaty day (YYYY-MM-DD) and the moment. */
   lastChecked: string; lastCheckedAt: Date;
 }
@@ -94,16 +106,25 @@ async function factsFor(sql: postgres.Sql, ids: string[]): Promise<Map<string, F
       select d.product_id, min(d.low) as low from d join h on h.product_id = d.product_id where d.day < h.last_day group by 1),
     o as (
       select o.product_id, array_agg(o.price order by o.price, se.id) as prices,
-             (array_agg(se.rating order by o.price, se.id))[1] as rating, (array_agg(se.reviews order by o.price, se.id))[1] as reviews
+             (array_agg(se.rating order by o.price, se.id))[1] as rating, (array_agg(se.reviews order by o.price, se.id))[1] as reviews,
+             (array_agg(se.name order by o.price, se.id))[1] as seller
       from offers_current o join sellers se on se.id = o.seller_id join p on p.id = o.product_id group by 1)
     select p.external_id as "externalId", p.category_path[array_length(p.category_path, 1)] as category,
            coalesce(h.days, 0) as "observedDays", h.first as "firstObserved",
            (e.low is not null and s.current_min_price < e.low) as "lowestSeen",
-           coalesce(o.prices, '{}') as prices, o.rating, o.reviews,
+           coalesce(o.prices, '{}') as prices, o.rating, o.reviews, o.seller,
            to_char((s.last_checked_at at time zone 'Asia/Almaty')::date, 'YYYY-MM-DD') as "lastChecked", s.last_checked_at as "lastCheckedAt"
     from p join product_state s on s.product_id = p.id
     left join h on h.product_id = p.id left join earlier e on e.product_id = p.id left join o on o.product_id = p.id`;
   return new Map(rows.map((r) => [r.externalId, r]));
+}
+
+/** The next-cheapest offer, and whether the cheapest stands alone: the only one, or `pct`% or more below the next. */
+export function sellerSpread(prices: number[], pct: number): { nextPrice: number | null; oneSeller: boolean } {
+  const [lo, next] = [...prices].sort((a, b) => a - b);
+  if (lo === undefined) return { nextPrice: null, oneSeller: false };
+  if (next === undefined) return { nextPrice: null, oneSeller: true };
+  return { nextPrice: next, oneSeller: lo <= next * (1 - pct / 100) };
 }
 
 /** The cheapest offer's note against the others (the seller table's rule). */
@@ -145,6 +166,7 @@ export async function getDigest(sql: postgres.Sql, now = new Date()): Promise<Di
     externalId: x.externalId, title: x.title, titleKk: x.titleKk, category: f.category,
     price, sellers, checkedAt: new Date(f.lastCheckedAt).toISOString(),
     observedDays: f.observedDays, firstObserved: f.firstObserved, lowestSeen: f.lowestSeen, note: cheapestNote(f),
+    ...sellerSpread(f.prices, R.oneSellerPct), cheapestSeller: f.seller,
   });
   const move = (x: Mover): DigestMove | null => {
     const f = usable(x.externalId);
@@ -168,7 +190,7 @@ export async function getDigest(sql: postgres.Sql, now = new Date()): Promise<Di
   });
   const best = onePerCategory(drops).slice(0, R.best);
   return {
-    date, day, complete: !!day && day === date && !m.live && m.todayCheck === null,
+    date, day, city: "Алматы", complete: !!day && day === date && !m.live && m.todayCheck === null,
     live: m.live, asOf: m.asOf,
     market: { products: m.catalog.products, sellers: m.catalog.sellers, checked: m.checked, compared: m.compared, down: m.down, up: m.up, spreadMedianPct: m.spread.medianPct },
     best,

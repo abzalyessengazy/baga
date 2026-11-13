@@ -45,6 +45,7 @@ export async function GET(req: Request) {
       ...DIGEST_RULES,
       was: "Our lowest price a week ago that held two days in a row (the site's rule W), never Kaspi's crossed-out price.",
       listed: "In stock, checked on `day`, and the cheapest offer is not one the site marks «проверьте продавца».",
+      oneSeller: "true when the price is the only offer or the cheapest is 10%+ below the next: name the seller (cheapestSeller) and say it was checked in Алматы; other cities may not list that seller.",
     },
     best: d.best.map(link), drop: d.drop && link(d.drop), gap: d.gap && link(d.gap), wait: d.wait && link(d.wait),
     newLows: d.newLows.map(link),
