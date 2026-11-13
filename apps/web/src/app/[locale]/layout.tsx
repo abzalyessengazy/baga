@@ -4,13 +4,21 @@ import "../globals.css";
 import { NextIntlClientProvider, hasLocale } from "next-intl";
 import { getMessages, getTranslations, setRequestLocale } from "next-intl/server";
 import { notFound } from "next/navigation";
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { routing } from "@/i18n/routing";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SaleBanner } from "@/components/SaleBanner";
 import { SiteFooter } from "@/components/SiteFooter";
 import { Analytics } from "@/components/Analytics";
 import { siteUrl } from "@/lib/site";
+
+/** The browser bar takes the counter's colour in each scheme (globals.css --counter), so the page runs edge to edge. */
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#dde0e4" },
+    { media: "(prefers-color-scheme: dark)", color: "#1f2227" },
+  ],
+};
 
 export function generateStaticParams() {
   return routing.locales.map((locale) => ({ locale }));
