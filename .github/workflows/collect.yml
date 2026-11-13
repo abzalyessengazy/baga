@@ -1,7 +1,7 @@
 name: Collect prices
 on:
   # Once a day. kaspi.kz/robots.txt asks bots to visit 04:00-08:45 UTC (09:00-13:45 Almaty) with a
-  # 10 s crawl delay. We keep off the edges: the worker sends requests only 04:01-08:42 UTC (09:01-13:42 Almaty).
+  # 10 s crawl delay (we pace at 5 s since 14 Nov 2026, the owner's stress test). We keep off the edges: the worker sends requests only 04:01-08:42 UTC (09:01-13:42 Almaty).
   # The job starts at 03:50 UTC and the worker waits for 04:01.
   # See DECISIONS.md "Follow kaspi.kz/robots.txt". Manual runs outside the window exit without requests.
   # GitHub delays scheduled runs under load and often drops them (2 and 3 Nov 2026: no morning run at all; the

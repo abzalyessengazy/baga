@@ -1,5 +1,5 @@
 /**
- * One daily collection run inside Kaspi's robots.txt visit window (04:00–08:45 UTC; we use 04:01–08:42), one request per ≥10 s:
+ * One daily collection run inside Kaspi's robots.txt visit window (04:00–08:45 UTC; we use 04:01–08:42), one request per ≥5 s (10 s until 13 Nov 2026):
  * fetch visitor requests first, then check due products (offers only; product page weekly), then queued seed
  * products; poll for new visitor requests until the window closes; evaluate alerts; send the first price and
  * target alerts to Telegram right after each check, queued emails at the end. Started by .github/workflows/collect.yml at 03:50 UTC; waits for 04:01.
@@ -22,7 +22,7 @@ const sql = postgres(env.databaseUrl(), { max: 2, ...connectionOptions(env.datab
 /**
  * `--manual` (DECISIONS.md 2026-11-09, CLAUDE.md rule 6): only the products visitors asked for outside the window
  * (manual_checks, at most 40 a day), started by .github/workflows/manual.yml when a visitor asks. Never in the
- * collector's minutes (isManualCheckTime: not 03:55–08:50 UTC), the same 10 s pacing, User-Agent and breaker; the
+ * collector's minutes (isManualCheckTime: not 03:55–08:50 UTC), the same pacing, User-Agent and breaker; the
  * first 403/429 pauses manual checks for 7 days.
  */
 const MANUAL = process.argv.includes("--manual");
@@ -33,7 +33,7 @@ const breaker = new CircuitBreaker();
 // Every request that passes the guard is sent: counted for collection_runs.requests (migration 0017).
 let requests = 0;
 const kaspi = createKaspiClient({
-  // Exactly robots.txt's 10 s plus 0.2 s, no random extra (DECISIONS.md 2026-11-10 "More checks from the same rules":
+  // The pacing (5 s since 14 Nov 2026, the owner's stress test; robots.txt says 10) plus 0.2 s, no random extra (DECISIONS.md 2026-11-10 "More checks from the same rules":
   // the 0-2 s jitter cost ~8% of the day's requests and protected nothing). Gaps are measured start to start.
   minIntervalMs: KASPI_CRAWL_DELAY_MS + 200, jitterMs: 0,
   // Manual checks say so in the User-Agent: a single page a visitor asked for, not the daily crawl.

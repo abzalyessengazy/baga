@@ -1,9 +1,12 @@
 /**
  * kaspi.kz/robots.txt (checked 1 Nov 2026): `Crawl-delay: 10`, `Visit-time: 0400-0845` (UTC).
  * The collector only runs inside it (with margins, COLLECT_WINDOW_UTC) and waits at least CRAWL_DELAY_MS between requests.
+ *
+ * 5 s since 14 Nov 2026, the owner's decision (DECISIONS.md 2026-11-13 "Stress test: 5 s between Kaspi requests"):
+ * half of robots.txt's Crawl-delay of 10, knowingly. The window, one request at a time and the stop on 403/429 stay.
  */
 export const KASPI_VISIT_WINDOW_UTC = { startMinute: 4 * 60, endMinute: 8 * 60 + 45 } as const;
-export const KASPI_CRAWL_DELAY_MS = 10_000;
+export const KASPI_CRAWL_DELAY_MS = 5_000;
 
 export const VISIT_WINDOW_MINUTES = KASPI_VISIT_WINDOW_UTC.endMinute - KASPI_VISIT_WINDOW_UTC.startMinute;
 
@@ -24,7 +27,7 @@ function minuteOfDayUtc(d: Date): number {
 
 /**
  * Days the collector stops early (UTC date → end minute), to leave the rest of Kaspi's Visit-time to a one-off
- * probe: two clients at once would break the 10 s Crawl-delay. A probe after the collector (probe-scale.ts --wait,
+ * probe: two clients at once would break the pacing (KASPI_CRAWL_DELAY_MS). A probe after the collector (probe-scale.ts --wait,
  * 08:31–08:43) needs its day here since the window ends at 08:42. None now (11 Nov 2026 was the list coverage probe).
  */
 export const COLLECT_END_EXCEPTIONS_UTC: Readonly<Record<string, number>> = {};
@@ -100,7 +103,7 @@ export function secondsUntilShiftEnds(now: Date): number {
  * Manual checks (a visitor's own product, on request; DECISIONS.md 2026-11-09): never from 5 minutes before the
  * collector can start until 5 minutes after Kaspi's Visit-time ends (03:55–08:50 UTC): the daily collector and the
  * occasional probe after it (08:31–08:43) own those minutes, and inside the window the collector fetches a visitor's
- * product within minutes anyway. Two clients at once would break the 10 s Crawl-delay.
+ * product within minutes anyway. Two clients at once would break the pacing (KASPI_CRAWL_DELAY_MS).
  */
 export const MANUAL_BLACKOUT_UTC = { startMinute: KASPI_VISIT_WINDOW_UTC.startMinute - 5, endMinute: KASPI_VISIT_WINDOW_UTC.endMinute + 5 } as const;
 

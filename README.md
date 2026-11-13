@@ -5,7 +5,7 @@ Paste a Kaspi.kz product link, or search the products BAGA already tracks, and s
 Live: https://baga-rho.vercel.app/ru · Repo: https://github.com/abzalyessengazy/baga
 
 ## How it works
-- **Collector** (`apps/worker`, GitHub Actions, daily): fetches Kaspi prices only inside the window kaspi.kz/robots.txt sets (04:00–08:45 UTC = 09:00–13:45 Almaty), with at least 10 s between requests.
+- **Collector** (`apps/worker`, GitHub Actions, daily): fetches Kaspi prices only inside the window kaspi.kz/robots.txt sets (04:00–08:45 UTC = 09:00–13:45 Almaty), with at least 5 s between requests (the owner's stress test from 14 Nov 2026; robots.txt asks for 10).
   - It saves a price only when it changes, plus one confirming observation a day. Gaps stay gaps.
   - It stops when Kaspi answers 403 or 429.
 - **Website** (`apps/web`, Vercel): reads only our database. It never requests Kaspi product data, because Kaspi refuses requests from Vercel's servers.

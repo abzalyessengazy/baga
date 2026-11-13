@@ -11,8 +11,11 @@ import type { WorkflowFailure } from "./workflows";
  */
 export interface Commit { hash: string; subject: string }
 
-/** A finished collection day with fewer requests than this is reported as a problem (a full day is ~1,600). */
-export const LOW_REQUESTS = 800;
+/**
+ * A finished collection day with fewer requests than this is reported as a problem: about half a full day, which is
+ * ~3,300 at the 5 s pace (14 Nov 2026, the owner's stress test; ~1,600 and a floor of 800 at 10 s before).
+ */
+export const LOW_REQUESTS = 1_600;
 
 const MARK: Record<TargetMark, string> = { on: "✅", half: "🟡", off: "🔴" };
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");

@@ -2,7 +2,7 @@ name: Manual price checks
 on:
   # A visitor's own product, checked on request outside the collector's window (DECISIONS.md 2026-11-09; CLAUDE.md
   # rule 6): the website starts this when a visitor asks (at most 40 a day, 3 per visitor; manual_checks). The
-  # worker never sends a request in the collector's minutes (03:55-08:50 UTC), paces requests 10 s apart with the
+  # worker never sends a request in the collector's minutes (03:55-08:50 UTC), paces requests 5 s apart (10 s until 13 Nov 2026) with the
   # same User-Agent, and the first 403/429 pauses manual checks for 7 days. The schedule is a backup for a start that
   # failed (a run with nothing queued ends in seconds, without any Kaspi request).
   workflow_dispatch:
