@@ -62,8 +62,11 @@ function Board({ b, me, locale }: { b: { rows: BoardRow[]; total: number }; me: 
         <span className="lb-num lb-total"><b>{f(r.total)}</b><small>{t("colTotal")}</small></span>
         <span className="lb-num lb-saved"><b>{r.saved > 0 ? f(r.saved) : "—"}</b><small>{t("colSaved")}</small></span>
         <span className="lb-num lb-want"><b>{go ? <CountUp value={r.potential} format={f} /> : f(r.potential)}</b><small>{t("colWant")}</small></span>
-        <motion.span className="lb-bar" aria-hidden initial={false} animate={{ scaleX: go ? Math.max(0.02, r.potential / max) : 0 }}
-          transition={go ? { duration: 0.9, delay: 0.2 + i * 0.07, ease: [0.23, 1, 0.32, 1] } : { duration: 0 }} />
+        {/* A smooth bar on a light track (the owner, 14 Nov: no dots); the leader's runs full width. */}
+        <span className="lb-track" aria-hidden>
+          <motion.span className="lb-bar" initial={false} animate={{ width: go ? `${Math.max(3, (r.potential / max) * 100)}%` : "0%" }}
+            transition={go ? { duration: 0.9, delay: 0.2 + i * 0.07, ease: [0.23, 1, 0.32, 1] } : { duration: 0 }} />
+        </span>
       </motion.li>
     );
   };

@@ -1032,8 +1032,9 @@ span.ticker-thumb { background: var(--paper-shade); box-shadow: none; }
 @media (min-width: 900px) { .lb-want b { font-size: var(--step-1); } }
 @media (max-width: 899px) { .lb-row { gap: 10px; } .lb-want small { max-width: 9ch; white-space: normal; line-height: 1.15; } }
 .lb-tracked, .lb-total, .lb-saved { display: none; }
-.lb-bar { position: absolute; left: 8px; right: 8px; bottom: 5px; height: 4px; transform-origin: left center;
-  background: radial-gradient(circle, var(--stamp) 1.2px, transparent 1.5px) 0 0 / 4px 4px; }
+.lb-track { position: absolute; left: 8px; right: 8px; bottom: 5px; height: 6px; border-radius: 999px; background: color-mix(in srgb, var(--stamp) 10%, transparent); overflow: hidden; }
+.lb-bar { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, color-mix(in srgb, var(--stamp) 55%, var(--paper)), var(--stamp)); }
+.lb-row.is-top-1 .lb-bar { background: linear-gradient(90deg, color-mix(in srgb, var(--stamp) 55%, var(--paper)), var(--stamp) 70%, #8f7dff); }
 .lb-row.is-you { background: color-mix(in srgb, var(--stamp) 8%, transparent); }
 .lb-gap { text-align: center; color: var(--ink-faint); letter-spacing: 0.4em; padding: 2px 0 6px; }
 .lb-empty { margin: 14px 0; line-height: 1.5; font-family: var(--font-ui); }
@@ -1161,7 +1162,7 @@ span.ticker-thumb { background: var(--paper-shade); box-shadow: none; }
   .lb-want { grid-area: want; flex-direction: row; flex-wrap: wrap; align-items: baseline; justify-content: flex-start; gap: 0 8px; text-align: left; min-width: 0; }
   .lb-want b { font-size: 1.25rem; }
   .lb-want small { max-width: none; white-space: nowrap; font-size: 0.75rem; }
-  .lb-bar { left: 92px; right: 6px; bottom: 7px; }
+  .lb-track { left: 92px; right: 6px; bottom: 7px; }
 }
 
 /* Home lists laid out like the leaderboard (14 Nov, the owner: «align the main page tops as well»): the name takes
