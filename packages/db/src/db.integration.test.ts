@@ -368,6 +368,8 @@ describe.skipIf(!url)("database (disposable Postgres)", () => {
       await save("400000001", ["Аптека", "Лекарства"]);
       await save("400000002", ["Телефоны и гаджеты", "Смартфоны"]);
       await save("400000003", ["Детские товары", "Игрушки"]);
+      // Since migration 0028 a city is asked only when someone chose it: here every city, for every product.
+      for (const id of ["400000001", "400000002", "400000003"]) for (const c of ["astana", "atyrau", "shymkent"] as const) await noteCityView(sql, id, c);
       const due = await cityChecksDue(sql, 10);
       expect(due.map((d) => `${d.externalId}:${d.city}`)).toEqual(["400000001:astana", "400000001:atyrau", "400000001:shymkent"]);
       await saveCityPrice(sql, due[1]!.productId, "atyrau", [
