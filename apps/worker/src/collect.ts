@@ -8,7 +8,7 @@ import { createKaspiClient, buildSnapshot, KaspiHttpError, KaspiParseError, Kasp
 import { queuedManualChecks, finishManualCheck, manualPausedUntil, cityChecksDue, saveCityPrice } from "@baga/db";
 import { saveSnapshot, claimNotifications, startSend, markSent, markFailed, tidyDeliveries, connectionOptions, requestProduct, attachShortLinkTrackings, weekMovers } from "@baga/db";
 import {
-  evaluateAlert, priorityFor, newProductTurn, isStablePrice, isCalmPrice, intervalFor, CALM, STABLE, INTERVAL_MINUTES, PRIORITY_ORDER, USER_INTEREST, CATALOG, SEED_MIN_PRICE, backoffMinutes, isSuspiciousJump, type TrackingAlertState,
+  evaluateAlert, priorityFor, newProductTurn, isStablePrice, isCalmPrice, intervalFor, laterVariants, CALM, STABLE, INTERVAL_MINUTES, PRIORITY_ORDER, USER_INTEREST, CATALOG, SEED_MIN_PRICE, backoffMinutes, isSuspiciousJump, type TrackingAlertState,
   KASPI_CRAWL_DELAY_MS, CITIES, CITY_CHECKS, isCityDependent, isInVisitWindow, isManualCheckTime, needsPageRefresh, msUntilVisitWindow, targetForDrop, almatyDay, runningSale, type Priority,
 } from "@baga/core";
 import postgres from "postgres";
@@ -157,6 +157,7 @@ async function main() {
   await sql`update seed_queue set attempts = 0 where source = 'visitor' and status = 'pending' and attempts >= 3
     and added_at > now() - interval '14 days'`;
   const runId = run!.id;
+  await loadVariants();
   let changed = 0;
   let seeded = 0;
   const tried = new Set<string>(); // each queued product gets at most one attempt per run
@@ -441,6 +442,18 @@ async function addQueued(q: Queued, runId: number): Promise<boolean> {
   }
 }
 
+/**
+ * Later colour/memory variants of a device already in the catalog (DECISIONS.md, 2026-11-14 "Variants checked less,
+ * breadth before depth"), worked out once per run from the titles; a product first seen during the run counts next run.
+ */
+let variants = new Set<number>();
+async function loadVariants() {
+  const rows = await sql<{ id: number; title: string; reviews: number | null }[]>`
+    select id::int as id, title, kaspi_reviews as reviews from products where status = 'active'`;
+  variants = laterVariants(rows);
+  console.log(`${variants.size} later colour/memory variants: checked every third day unless tracked or opened lately`);
+}
+
 async function reschedule(productId: number, minPrice: number | null) {
   const [t] = await sql<{ n: number; dist: number | null }[]>`
     select count(*)::int as n, min((${minPrice}::int - target_price)::float / target_price * 100) as dist
@@ -475,7 +488,9 @@ async function reschedule(productId: number, minPrice: number | null) {
     isSeed: p?.is_seed ?? false, lastViewedDaysAgo: p?.viewed_days ?? null, seedRank: p?.seed_rank ?? 0,
     stable: isStablePrice(lows.map((r) => r.p)),
   });
-  const minutes = intervalFor(priority, { calm: isCalmPrice(lows14.map((r) => r.p)), inStock: minPrice !== null });
+  // A variant someone opened in the last 14 days keeps its tier: people paste the exact colour and size they want.
+  const variant = variants.has(productId) && !(p?.viewed_days !== null && p?.viewed_days !== undefined && p.viewed_days <= 14);
+  const minutes = intervalFor(priority, { calm: isCalmPrice(lows14.map((r) => r.p)), inStock: minPrice !== null, variant });
   await sql`update collection_schedule set priority = ${priority}, interval_minutes = ${minutes}, fail_count = 0,
     last_error = null, locked_until = null, next_check_at = now() + make_interval(mins => ${minutes})
     where product_id = ${productId}`;

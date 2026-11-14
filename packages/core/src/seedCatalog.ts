@@ -72,11 +72,22 @@ export function seedCategory(slug: string): string | null {
   return SEED_CATEGORIES.find((c) => c.models?.test(lower))?.id ?? null;
 }
 
-/** Model key: the slug without its colour, the last word on Kaspi ("…-256gb-nanosim-esim-serebristyi"), and "podarok". */
+/**
+ * Model key: the slug without its colour (the last word on Kaspi), "podarok", and since 14 Nov 2026 its memory size
+ * and SIM kind ("…-256gb-nanosim-esim-serebristyi", "…-8-gb-256-gb-…"): one product per device, not per configuration.
+ */
 export function modelKey(slug: string): string {
   const words = tokens(slug);
   while (words.length > 3 && words[words.length - 1] === "podarok") words.pop();
-  return words.length > 3 ? words.slice(0, -1).join("-") : words.join("-");
+  const base = words.length > 3 ? words.slice(0, -1) : words;
+  const out: string[] = [];
+  for (let i = 0; i < base.length; i++) {
+    const w = base[i]!;
+    if (/^\d+(gb|tb)$/.test(w) || /^(nanosim|esim|dual|sim|nano)$/.test(w)) continue;
+    if (/^\d+$/.test(w) && /^(gb|tb)$/.test(base[i + 1] ?? "")) { i++; continue; }
+    out.push(w);
+  }
+  return out.join("-");
 }
 
 /**
@@ -177,4 +188,50 @@ export function pickRareProducts<T extends { productId: string; slug: string }>(
     out.set(cat, list);
   }
   return new Map(RARE_CATEGORIES.filter((c) => out.has(c.id)).map((c) => [c.id, out.get(c.id)!]));
+}
+
+/**
+ * Breadth before depth (DECISIONS.md, 2026-11-14 "Variants checked less, breadth before depth"): the brand-and-word
+ * rules above kept adding products to the same ~90 categories (11 Nov: 113 products, 2 categories). Kaspi's sitemap
+ * links carry no category, but their first word is nearly always the product type ("kurtka-…", "smesitel-…",
+ * "podguzniki-…"); Kaspi writes the soft sign as a hyphen, so a first word of three letters or fewer is read with the
+ * next ("ser-gi", "kol-tso"). The most common first words we have no product for, a few products each: the aim is
+ * to meet as many kinds of product pages as possible before visitors paste them.
+ */
+export function headWord(slug: string): string | null {
+  const words = tokens(slug);
+  const i = words.findIndex((w) => !/^\d+$/.test(w));
+  if (i < 0) return null;
+  const w = words[i]!;
+  if (w.length <= 3 && words[i + 1] && !/^\d+$/.test(words[i + 1]!)) return `${w}${words[i + 1]}`;
+  return w.length >= 3 ? w : null;
+}
+/** First words that are not a kind of product. */
+const NOT_A_TYPE = new Set(["dlja", "dlya", "the", "mini", "smart", "home", "auto", "art", "lux", "elite", "royal", "italy", "chernyi", "belyi", "novyi", "original", "set", "pro", "max"]);
+
+export function pickBreadth<T extends { productId: string; slug: string }>(candidates: T[], coveredSlugs: string[], perHead: number, heads: number): Map<string, T[]> {
+  const covered = new Set(coveredSlugs.map(headWord).filter((h): h is string => !!h));
+  const groups = new Map<string, T[]>();
+  for (const c of candidates) {
+    const h = headWord(c.slug);
+    if (!h || covered.has(h) || NOT_A_TYPE.has(h)) continue;
+    (groups.get(h) ?? groups.set(h, []).get(h)!).push(c);
+  }
+  const top = [...groups.entries()].sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0])).slice(0, heads);
+  const out = new Map<string, T[]>();
+  for (const [h, list] of top) {
+    const seen = new Set<string>();
+    const picked: T[] = [];
+    for (const c of [...list].sort((a, b) => Number(b.productId) - Number(a.productId))) {
+      // One product per brand within a type (its first two words), so the few picks are different products.
+      const m = modelKey(c.slug);
+      const line = tokens(c.slug).slice(0, 2).join("-");
+      if (seen.has(m) || seen.has(line)) continue;
+      seen.add(m).add(line);
+      picked.push(c);
+      if (picked.length >= perHead) break;
+    }
+    out.set(h, picked);
+  }
+  return out;
 }

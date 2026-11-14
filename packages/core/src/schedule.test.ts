@@ -132,6 +132,11 @@ describe("longer gaps where nothing happens (10 Nov 2026)", () => {
     expect(intervalFor("seed", { calm: false, inStock: false })).toBe(3 * 24 * 60);
     expect(intervalFor("catalog", { calm: true, inStock: false })).toBe(3 * 24 * 60);
   });
+  it("checks a later colour/memory variant every third day, unless someone tracks it", () => {
+    expect(intervalFor("seed", { calm: false, inStock: true, variant: true })).toBe(3 * 24 * 60);
+    expect(intervalFor("catalog", { calm: true, inStock: true, variant: true })).toBe(5 * 24 * 60);
+    expect(intervalFor("tracked", { calm: false, inStock: true, variant: true })).toBe(INTERVAL_MINUTES.tracked);
+  });
   it("never stretches what someone tracks", () => {
     expect(intervalFor("tracked", { calm: true, inStock: false })).toBe(INTERVAL_MINUTES.tracked);
     expect(intervalFor("hot", { calm: true, inStock: false })).toBe(INTERVAL_MINUTES.hot);

@@ -1,3 +1,5 @@
+import { VARIANT_INTERVAL_MINUTES } from "./variants";
+
 /** Adaptive check intervals (minutes). A product costs the same to watch for 1 or 1000 users. */
 export type Priority = "hot" | "tracked" | "seed" | "catalog" | "cold";
 
@@ -66,13 +68,16 @@ export function isCalmPrice(lows: number[]): boolean {
   return lo > 0 && hi <= lo * (1 + CALM.pct / 100);
 }
 
-/** The check interval for a product's tier, stretched for calm catalog products and untracked ones out of stock. */
-export function intervalFor(priority: Priority, p: { calm: boolean; inStock: boolean }): number {
+/**
+ * The check interval for a product's tier, stretched for calm catalog products, untracked ones out of stock, and
+ * later colour/memory variants of a device nobody tracks or opened lately (`variant`, 14 Nov 2026: every third day).
+ */
+export function intervalFor(priority: Priority, p: { calm: boolean; inStock: boolean; variant?: boolean }): number {
   const base = INTERVAL_MINUTES[priority];
   if (priority === "hot" || priority === "tracked") return base;
   if (!p.inStock) return Math.max(base, OUT_OF_STOCK_INTERVAL_MINUTES);
-  if (priority === "catalog" && p.calm) return Math.max(base, CALM.intervalMinutes);
-  return base;
+  const calm = priority === "catalog" && p.calm ? Math.max(base, CALM.intervalMinutes) : base;
+  return p.variant ? Math.max(calm, VARIANT_INTERVAL_MINUTES) : calm;
 }
 
 /** Whether daily lows (the last STABLE.days days, observed days only) say the price is stable. */

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { seedCategory, pickSeedProducts, pickRareProducts, rareCategory, modelKey, familyKey, FAMILY_CAP } from "./seedCatalog";
+import { seedCategory, pickSeedProducts, pickRareProducts, rareCategory, modelKey, familyKey, FAMILY_CAP, headWord, pickBreadth } from "./seedCatalog";
 
 describe("seedCategory", () => {
   it("needs a category word and a known brand", () => {
@@ -49,7 +49,7 @@ describe("seedCategory", () => {
 });
 
 describe("pickSeedProducts", () => {
-  it("takes newest first, one colour per model, capped per category", () => {
+  it("takes newest first, one product per device (any colour or memory size), capped per category", () => {
     const got = pickSeedProducts([
       { productId: "100000001", slug: "apple-iphone-12-128gb-chernyi" },
       { productId: "177318181", slug: "apple-iphone-18-pro-256gb-nanosim-esim-serebristyi" },
@@ -59,11 +59,14 @@ describe("pickSeedProducts", () => {
       { productId: "200000000", slug: "kreslo-ofisnoe-chernoe" },
     ], 2);
     expect([...got.keys()]).toEqual(["phones"]);
-    expect(got.get("phones")!.map((p) => p.productId)).toEqual(["177318415", "177318182"]);
+    expect(got.get("phones")!.map((p) => p.productId)).toEqual(["177318415", "100000001"]);
   });
   it("model key drops the trailing colour and gift tag", () => {
     expect(modelKey("apple-iphone-18-pro-256gb-nanosim-esim-serebristyi")).toBe(modelKey("apple-iphone-18-pro-256gb-nanosim-esim-goluboi"));
     expect(modelKey("apple-iphone-16-128gb-chernyi-podarok")).toBe(modelKey("apple-iphone-16-128gb-belyi-podarok"));
+    expect(modelKey("apple-iphone-18-pro-1tb-dual-esim-goluboi")).toBe(modelKey("apple-iphone-18-pro-256gb-nanosim-esim-serebristyi"));
+    expect(modelKey("samsung-galaxy-a17-8-gb-256-gb-goluboi")).toBe(modelKey("samsung-galaxy-a17-6-gb-128-gb-chernyi-podarok"));
+    expect(modelKey("apple-iphone-18-pro-max-256gb-chernyi")).not.toBe(modelKey("apple-iphone-18-pro-256gb-chernyi"));
   });
   it("keeps consoles, sized monitors and brand-first names", () => {
     expect(seedCategory("sony-playstation-5-slim-digital-edition-geimpad-charging-station-pulse-3d")).toBe("consoles");
@@ -115,5 +118,24 @@ describe("seed priorities", () => {
     const got = pickRareProducts(Array.from({ length: 9 }, (_, i) => ({ productId: String(200000000 + i), slug: `divan-model${i}-seryi` })), 5);
     expect(got.get("sofas")).toHaveLength(5);
     expect(got.get("sofas")![0]!.productId).toBe("200000008");
+  });
+});
+
+describe("breadth", () => {
+  it("reads the product type from the first word, joining a soft-sign split", () => {
+    expect(headWord("kurtka-zhenskaja-chernaja")).toBe("kurtka");
+    expect(headWord("ser-gi-sokolov-zoloto")).toBe("sergi");
+    expect(headWord("27-xiaomi-monitor")).toBe("xiaomi");
+  });
+  it("takes the commonest types we have none of, a few different products each", () => {
+    const c = (id: number, slug: string) => ({ productId: String(id), slug });
+    const got = pickBreadth([
+      c(1, "kurtka-a-b-chernaja"), c(2, "kurtka-a-b-belaja"), c(3, "kurtka-c-d-chernaja"), c(4, "kurtka-e-f-chernaja"),
+      c(5, "smesitel-grohe-x-1"), c(6, "smesitel-grohe-y-2"),
+      c(7, "noutbuk-asus-x-1"), c(8, "dlja-iphone-chehol-1"),
+    ], ["noutbuk-lenovo-a-1"], 2, 10);
+    expect([...got.keys()]).toEqual(["kurtka", "smesitel"]);
+    expect(got.get("kurtka")!.map((p) => p.productId)).toEqual(["4", "3"]);
+    expect(got.get("smesitel")!.map((p) => p.productId)).toEqual(["6"]); // the same line (smesitel-grohe-…) once
   });
 });

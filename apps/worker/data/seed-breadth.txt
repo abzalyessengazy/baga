@@ -1,0 +1,796 @@
+# Breadth pass from data/sitemap-links.txt, 2026-11-14T04:51:00.691Z: the 200 commonest product types we have none of, up to 2 each (392 products).
+# Queue first: pnpm --filter @baga/worker seed data/seed-breadth.txt --front
+
+# min-price 100000
+
+# type: chehol
+https://kaspi.kz/shop/p/chehol-dlja-apple-iphone-18-pro-iphone-17-pro-purpurnyi-181521128/
+https://kaspi.kz/shop/p/chehol-rh-dlja-apple-iphone-16-pro-max-bordovyi-181505560/
+
+# type: nabor
+https://kaspi.kz/shop/p/nabor-nabor-doktora-2665-7-181476500/
+https://kaspi.kz/shop/p/nabor-askeen-domashnii-supermarket-supermarket-181434701/
+
+# type: komplekt
+https://kaspi.kz/shop/p/komplekt-2-spal-nyi-30360654-401307269-navolochki-48x74-sm-hlopok-muslin-181487586/
+https://kaspi.kz/shop/p/komplekt-sofiya-bs-sb-61-razmer-universal-nyi-bordovyi-181485008/
+
+# type: noski
+https://kaspi.kz/shop/p/noski-camel-noski-camel-1-para-korichnevyi-36-44-181501495/
+https://kaspi.kz/shop/p/noski-30469923-810458705-5-par-mul-tikolor-37-41-181491036/
+
+# type: sergi
+https://kaspi.kz/shop/p/ser-gi-bonka-shop-detskie-ser-gi-meditsinskoe-zoloto-tsirkonii-181477954/
+https://kaspi.kz/shop/p/sergi-dilcy-kaplja-v-brendirovannoi-korobke-180353875/
+
+# type: sumka
+https://kaspi.kz/shop/p/sumka-tout-ayanat-st1001-len-chernyi-181497248/
+https://kaspi.kz/shop/p/sumka-kross-bodi-alimso-3710-mln-ekokozha-kofeinyi-korichnevyi-181478529/
+
+# type: sokolov
+https://kaspi.kz/shop/p/sokolov-komplekty-ukrashenii-988060302-93030442-ves-2-64-g-serebro-fianit-178235216/
+https://kaspi.kz/shop/p/sokolov-051636-dlina-17-sm-ves-1-34-g-zoloto-pletenie-jakornoe-177823562/
+
+# type: steklo
+https://kaspi.kz/shop/p/steklo-dlja-apple-iphone-14-pro-181343023/
+https://kaspi.kz/shop/p/steklo-tofura-dlja-apple-iphone-15-pro-max-th300-chernyi-181180008/
+
+# type: kvartsevye
+https://kaspi.kz/shop/p/kvartsevye-a087-nerzhavejuschaja-stal--181477438/
+https://kaspi.kz/shop/p/kvartsevye-korix-ko-nerzhavejuschaja-stal--181450078/
+
+# type: mjagkaja
+https://kaspi.kz/shop/p/mjagkaja-igrushka-lemniscata-vernolli-mishka-v-kapjushone-v-obraze-sticha-44-sm-sinii-181261482/
+https://kaspi.kz/shop/p/mjagkaja-primanka-avo-primanka-dlja-foreli-7-sht-70-mm-belyi-178739566/
+
+# type: shapka
+https://kaspi.kz/shop/p/shapka-18838485858-temno-bezhevyi-52-54-181495595/
+https://kaspi.kz/shop/p/shapka-atma-brand-22-edil-flis-razmer-universal-nyi-seryi-181487498/
+
+# type: podveska
+https://kaspi.kz/shop/p/podveska-30475437-204212508-meditsinskoe-zoloto-bez-vstavok-181404909/
+https://kaspi.kz/shop/p/podveska-romark-kulon---majatnik-natural-nyi-kamen-ametist-180932959/
+
+# type: motok
+https://kaspi.kz/shop/p/motok-30393890-182653944-zelenyi-34-m-50-g-181467834/
+https://kaspi.kz/shop/p/motok-angora-70-mjatnyi-50gr-400m-181414940/
+
+# type: smesitel
+https://kaspi.kz/shop/p/smesitel-heise-02-chernyi-nerzhavejuschaja-stal-tsvet-hrom-181130493/
+https://kaspi.kz/shop/p/smesitel-russani-rs-nero-09-nerzhavejuschaja-stal-tsvet-chernyi-180762884/
+
+# type: ruchka
+https://kaspi.kz/shop/p/ruchka-so-stiraemymi-chernilami-mp-2390-12-sht-0-5-mm-tsvet-chernil-sinii-181471115/
+https://kaspi.kz/shop/p/ruchka-sharikovaja-725649231-1-sht-0-7-mm-tsvet-chernil-sinii-181467633/
+
+# type: kruzhka
+https://kaspi.kz/shop/p/kruzhka-osz-1208-vremja-chaja-300-ml-steklo-181082274/
+https://kaspi.kz/shop/p/kruzhka-1550-350-ml-keramika-181041171/
+
+# type: kabel
+https://kaspi.kz/shop/p/kabel-jasper-lightning-m-usb-typec-m-1-5-m-21708-belyi-181255517/
+https://kaspi.kz/shop/p/kabel-usb-type-a-m-usb-typec-m-1-m-30468026-486180288-chernyi-181219168/
+
+# type: brelok
+https://kaspi.kz/shop/p/brelok-108144111-7-plastik-tekstil-1-sht-181415017/
+https://kaspi.kz/shop/p/brelok-30420614-358920248-12-metall-ekokozha-1-sht-181399769/
+
+# type: koltso
+https://kaspi.kz/shop/p/kol-tso-skelet-razmer-reguliruemyi-bizhuternyi-splav-bez-vstavok-serebristyi-181505188/
+https://kaspi.kz/shop/p/-1-kol-tso-s-shipami-t14-zelenyi-101986413/
+
+# type: vozdushnyi
+https://kaspi.kz/shop/p/vozdushnyi-shar-falali-tsifra-1-beloe-zoloto-metallik-1-sht-zolotistyi-belyi-181114127/
+https://kaspi.kz/shop/p/vozdushnyi-plastilin-180681386/
+
+# type: kolodki
+https://kaspi.kz/shop/p/kolodki-wxqp-zadnie-340993-179048733/
+https://kaspi.kz/shop/p/kolodki-sangsin-brake-perednie-sp1155-178928957/
+
+# type: maska
+https://kaspi.kz/shop/p/maska-cherep-181398258/
+https://kaspi.kz/shop/p/maska-dlja-sna-vizora-hlopok-kitaiskaja-krapiva-rami-5-sht-181074776/
+
+# type: kontaktnye
+https://kaspi.kz/shop/p/kontaktnye-linzy-quanmei-white-ring-0-krivizna-8-5-na-polgoda-2-sht-181388034/
+https://kaspi.kz/shop/p/kontaktnye-30425507-606493022-chernyi-162647084/
+
+# type: lenta
+https://kaspi.kz/shop/p/lenta-rubikon-rubikon-4-sht-57-kg-181243719/
+https://kaspi.kz/shop/p/lenta-sid-nova-sn-espblue-64-1-sht-77-kg-181220069/
+
+# type: stellox
+https://kaspi.kz/shop/p/stellox-uplotnitel-noe-kol-tso-1125797sx-178832324/
+https://kaspi.kz/shop/p/stellox-sailentblok-rychaga-podveski-7700524sx-178825442/
+
+# type: kepka
+https://kaspi.kz/shop/p/kepka-195030555224-razmer-56-chernyi-180797927/
+https://kaspi.kz/shop/p/kepka-sa-3-razmer-universal-nyi-bordovyi-180711336/
+
+# type: svecha
+https://kaspi.kz/shop/p/svecha-zazhiganija-hkt-pn-138-181083771/
+https://kaspi.kz/shop/p/svecha-tsilindr-6-sht-13-sm-180366035/
+
+# type: schetka
+https://kaspi.kz/shop/p/schetka-30460626-schjotka-skrebok-dlja-snega-i-l-da-2-v-1-66-sm-1-sht-181475386/
+https://kaspi.kz/shop/p/schetka-karkasnaja-sirius-16-400-mm-1-sht-181123824/
+
+# type: patron
+https://kaspi.kz/shop/p/patron-radiator-pechki-prs2104-180789316/
+https://kaspi.kz/shop/p/patron-opora-dvigatelja-pse3315-180636945/
+
+# type: podushka
+https://kaspi.kz/shop/p/podushka-valik-solomenka-pozitsioner-dlja-novorozhdjonnyh-181283810/
+https://kaspi.kz/shop/p/podushka-nikstory-aq-tilek-shelk-shelkoprjada-iskusstvennyi-lebjazhii-puh-50x70-sm-181195192/
+
+# type: perchatki
+https://kaspi.kz/shop/p/perchatki-mirava-perchatki-zhenskie-chernye-razmer-universal-nyi-chernyi-181486431/
+https://kaspi.kz/shop/p/perchatki-wow-2022-razmer-universal-nyi-chernyi-181410544/
+
+# type: remen
+https://kaspi.kz/shop/p/remen-kanbailey-c11a-iskusstvennaja-kozha-105-sm-chernyi-181452415/
+https://kaspi.kz/shop/p/remen-1s-quick-chernyi-181278742/
+
+# type: remeshok
+https://kaspi.kz/shop/p/remeshok-mircase-dlja-huawei-watch-gt-4-watch-gt-5-watch-gt-6-watch-gt-7-rozovyi-181499311/
+https://kaspi.kz/shop/p/remeshok-soturl-dlja-xiaomi-mi-band-4-chernyi-181341700/
+
+# type: ljustra
+https://kaspi.kz/shop/p/ljustra-imperija-ljustr-87-110-bk-led-kol-vo-lamp-5-sht-chernyi-181251229/
+https://kaspi.kz/shop/p/ljustra-abc-60792-led-kol-vo-lamp-1-sht-zolotistyi-181125356/
+
+# type: konstruktor
+https://kaspi.kz/shop/p/konstruktor-zeni-building-blocks-837282516-detalei-46-sht-181484659/
+https://kaspi.kz/shop/p/konstruktor-minecraft-minecraft-magnet-block-6526878-detalei-60-sht-181349881/
+
+# type: podarochnyi
+https://kaspi.kz/shop/p/podarochnyi-nabor-dlja-mal-chika-detskii-nabor-181442995/
+https://kaspi.kz/shop/p/podarochnyi-paket-novogodnii-12-sht-polietilen-vysokogo-davlenija-18h26-sm-181281456/
+
+# type: wxqp
+https://kaspi.kz/shop/p/wxqp-patrubok-112651-180552507/
+https://kaspi.kz/shop/p/wxqp-rulevaja-tjaga-361399-179049117/
+
+# type: pusety
+https://kaspi.kz/shop/p/pusety-zhenskie-ser-gi-pusety-klever-cherno-belye-titan-bez-vstavok-180898308/
+https://kaspi.kz/shop/p/pusety-diamant-51-322-03027-2-ves-1-7-g-zoloto-perlamutr-180582039/
+
+# type: zakolka
+https://kaspi.kz/shop/p/zakolka-krab-2-sht-chernyi-serebristyi-181508074/
+https://kaspi.kz/shop/p/zakolka-bant-5-sm-2-sht-oranzhevyi-181033748/
+
+# type: derzhatel
+https://kaspi.kz/shop/p/derzhatel-union-power-fly100-chernyi-181251443/
+https://kaspi.kz/shop/p/derzhatel-dari-queen-sinii-181140685/
+
+# type: baltekstil
+https://kaspi.kz/shop/p/bal-tekstil-kover-200x200-sm-w666c-red-oscar-kruglaja-178015898/
+
+# type: nasos
+https://kaspi.kz/shop/p/nasos-poverhnostnyi-tsirkuljatsionnyi-fancy-chlf-4-6-181200037/
+https://kaspi.kz/shop/p/nasos-otopitelja-elektricheskii-18769644-284944572-220-v-180525635/
+
+# type: raspashnoi
+https://kaspi.kz/shop/p/raspashnoi-shkaf-90x200h50-sm-korichnevyi-chernyi-181282799/
+
+# type: kukla
+https://kaspi.kz/shop/p/kukla-reborn-15378081-realistichnaja-kukla-reborn-kolektsionnaja-cp1306-03018-01-45-sm-aksessuary-v-komplekte-181152535/
+https://kaspi.kz/shop/p/kukla-model-30418555-653824455-kukla-model-7-17-sm-181064226/
+
+# type: stul
+https://kaspi.kz/shop/p/stul-30471810-211990335-87x53x44-sm-kremovyi-1-sht--180509314/
+https://kaspi.kz/shop/p/stul-30409714-897676895-80x50x45-sm-chernyi-bezhevyi-1-sht--180432307/
+
+# type: organaizer
+https://kaspi.kz/shop/p/organaizer-plastik-derevo-181421594/
+https://kaspi.kz/shop/p/organaizer-doski-bezhevyi-181140090/
+
+# type: igrushka
+https://kaspi.kz/shop/p/igrushka-mjalka-17919890-020012447-mul-tikolor-181246362/
+https://kaspi.kz/shop/p/igrushka-podveska-babygym-stoika-montessori-5-igrushek-180942559/
+
+# type: plenka
+https://kaspi.kz/shop/p/plenka-mavlen-dlja-apple-iphone-17-pro-181179630/
+https://kaspi.kz/shop/p/plenka-upakovochnaja-20-askan-20-sht-58h58-sm-178128992/
+
+# type: rezinka
+https://kaspi.kz/shop/p/rezinka-bant-2-sht-oranzhevyi-181380261/
+https://kaspi.kz/shop/p/rezinka-aksessuar-1-sht-mul-tikolor-181179806/
+
+# type: nastol
+https://kaspi.kz/shop/p/nastol-nyi-organaizer-moon-predmetov-1-sht-belyi-181305226/
+https://kaspi.kz/shop/p/nastol-naja-lampa-winsfire-plisse-led-3-vt-metall-181140730/
+
+# type: kartina
+https://kaspi.kz/shop/p/kartina-po-nomeram-askeen-chernyi-kot-holst-na-podramnike-20x20-sm-181211347/
+https://kaspi.kz/shop/p/kartina-gornyi-peizazh-s-ornamentom-50x70-sm-180671028/
+
+# type: girljanda
+https://kaspi.kz/shop/p/girljanda-zanaves-korix-tsvet-svechenija-holodnyi-belyi-3-m-181407206/
+https://kaspi.kz/shop/p/girljanda-nit-led-tsvet-svechenija-sinii-10-m-181227523/
+
+# type: podstavka
+https://kaspi.kz/shop/p/podstavka-home-time-sg-22-serebristyi-181471535/
+https://kaspi.kz/shop/p/podstavka-shagyn-alem-dlja-chasov-plastik-181429459/
+
+# type: penal
+https://kaspi.kz/shop/p/penal-sushi-30350226-166068927-zastezhka-molnija-rozovyi-181201502/
+https://kaspi.kz/shop/p/penal-askeen-karas-zastezhka-molnija-mul-tikolor-180531875/
+
+# type: febest
+https://kaspi.kz/shop/p/febest-uplotnitel-noe-kol-tso-ringol054pcs10-169393101/
+https://kaspi.kz/shop/p/febest-kol-tso-uplotnitel-noe-forsunki-vpryska-topliva-ringfl020pcs10-169124261/
+
+# type: blesna
+https://kaspi.kz/shop/p/blesna-30413463-604998342-20-sht-70-mm-mul-tikolor-180835894/
+https://kaspi.kz/shop/p/blesna-taifun-taifun-blesna-9-sm-model-1012-weight-21-so-1-sht-90-mm-zoloto-180465126/
+
+# type: kovrik
+https://kaspi.kz/shop/p/kovrik-dlja-posudy-30477905-878349913-eva-181381915/
+https://kaspi.kz/shop/p/kovrik-18605102-124323150-60x40-sm-hlopok-181121952/
+
+# type: skovoroda
+https://kaspi.kz/shop/p/skovoroda-qsd-lidpan-lidpan-22-chugun-181232992/
+https://kaspi.kz/shop/p/skovoroda-zwillon-zw-2928-zw-2928-28-nerzhavejuschaja-stal--181227087/
+
+# type: chemodan
+https://kaspi.kz/shop/p/chemodan-yerturan-126-polipropilen-40-l-grafit-181414541/
+https://kaspi.kz/shop/p/chemodan-bobo-too-qazaq-sumka-polikarbonat-s-polikarbonat-45-l-belyi-181132587/
+
+# type: kole
+https://kaspi.kz/shop/p/kol-e-bari-siz-ushin-k-belek03-dlina-49-sm-ves-5-g-serebro-tsirkon-180756082/
+
+# type: dlina
+https://kaspi.kz/shop/p/888-dlina-18-5-sm-natural-nyi-kamen-turmalin-bez-vstavok-181429342/
+https://kaspi.kz/shop/p/30288406-675029222-dlina-45-sm-nerzhavejuschaja-stal-almaznoe-steklo-180973644/
+
+# type: aelita
+https://kaspi.kz/shop/p/aelita-perets-sladkii-agapovskii-181436894/
+https://kaspi.kz/shop/p/aelita-romashka-dekorativnaja-mnogoletnjaja-181268489/
+
+# type: figurka
+https://kaspi.kz/shop/p/figurka-645555-55-sm-178801466/
+https://kaspi.kz/shop/p/figurka-podvizhnaja-3d-robot---podrazdelenie-prizrak-13-5-sm-1-sht-176701186/
+
+# type: zubr
+https://kaspi.kz/shop/p/zubr-akkumuljator-zubr-6ct-95ah---zubr-95-ach-prjamaja-ultra-asia-95-ach-obratnaja-prjamaja-178126188/
+https://kaspi.kz/shop/p/zubr-mineral-noe-iso-vg-100-21-0007-913-1-l-173430150/
+
+# type: papka
+https://kaspi.kz/shop/p/papka-vkladysh-obo-fail-odnorazovyi-60mkm-100sht-a3-prozrachnyi-181408991/
+https://kaspi.kz/shop/p/papka-skorosshivatel-30300348-701138503-a4-mul-tikolor-180658145/
+
+# type: prostynja
+https://kaspi.kz/shop/p/prostynja-garmonija-038566666-200x220-poplin-181335505/
+https://kaspi.kz/shop/p/prostynja-786347499-786347499-180x200-hlopok-muslin-veljur-181071293/
+
+# type: nakleika
+https://kaspi.kz/shop/p/nakleika-yt0711581439659-60x7-sm-181225803/
+https://kaspi.kz/shop/p/nakleika-na-avto-vzgljad-devushki-anime-razryv-19-8-h-13-4-sm--181162620/
+
+# type: beisbolka
+https://kaspi.kz/shop/p/beisbolka-forty-45-five-beisbolka-snapback-brooklyn-razmer-universal-nyi-chernyi-180948929/
+https://kaspi.kz/shop/p/beisbolka-kazanbas-ncps0014-razmer-57-58-korichnevyi-180787192/
+
+# type: zoloto
+https://kaspi.kz/shop/p/zoloto-rossii-ag-br-048-dlina-19-sm-ves-2-19-g-zoloto-pletenie-troinoi-romb-178761854/
+https://kaspi.kz/shop/p/zoloto-trade-0293838-dlina-reguliruemyi-sm-ves-4-15-g-serebro-pletenie-fantaziinoe-173403892/
+
+# type: forma
+https://kaspi.kz/shop/p/forma-clinch-clinch-bl-xl-forma-dlja-boksa-krasnyi-170-176-180994787/
+https://kaspi.kz/shop/p/forma-dlja-boksa-clinch-clinch-bl-xxl-forma-dlja-boksa-sinii-180-190-180994766/
+
+# type: kuskovoe
+https://kaspi.kz/shop/p/kuskovoe-mylo-tualetnoe-30483246-932775035-parfmirovannoe-1-sht-181270735/
+https://kaspi.kz/shop/p/kuskovoe-camay-mylo-tualetnoe-magique-85-g-112213825/
+
+# type: bloknot
+https://kaspi.kz/shop/p/bloknot-aiu-otyr-partada-tsvety-a5-80-l-korichnevyi-181407440/
+https://kaspi.kz/shop/p/bloknot-allany-99-k-rkem-es-mder-a5-54-l-mul-tikolor-180973499/
+
+# type: nurmax
+https://kaspi.kz/shop/p/nurmax-bolt-stal-m6x20-mm-1-sht-164393469/
+https://kaspi.kz/shop/p/nurmax-plastina-160x50x1-8-mm-1-sht-ps50160f-152991008/
+
+# type: mirpolikov
+https://kaspi.kz/shop/p/mirpolikov-83773927mp-universal-nyi-seryi-chernyi-170062855/
+https://kaspi.kz/shop/p/mirpolikov-2929387mrset-dlja-byd-destroyer-05-2024-2026-chernyi-169889133/
+
+# type: butylka
+https://kaspi.kz/shop/p/butylka-tupperware-butylka-310ml-s-klapanom-0-31-l-mul-tikolor-flip-top-polipropilen-181409414/
+https://kaspi.kz/shop/p/butylka-30478893-jq246-3-abs-plastik-181204323/
+
+# type: podguzniki
+https://kaspi.kz/shop/p/podguzniki-trusiki-bafuri-bafuri-xl-42-sht-180752341/
+https://kaspi.kz/shop/p/podguzniki-ainalym-luxury-6-xxl-42-sht-179083676/
+
+# type: zhidkoe
+https://kaspi.kz/shop/p/zhidkoe-sredstvo-aquades-dlja-myt-ja-stekol-parfjum-5l-do--25c-181368431/
+https://kaspi.kz/shop/p/zhidkoe-mylo-tualetnoe-99-home-krem-mylo-ustranjajuschee-zapahi-svezhest-i-mjata-300-ml-180763015/
+
+# type: platok
+https://kaspi.kz/shop/p/platok-moda-italia-sh01-sherst-90-x-90-sm-181342308/
+https://kaspi.kz/shop/p/platok-6252-kashemir-90-x-90-sm-180981503/
+
+# type: lynxauto
+https://kaspi.kz/shop/p/lynxauto-remkomplekt-tormoznogo-supporta-bc-2104-180632496/
+https://kaspi.kz/shop/p/lynxauto-uplotnitel-svechnogo-kolodtsa-sg2530-180491033/
+
+# type: tumba
+https://kaspi.kz/shop/p/tumba-666727669-40x50x40-sm-belyi-180687520/
+https://kaspi.kz/shop/p/tumba-s-rakovinoi-uno-60x83x47-sm-belyi-180511826/
+
+# type: matrix
+https://kaspi.kz/shop/p/matrix-maska-mega-sleek-dlja-razglazhivanija-volos-500-ml-172950036/
+https://kaspi.kz/shop/p/matrix-skoby-dlja-steplera-41118-1000-sht-170420330/
+
+# type: korobka
+https://kaspi.kz/shop/p/korobka-aspro-1-sht-5h5h4-5-sm-181250512/
+https://kaspi.kz/shop/p/korobka-1-sht-30h30h30-sm-180929151/
+
+# type: paket
+https://kaspi.kz/shop/p/paket-pischevye-pakety-na-rezinke-dlja-holodil-nika-i-posudy-i-edy-polietilen-25-sm-200-sht-181410787/
+https://kaspi.kz/shop/p/paket-polietilenovye-pischevye-pakety-dlja-edy-shapochka-dlja-posudy-200sht-dlja-hranenija-produktov-181395127/
+
+# type: chasy
+https://kaspi.kz/shop/p/chasy-elektronnye-30471866-234106896-plastik-polimer-181255079/
+https://kaspi.kz/shop/p/chasy-kvartsevye-velasco-vs-clck-silver-001-plastik-180947411/
+
+# type: diski
+https://kaspi.kz/shop/p/diski-patron-zadnie-pbd2705-180922243/
+https://kaspi.kz/shop/p/diski-masuma-perednie-bd-1209-180921746/
+
+# type: sharf
+https://kaspi.kz/shop/p/sharf-30457559-128509051-imitatsija-kashemira-190-x-65-sm-181281590/
+https://kaspi.kz/shop/p/sharf-rukko-shrf-poliester-210-x-39-sm-181127582/
+
+# type: navolochka
+https://kaspi.kz/shop/p/navolochka-dekorativnaja-marison-flanelevaja-s-ob-jomnym-uzorom-chjorno-seraja-45-45-sm-181432305/
+https://kaspi.kz/shop/p/navolochka-garmonija-936847887-60x60-sinii-belyi-181335845/
+
+# type: leska
+https://kaspi.kz/shop/p/leska-15909587-proboss-f-10m-4mm-leska-trimmera-1-sht-178218288/
+https://kaspi.kz/shop/p/leska-soroka-00162650-dlina-40-sm-ves-0-3-g-serebro-bez-vstavok-173450746/
+
+# type: nasadka
+https://kaspi.kz/shop/p/nasadka-dlja-rezki-dlja-ushm-30482133-pks-125375968-1-sht-180916287/
+https://kaspi.kz/shop/p/nasadka-roborock-hct261rr-dlja-robotov-pylesosov-roborock-6-sht--180916201/
+
+# type: zerkalo
+https://kaspi.kz/shop/p/zerkalo-30403372-168008713-80x60-sm-nastennoe-181104912/
+https://kaspi.kz/shop/p/zerkalo-09815-32x46-sm-nastol-noe-180416792/
+
+# type: perehodnik
+https://kaspi.kz/shop/p/perehodnik-tohom-usb-typec-m-3-5-mm-jack-f-0-05-m-audioadapter-usb-type-c-3-5-mm-chernyi-181256518/
+https://kaspi.kz/shop/p/perehodnik-yoowi-usb-3-2---usb-type-c-u310-181035510/
+
+# type: vykljuchatel
+https://kaspi.kz/shop/p/vykljuchatel-besprovodnoi-1-klavishnyi-luminary-a22-belyi-181230091/
+https://kaspi.kz/shop/p/vykljuchatel-klavishnyi-zarja-vt-04-chernyi-178726250/
+
+# type: brosh
+https://kaspi.kz/shop/p/brosh-larey-klever9755786557-bizhuternyi-splav-kristally-181162436/
+https://kaspi.kz/shop/p/brosh-billiza-n3-etno-serebristyi-bb-01-bizhuternyi-splav-metall-plastik-180812842/
+
+# type: avon
+https://kaspi.kz/shop/p/avon-uvlazhnjajuschii-los-on-dlja-tela-mindal-i-roza-los-on-dlja-tela-400-ml-180907323/
+https://kaspi.kz/shop/p/avon-today-parfjumernaja-voda-edp-2-sht-po-50-ml-dlja-zhenschin-178857164/
+
+# type: tsep
+https://kaspi.kz/shop/p/tsep-larey-kar8766775r556677-dlina-70-sm-bizhuternyi-splav-metall-emal--180825709/
+https://kaspi.kz/shop/p/tsep-viart-tsep-dlina-45-5-sm-bizhuternyi-splav-stal-bez-vstavok-180485508/
+
+# type: odejalo
+https://kaspi.kz/shop/p/odejalo-nikstory-aq-tilek-200x220-zimnee-181357102/
+https://kaspi.kz/shop/p/odejalo-tac-77746-155x215-zimnee-181128260/
+
+# type: filtr
+https://kaspi.kz/shop/p/fil-tr-claron-pure-100-stepenei-ochistki-6-181424213/
+https://kaspi.kz/shop/p/835485080-fil-tr-vody-dlja-stiral-noi-mashiny-protochnyi-fil-tr-dlja-vody-fil-tr-dlja-dusha-172068502/
+
+# type: tkan
+https://kaspi.kz/shop/p/tkan-sarzha-podkladochnyi-poliester-dlina-100-sm-belo-bezhevyi-molochnyi-shampan-svetlo-bezhevyi-181238176/
+https://kaspi.kz/shop/p/tkan-vual-dlina-300-sm-zheltyi-181078662/
+
+# type: obodok
+https://kaspi.kz/shop/p/obodok-olen-i-rozhki-s-ushkami-razmer-universal-nyi-1-sht-181079117/
+https://kaspi.kz/shop/p/obodok-1-sht-jarko-rozovyi-180684789/
+
+# type: semena
+https://kaspi.kz/shop/p/semena-altaja-kapusta-belokachannaja-sibirskii-gigant-172957523/
+https://kaspi.kz/shop/p/semena-kunzhuta-chernye-ochischennye-omega-15-gr-166718315/
+
+# type: estel
+https://kaspi.kz/shop/p/estel-professional-otium-diamond-dlja-gladkosti-shampun-1000-ml-180654270/
+https://kaspi.kz/shop/p/estel-lauder-ddh-double-wear-stay-in-place-makeup-tonal-nyi-krem-1n0-30-ml-167609105/
+
+# type: topper
+https://kaspi.kz/shop/p/topper-strong-sleep-seo-180x200x8-sm-179024909/
+https://kaspi.kz/shop/p/topper-home-nova-180x200x6-sm-178845589/
+
+# type: novogodnjaja
+https://kaspi.kz/shop/p/novogodnjaja-elka-arlankids-elka-iskusstvennaja-150-sm-pvh-181379138/
+https://kaspi.kz/shop/p/novogodnjaja-iskusstvennaja-elka-omir-salti-60-sm-179056502/
+
+# type: komod
+https://kaspi.kz/shop/p/komod-euromebel-rem-83-6x39x82-5-sm-bezhevyi-svetlo-korichnevyi-178920369/
+https://kaspi.kz/shop/p/komod-estet-peony-bloom-tsvetenie-piona-95-5x40x91-sm-birjuzovyi-korichnevyi-178891229/
+
+# type: gamma
+https://kaspi.kz/shop/p/gamma-d-oro-bubble-gum-100-ml-181384695/
+https://kaspi.kz/shop/p/gamma-lotok-s-reshetkoi-seryi-178250027/
+
+# type: kist
+https://kaspi.kz/shop/p/kist-dlja-tonkih-linii-derevo-1-sht-181406624/
+https://kaspi.kz/shop/p/kist-kulinarnaja-30482133-pksc349734360-1-sht-silikon-180911287/
+
+# type: polotentse
+https://kaspi.kz/shop/p/polotentse-poncho-poncho-60x60-sm-1-sht-mikrofibra-180793398/
+https://kaspi.kz/shop/p/polotentse-mikki-45x45-sm-1-sht-poliester-neilon-178927806/
+
+# type: statuetka
+https://kaspi.kz/shop/p/statuetka-tykva-vulu-2-sm-latun--180687802/
+https://kaspi.kz/shop/p/statuetka-17968294-463556364-7-sm-plastik-178886594/
+
+# type: magnit
+https://kaspi.kz/shop/p/magnit-suvenir-suvenirnyi-magnit-hellouin---happy-halloween-8053mm-1-sht-181380875/
+https://kaspi.kz/shop/p/magnit-krasnyi-magnit-krasnyi-180410604/
+
+# type: sinteticheskoe
+https://kaspi.kz/shop/p/sinteticheskoe-formula-advanced-plus-10w-40-4-l-180758838/
+https://kaspi.kz/shop/p/sinteticheskoe-zic-x7-5w30-lpg-5w-30-1-l-180546367/
+
+# type: koshelek
+https://kaspi.kz/shop/p/koshelek-chandarah-sl-33-iskusstvennaja-kozha-chernyi-181132392/
+https://kaspi.kz/shop/p/koshelek-07091989-iskusstvennaja-kozha-belyi-korichnevyi-180819258/
+
+# type: krjuchok
+https://kaspi.kz/shop/p/krjuchok-dlja-shiny-30405001-851082987-50-sht-metall-180900170/
+https://kaspi.kz/shop/p/krjuchok-krjuchki-vintovye-samoklejaschiesja-4-sht-nerzhavejuschaja-stal-plastik-179004046/
+
+# type: barsetka
+https://kaspi.kz/shop/p/barsetka-dk-brand-017-1-natural-naja-kozha-korichnevyi-178975104/
+https://kaspi.kz/shop/p/barsetka-18206306-1119644397-natural-naja-kozha-chernyi-178954999/
+
+# type: dekorativnyi
+https://kaspi.kz/shop/p/dekorativnyi-kovrik-60x200-sm-shaggy-cl104188-prjamougol-naja-181469674/
+https://kaspi.kz/shop/p/dekorativnyi-svetil-nik-676043521-plastik-181123117/
+
+# type: mjach
+https://kaspi.kz/shop/p/mjach-brftbl-brftbl-dlja-futbola-razmer-5-181270430/
+https://kaspi.kz/shop/p/mjach-mjach-dlja-voleibola-118-dlja-voleibola-razmer-5-181134064/
+
+# type: konteiner
+https://kaspi.kz/shop/p/konteiner-dlja-sypuchih-plastik-181383656/
+https://kaspi.kz/shop/p/konteiner-babybox-ala-konteiner-dlja-detskoi-molochnoi-smesi-i-suhogo-pitanija-250-ml-250-ml-plastik-rozovyi-180762766/
+
+# type: golfy
+https://kaspi.kz/shop/p/gol-fy-17421040-360037843-temno-korichnevyi-35-40-181448744/
+
+# type: sadoer
+https://kaspi.kz/shop/p/sadoer-syvorotka-eyelash-long-thick-3-sht-po-15-ml-180648572/
+https://kaspi.kz/shop/p/sadoer-dlja-zaschity-i-smjagchenija-kozhi-vazelin-kosmeticheskii-dlja-tela-100-ml-178073852/
+
+# type: kongo
+https://kaspi.kz/shop/p/kongo-ser-gi-lesnye-griby-tsinkovyi-splav-bez-vstavok-180974021/
+https://kaspi.kz/shop/p/kongo-altyn-451645163400-ves-2-9-g-zoloto-bez-vstavok-180767955/
+
+# type: datchik
+https://kaspi.kz/shop/p/datchik-urovnja-topliva-vdo-226-181008494/
+https://kaspi.kz/shop/p/datchik-utechki-gaza-skyriver-provodnoi-skyriver-belyi-180756084/
+
+# type: detskii
+https://kaspi.kz/shop/p/detskii-nabor-korzhyn-detskii-nabor-180940549/
+https://kaspi.kz/shop/p/detskii-pelenal-nyi-komod-lynro-baby-80-80x45x90-sm-belyi-180571605/
+
+# type: batareika
+https://kaspi.kz/shop/p/batareika-cr2016-gp-5-sht-181080197/
+https://kaspi.kz/shop/p/batareika-aa-5-sht-180798368/
+
+# type: veshalka
+https://kaspi.kz/shop/p/veshalka-napol-naja-adlur-025786043-derevo-40x167-sm-korichnevyi-181276533/
+https://kaspi.kz/shop/p/veshalka-nastennaja-merwood-184919891-ldsp-veljur-75x100-sm-bezhevyi-180975862/
+
+# type: marker
+https://kaspi.kz/shop/p/marker-deli-mate-u102-black-3-sht-1-5-mm-chjornyi-181342739/
+https://kaspi.kz/shop/p/marker-fenlot-fl-7006-3-sht-2-5-mm-chernyi-krasnyi-sinii-180701645/
+
+# type: bumaga
+https://kaspi.kz/shop/p/bumaga-dlja-vypechki-bez-brenda-dlja-vypechki-181493439/
+https://kaspi.kz/shop/p/bumaga-073566626-b7-6-sht-samoklejuscheesja-pokrytie-180959585/
+
+# type: yusuf
+https://kaspi.kz/shop/p/yusuf-hali-kover-150x230-sm-gold-shaggy-prjamougol-naja-178247717/
+https://kaspi.kz/shop/p/yusuf-carpets-kover-200x300-sm-trend-7659-prjamougol-naja-178065991/
+
+# type: ikea
+https://kaspi.kz/shop/p/ikea-otdel-nostojaschaja-70605322-nerzhavejuschaja-stal--178141635/
+https://kaspi.kz/shop/p/ikea-polotentse-vogshjon-70x140-sm-1-sht-hlopok-175086110/
+
+# type: obschaja
+https://kaspi.kz/shop/p/obschaja-tetrad-23678-1-48-l-a5-lineika-mjagkaja-oblozhka-1-sht-178944168/
+
+# type: panama
+https://kaspi.kz/shop/p/panama-30308834-966644312-razmer-57-molochnyi-180915984/
+https://kaspi.kz/shop/p/panama-103885069668-razmer-universal-nyi-chernyi-180897668/
+
+# type: kosmetichka
+https://kaspi.kz/shop/p/kosmetichka-pljush-belyi-10-3x19-5-sm-181130291/
+https://kaspi.kz/shop/p/kosmetichka-tekstil-pljush-rozovyi-10x17-sm-180446409/
+
+# type: galstuk
+https://kaspi.kz/shop/p/galstuk-100-steps-galstuk555-atlas-goluboi-180951948/
+https://kaspi.kz/shop/p/galstuk-09387-atlas-35-sm-sinii-180677180/
+
+# type: akkumuljator
+https://kaspi.kz/shop/p/akkumuljator-devon-5165-li-12-30-li-ion-12-v-3-ach-1-sht-181002849/
+https://kaspi.kz/shop/p/akkumuljator-aa-4-sht-180800777/
+
+# type: tablichka
+https://kaspi.kz/shop/p/tablichka-millart-dushevaja-kabina-16x10-sm-181064954/
+https://kaspi.kz/shop/p/tablichka-pros-ba-ne-stavit-mashiny-u-shlagbauma-50x17-sm-180662750/
+
+# type: udlinitel
+https://kaspi.kz/shop/p/udlinitel-zyons-mrm-5-3-m-181506412/
+https://kaspi.kz/shop/p/udlinitel-a-case-316-3m-2-3-m-181404470/
+
+# type: nakleiki
+https://kaspi.kz/shop/p/nakleiki-nabor-anime-chelovek-benzopila-chainsaw-man-emin-nova-50-181500717/
+https://kaspi.kz/shop/p/nakleiki-rulon-naleiki-milye-500-181446959/
+
+# type: shljapa
+https://kaspi.kz/shop/p/shljapa-zile-211026-razmer-universal-nyi-korichnevyi-181250898/
+https://kaspi.kz/shop/p/shljapa-panama-iz-shersti-razmer-universal-nyi-chernyi-181208178/
+
+# type: disk
+https://kaspi.kz/shop/p/disk-otreznoi-po-keramogranitu-i-po-kafelju-125x14h2-4-mm-topstone-tsdg-125f-178884543/
+https://kaspi.kz/shop/p/disk-stseplenija-jumz-feredo-na-sharikah-belar-30440472-767721576-175113289/
+
+# type: hyundai
+https://kaspi.kz/shop/p/hyundai-kia-nakladka-861901r000-hyundai-accent-179014612/
+https://kaspi.kz/shop/p/30445319-538188445-hyundai-custin-2023-chernyi-178924455/
+
+# type: klassicheskii
+https://kaspi.kz/shop/p/klassicheskii-termos-ertu-ertu-sus304-cute-rabbit-t29606-0-32-l-rozovyi-181245952/
+https://kaspi.kz/shop/p/klassicheskii-runchuan-tape-0-9-500-cm-white-5-m-belyi-180835964/
+
+# type: skatert
+https://kaspi.kz/shop/p/skatert-skatert-prazdnichnaja-hellouin-chernaja-s-letuchimi-myshami-i-paukami-30391640-halloween-detskaja-180x120-sm-eva-181061644/
+https://kaspi.kz/shop/p/skatert-dastarhan-30481806-538531163-200x140-sm-viskoza-180763421/
+
+# type: katushka
+https://kaspi.kz/shop/p/katushka-zazhiganija-stellox-61-00013-sx-178268939/
+https://kaspi.kz/shop/p/katushka-s-tsep-ju-045580440-1-sht-176649233/
+
+# type: muzykal
+https://kaspi.kz/shop/p/muzykal-nyi-instrument-detskaja-gitara-huntrx-plastik-180583257/
+https://kaspi.kz/shop/p/muzykal-naja-igrushka-karaoke-k-pop-plastik-abs-plastik-178992190/
+
+# type: sufix
+https://kaspi.kz/shop/p/sufix-chehol-dlja-avtomobil-nyh-shtorok-sf1002-178221985/
+https://kaspi.kz/shop/p/sufix-vozdushnyi-fil-tr-so1034-178151133/
+
+# type: palatka
+https://kaspi.kz/shop/p/palatka-hatter-h-01-dlja-rybalki-kolichestvo-mest-4-zelenyi-180593454/
+https://kaspi.kz/shop/p/palatka-detskaja-igrovaja-color-craft-ot-happy-baby-domik-detskii-igrovoi-palatka-raskraska-178857098/
+
+# type: stellazh
+https://kaspi.kz/shop/p/stellazh-napol-nyi-1212954-78x25-5x127-sm-seryi-180422575/
+https://kaspi.kz/shop/p/stellazh-nad-unitaz-30478870-294968117-47x50x155-sm-belyi-177731077/
+
+# type: oboi
+https://kaspi.kz/shop/p/oboi-limonta-orbity-33010-osnova-flizelin-10x1-m--181207147/
+https://kaspi.kz/shop/p/oboi-deco-style-vektor---imitatsija-dekorativnyh-panelei-gy500901mn-osnova-flizelin-10x1-06-m--178953455/
+
+# type: bumazhnye
+https://kaspi.kz/shop/p/bumazhnye-salfetki-bouquet-novogodnie-20-sht-181071078/
+https://kaspi.kz/shop/p/bumazhnye-polotentsa-cotton-towels-80-sht-180530178/
+
+# type: sibrteh
+https://kaspi.kz/shop/p/sibrteh-stremjanka-sibrteh-97726-stal--163474025/
+https://kaspi.kz/shop/p/sibrteh-nozh-dlja-snjatija-izoljatsii-nozh-dielektricheskii-sibrteh-do-1000-v-1-sht-162666685/
+
+# type: korzina
+https://kaspi.kz/shop/p/korzina-14833032-422628791-43x43x30-sm-plastik-181199437/
+https://kaspi.kz/shop/p/korzina-5801-26x19x14-sm-plastik-181045014/
+
+# type: palantin
+https://kaspi.kz/shop/p/palantin-555-19-l-kashemir-pashmina-180-x-70-sm-181260369/
+https://kaspi.kz/shop/p/palantin-30278460-746021332-viskoza-poliester-imitatsija-kashemira-200-x-70-sm-181127897/
+
+# type: vneshnii
+https://kaspi.kz/shop/p/vneshnii-akkumuljator-battery-pack-10000-mach-belyi-181475023/
+https://kaspi.kz/shop/p/30405320-vneshnii-elektronnyi-do-3-5-bar-170436658/
+
+# type: kofe
+https://kaspi.kz/shop/p/kofe-caffinato-espresso-blend-1-svezheobzharennyi-zernovoi-250-g-181349832/
+https://kaspi.kz/shop/p/kofe-nuri-toplar-dibek-molotyi-250-g-181227449/
+
+# type: chainik
+https://kaspi.kz/shop/p/chainik-30482133-pks-198743443-1-8-l-nerzhavejuschaja-stal--181167300/
+https://kaspi.kz/shop/p/chainik-aphyxen-ts01-0-4-l-borosilikatnoe-steklo-zharoprochnoe-steklo-181035456/
+
+# type: balaklava
+https://kaspi.kz/shop/p/balaklava-kivat-495-65-razmer-52-54-temno-sinii-181257695/
+https://kaspi.kz/shop/p/balaklava-30438248-679459484-razmer-35-svetlo-seryi-181220004/
+
+# type: lego
+https://kaspi.kz/shop/p/lego-organaizer-sistema-hranenija-lego-nastol-nyi-brick-drawer-8-goluboi-31x16x11-sm-polipropilen-154937240/
+https://kaspi.kz/shop/p/lego-lanch-boks-40520001-1-sht-polipropilen-149102920/
+
+# type: tvtumba
+https://kaspi.kz/shop/p/tv-tumba-napol-naja-st90-ch-75x60x30-sm-chernyi-180903027/
+
+# type: mehanicheskie
+https://kaspi.kz/shop/p/mehanicheskie-h11-stal--178770388/
+https://kaspi.kz/shop/p/mehanicheskie-omega-nerzhavejuschaja-stal--178257193/
+
+# type: albom
+https://kaspi.kz/shop/p/al-bom-bookland-a3-48-listov-177816213/
+https://kaspi.kz/shop/p/30348404-al-bom-nakleek-kapibara-1x1-sm-169414891/
+
+# type: frey
+https://kaspi.kz/shop/p/frey-radiator-pechki-64111388170-178713408/
+https://kaspi.kz/shop/p/frey-perekljuchatel-784300101-177719459/
+
+# type: shlifmashina
+https://kaspi.kz/shop/p/shlifmashina-uglovaja-oasis-ag-72-125-eco-180964133/
+https://kaspi.kz/shop/p/shlifmashina-prjamoshlifoval-naja-makita-gd002gz-178795951/
+
+# type: lada
+https://kaspi.kz/shop/p/lada-deflektor-paneli-priborov-2190fl-178291419/
+https://kaspi.kz/shop/p/lada-zamok-bardachka-21061530321000-176753075/
+
+# type: shtora
+https://kaspi.kz/shop/p/shtora-dlja-vannoi-urker-home-jj-17-180x180-bordovyi-peva-181187496/
+https://kaspi.kz/shop/p/shtora-den---noch-belyi-62x160-sm-145651285/
+
+# type: businy
+https://kaspi.kz/shop/p/businy-500-sht-179025475/
+https://kaspi.kz/shop/p/businy-serdechki--178867516/
+
+# type: busy
+https://kaspi.kz/shop/p/busy-belyi-1-m-180514959/
+https://kaspi.kz/shop/p/busy-357964kk-dlina-35-sm-bizhuternyi-splav-akril-bez-vstavok-180453509/
+
+# type: tjul
+https://kaspi.kz/shop/p/tjul-14621-400x250-sm-1-sht-setka-zolotistyi-180541670/
+https://kaspi.kz/shop/p/tjul-pan-miks-180397005/
+
+# type: bizhuternaja
+https://kaspi.kz/shop/p/bizhuternaja-furnitura-gumi-soedinitel-nye-kolechki-100-sht-181082347/
+https://kaspi.kz/shop/p/bizhuternaja-tsepochka-dlja-zhenschin-iz-nerzhavejuschei-stali-s-karabinom-i-stekljannoi-vstavkoi-40-sm-1-sht-156866462/
+
+# type: vobler
+https://kaspi.kz/shop/p/vobler-jmore-463982290-5-sht-100-mm-raznye-180835931/
+https://kaspi.kz/shop/p/vobler-yo-zuri-3dr-x-vibe-60s-14-5g-mggs-1-sht-179000275/
+
+# type: chai
+https://kaspi.kz/shop/p/chai-ivi-zolotaja-nagrada-shu-puer-pressovannyi-357-g-180776308/
+https://kaspi.kz/shop/p/chai-lavka-spetsii-5-vkusov-v-meshochke-puer-pressovannyi-33-g-180776283/
+
+# type: portativnaja
+https://kaspi.kz/shop/p/portativnaja-kolonka-solohour-s3-chernyi-mul-tikolor-181086407/
+https://kaspi.kz/shop/p/portativnaja-kofevarka-elektricheskaja-akkumuljatornaja-dlja-kapsul-i-molotogo-kofe-dorozhnaja-avtomobil-naja-179023023/
+
+# type: gavrish
+https://kaspi.kz/shop/p/gavrish-tsinnija-ispolin-172097741/
+https://kaspi.kz/shop/p/gavrish-kolokol-chik-belogor-e-172097684/
+
+# type: meshok
+https://kaspi.kz/shop/p/meshok-pylesbornik-thomas-dlja-pylesosov-thomas-aquabox-parkett-181523466/
+https://kaspi.kz/shop/p/meshok-dlja-obuvi-avella-plaschevka-chernyi-180369110/
+
+# type: choker
+https://kaspi.kz/shop/p/choker-emin-nova-051719723-dlina-31-sm-bizhuternyi-splav-bez-vstavok-180356927/
+https://kaspi.kz/shop/p/choker-red-moon-choker-dolmatovskaja-jashma-dlina-38-sm-jashma-bez-vstavok-178936195/
+
+# type: povjazka
+https://kaspi.kz/shop/p/povjazka-momo-caps-odnotonnaja2627-razmer-57-58-59-60-chernyi-181381474/
+https://kaspi.kz/shop/p/povjazka-30341377-604184344-razmer-universal-nyi-seryi-181223197/
+
+# type: rexant
+https://kaspi.kz/shop/p/rexant-silovaja-vilka-230-v-16a-kompakt-s-z-16a-ip44-kauchuk-111-200-181260731/
+https://kaspi.kz/shop/p/rexant-gofra-avtomobil-naja-15-1305-176609999/
+
+# type: zhurnal
+https://kaspi.kz/shop/p/zhurnal-nyi-stolik-adlur-036142439-40h40x47-sm-korichnevyi-180969059/
+https://kaspi.kz/shop/p/zhurnal-ucheta-zhurnal-ucheta-provedenija-instruktazhei-po-pozharnoi-bezopasnosti-a4-50-l-178957500/
+
+# type: kostjum
+https://kaspi.kz/shop/p/kostjum-ohota-rybalka-haki-56-180835996/
+https://kaspi.kz/shop/p/kostjum-ved-ma-180580941/
+
+# type: pled
+https://kaspi.kz/shop/p/pled-pokryvalo-4898995-hlopok-trikotazh-rozovyi-181000648/
+https://kaspi.kz/shop/p/pled-babochka-200x150-sm-bezhevyi-180361992/
+
+# type: toljatti
+https://kaspi.kz/shop/p/tol-jatti-rychag-ruchnogo-tormoza-2110-3508010-178970308/
+
+# type: trjapka
+https://kaspi.kz/shop/p/trjapka-dlja-okon-3-sht-mikrofibra-181313910/
+https://kaspi.kz/shop/p/trjapka-354193030-50-sht-mikrofibra-180990052/
+
+# type: shkol
+https://kaspi.kz/shop/p/shkol-naja-tetrad-30479705-427141618-96-l-a5-kletka-tverdaja-oblozhka-1-sht-181382903/
+https://kaspi.kz/shop/p/shkol-nyi-nabor-kuromi-07-predmetov-7-sht-180429766/
+
+# type: napol
+https://kaspi.kz/shop/p/napol-nyi-turnik-chernyi-181043035/
+https://kaspi.kz/shop/p/napol-naja-lampa-torsher-napol-nyi-e27-60-vt-metall-akril-plastik-180989706/
+
+# type: febi
+https://kaspi.kz/shop/p/febi-kryshka-rasshiritel-nogo-bachka-38801-177987647/
+https://kaspi.kz/shop/p/febi-rychag-podveski-33352-173416121/
+
+# type: force
+https://kaspi.kz/shop/p/force-180685458/
+https://kaspi.kz/shop/p/force-prime-kompressornyi-fpm-nl-40-40-l-seryi-172139550/
+
+# type: list
+https://kaspi.kz/shop/p/list-ja-mika-joy-list-ja-200-sm-list-ja-dozhdik-178933059/
+https://kaspi.kz/shop/p/list-2000h1250h0-45-mm-sinii-serebristyi-korichnevyi-belyi-bezhevyi-zelenyi-krasnyi-seryi-172148427/
+
+# type: pustyshka
+https://kaspi.kz/shop/p/pustyshka-dr-karls-00000114132-2-sht-sinii-178690784/
+https://kaspi.kz/shop/p/pustyshka-aguzhan-kobelek-1-sht-rozovyi-178149088/
+
+# type: zhaljuzi
+https://kaspi.kz/shop/p/zhaljuzi-vertikal-nye-130x140-sm-zhaljuzi-vertikal-nye-tkanevye-tkan--181363058/
+https://kaspi.kz/shop/p/zhaljuzi-gorizontal-nye-168x159-sm-30086815-078054114-tkan--179042553/
+
+# type: buket
+https://kaspi.kz/shop/p/buket-ammann-fizalis-50-sm-fizalis-181062629/
+https://kaspi.kz/shop/p/buket-v-tykve-utro-oseni-iskusstvennye-tsvety-178989153/
+
+# type: obuchajuschii
+https://kaspi.kz/shop/p/obuchajuschii-nabor-zeni-supermarket-calculator-plastik-181283746/
+https://kaspi.kz/shop/p/obuchajuschii-bloknot-razvivaem-logiku-geodom-112022489/
+
+# type: polka
+https://kaspi.kz/shop/p/polka-boston-45h45x170-sm-korichnevyi-180899366/
+https://kaspi.kz/shop/p/polka-grusha-90h15-2x55-sm-bezhevyi-179035960/
+
+# type: musornoe
+https://kaspi.kz/shop/p/musornoe-vedro-articool-s-kryshkoi-articool-10-l-181223112/
+
+# type: futljar
+https://kaspi.kz/shop/p/futljar-dlja-nozhei-cu-110-200-179081957/
+https://kaspi.kz/shop/p/futljar-chemodan-professional--169233488/
+
+# type: butylochka
+https://kaspi.kz/shop/p/butylochka-adlur-antikolikovaja-sf-001-280-ml-prozrachnyi-181458860/
+https://kaspi.kz/shop/p/butylochka-miyoumi-bottle01-300l-250-300-ml-bezhevyi-178208062/
+
+# type: portmone
+https://kaspi.kz/shop/p/portmone-30254564-kmarket0710-iskusstvennaja-kozha-temno-korichnevyi-178087996/
+https://kaspi.kz/shop/p/portmone-bainex-vp77-natural-naja-kozha-chernyi-177832879/
+
+# type: avtom
+https://kaspi.kz/shop/p/avtom-9373829zont-dlja-universal-naja-universal-naja-universal-nyi-chernyi-seryi-171983201/
+https://kaspi.kz/shop/p/avtom-19299396avset-dlja-mercedes-benz-ml-320-2004-1997-chernyi-171406783/
+
+# type: karandash
+https://kaspi.kz/shop/p/karandash-jooydoo-grass-181326-hb-1-sht-180386906/
+https://kaspi.kz/shop/p/karandash-globus-kch-hb-12-sht-178759427/
+
+# type: toplivnyi
+https://kaspi.kz/shop/p/toplivnyi-nasos-asur-asur130219-181304231/
+https://kaspi.kz/shop/p/toplivnyi-bak-gsx-173045603/
+
+# type: sprei
+https://kaspi.kz/shop/p/sprei-voka-professional-universal-wash-0-75-l-180572228/
+https://kaspi.kz/shop/p/sprei-rano-komfort-service-aromatizator-lotos-i-orhideja-400-ml-178919141/
+
+# type: shlang
+https://kaspi.kz/shop/p/shlang-dlja-poliva-30459897-176206211-10-m-181159457/
+https://kaspi.kz/shop/p/shlang-vysokogo-davlenija-gur-96173943-177929767/
+
+# type: masuma
+https://kaspi.kz/shop/p/masuma-termostat-w56fa-78-180622346/
+https://kaspi.kz/shop/p/masuma-vozdushnyi-fil-tr-mfa-469-178150094/
+
+# type: vaza
+https://kaspi.kz/shop/p/vaza-20-sm-a163-keramika-180904030/
+https://kaspi.kz/shop/p/vaza-30-sm-895869269-steklo-178920738/

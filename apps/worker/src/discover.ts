@@ -13,6 +13,12 @@
  * links to data/sitemap-links.txt. --index-from-fixture takes the sitemap index saved by the last run instead of
  * asking kaspi.kz, so only Kaspi's CDN is asked (stops at the first failure if those addresses have expired).
  *
+ * --breadth N (with --from-file) picks for coverage instead (DECISIONS.md, 2026-11-14 "Variants checked less, breadth before
+ * depth"): the N commonest product types (a link's first word) we have nothing of, --per-type (default 2) each.
+ * --covered FILE lists the slugs we already have (catalog and queue, one per line); its types are skipped.
+ *
+ *   pnpm --filter @baga/worker discover --from-file --breadth 200 --covered data/covered-slugs.txt --out data/seed-breadth.txt
+ *
  * --exclude skips products already listed in earlier seed files (comma-separated: a.txt,b.txt). Rare categories go last, under a
  * "# min-price 50000" line: the seed command stores it, and the collector keeps such a product in the catalog only
  * if its first price reaches it (DECISIONS.md, 2026-11-03 "Seed priorities").
@@ -20,7 +26,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { createKaspiClient, parseKaspiUrl, KASPI_SITEMAP_URL, KaspiHttpError, canonicalProductUrl, type Sitemap } from "@baga/kaspi";
-import { isInVisitWindow, KASPI_CRAWL_DELAY_MS, pickSeedProducts, pickRareProducts, SEED_CATEGORIES, RARE_CATEGORIES, SEED_MIN_PRICE } from "@baga/core";
+import { isInVisitWindow, KASPI_CRAWL_DELAY_MS, pickSeedProducts, pickRareProducts, pickBreadth, SEED_CATEGORIES, RARE_CATEGORIES, SEED_MIN_PRICE } from "@baga/core";
 
 const arg = (name: string, dflt: number) => {
   const i = process.argv.indexOf(`--${name}`);
@@ -41,6 +47,9 @@ const fromFile = process.argv.includes("--from-file");
 const more = process.argv.includes("--more");
 const indexFromFixture = process.argv.includes("--index-from-fixture");
 const FIRST_RUN_FILES = 40;
+const breadth = arg("breadth", 0);
+const perType = arg("per-type", 2);
+const coveredFile = text("covered");
 
 if (!fromFile && !isInVisitWindow(new Date())) {
   console.error("Outside the collection window (04:01–08:42 UTC = 09:01–13:42 Almaty, inside kaspi.kz robots.txt 04:00–08:45). No requests made.");
@@ -85,6 +94,22 @@ function finish(): never {
     if (more) for (const l of prev) { const [productId, slug] = l.split("\t"); candidates.push({ productId: productId!, slug: slug! }); }
   }
   const fresh = candidates.filter((c) => !excluded.has(c.productId));
+  if (breadth) {
+    const covered = coveredFile ? readFileSync(coveredFile, "utf8").split("\n").map((l) => l.trim()).filter(Boolean) : [];
+    const coveredIds = new Set(covered.map((l) => l.split("\t")[0]));
+    const types = pickBreadth(fresh.filter((c) => !coveredIds.has(c.productId)), covered.map((l) => l.split("\t")[1] ?? l), perType, breadth);
+    const n = [...types.values()].reduce((a, l) => a + l.length, 0);
+    // Not daily seeds unless dear: a breadth product under SEED_MIN_PRICE.premium is checked like any product nobody watches.
+    const lines = [
+      `# Breadth pass from ${linksFile.replace(/^.*\/apps\/worker\//, "")}, ${new Date().toISOString()}: the ${types.size} commonest product types we have none of, up to ${perType} each (${n} products).`,
+      `# Queue first: pnpm --filter @baga/worker seed ${out.replace(/^.*\/apps\/worker\//, "")} --front`,
+      "", `# min-price ${SEED_MIN_PRICE.premium}`,
+      ...[...types].flatMap(([h, items]) => ["", `# type: ${h}`, ...items.map((p) => canonicalProductUrl(p.productId, p.slug))]),
+    ];
+    writeFileSync(out, lines.join("\n") + "\n");
+    console.log(`${types.size} types, ${n} products → ${out}`);
+    process.exit(0);
+  }
   const picked = pickSeedProducts(fresh, perCategory);
   const rare = pickRareProducts(fresh, perRare);
   const lines = [
