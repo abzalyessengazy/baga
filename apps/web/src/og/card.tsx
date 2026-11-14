@@ -9,7 +9,8 @@ import kk from "../../messages/kk.json";
  * The link preview image (Open Graph, 1200×630): a receipt on the steel counter, as on the site. Shared by the
  * product page and the home page. Every word comes from messages (`og`, `verdict`); prices and the chart only from
  * observed data. No image from Kaspi: drawing it here would make our server request Kaspi (CLAUDE.md rule 6).
- * Fonts: static Onest and JetBrains Mono (OFL, src/og/fonts), since the renderer reads neither woff2 nor variable fonts.
+ * Fonts: static Onest and IBM Plex Mono (OFL, src/og/fonts), since the renderer reads neither woff2 nor variable fonts. Plex Mono
+ * comes as four subsets per weight (latin; latin-ext for ₸; cyrillic; cyrillic-ext for ә ғ қ ң ө ү һ), all named "Mono".
  */
 export const OG_SIZE = { width: 1200, height: 630 };
 
@@ -29,12 +30,14 @@ export const ogT = (locale: string) => ogMessages(locale, "og");
 
 export async function ogFonts() {
   const f = (name: string) => readFile(join(dir(), name));
-  const [on4, on7, jb4, jb7] = await Promise.all([f("Onest-Regular.ttf"), f("Onest-Bold.ttf"), f("JetBrainsMono-Regular.ttf"), f("JetBrainsMono-Bold.ttf")]);
+  const [on4, on7] = await Promise.all([f("Onest-Regular.ttf"), f("Onest-Bold.ttf")]);
+  const subsets = ["latin", "latin-ext", "cyrillic", "cyrillic-ext"];
+  const mono = await Promise.all(([400, 700] as const).flatMap((weight) => subsets.map(async (s) =>
+    ({ name: "Mono", data: await f(`ibm-plex-mono-${s}-${weight}-normal.woff`), weight, style: "normal" as const }))));
   return [
     { name: "Onest", data: on4, weight: 400 as const, style: "normal" as const },
     { name: "Onest", data: on7, weight: 700 as const, style: "normal" as const },
-    { name: "Mono", data: jb4, weight: 400 as const, style: "normal" as const },
-    { name: "Mono", data: jb7, weight: 700 as const, style: "normal" as const },
+    ...mono,
   ];
 }
 

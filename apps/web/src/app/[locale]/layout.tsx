@@ -1,5 +1,9 @@
 import "@fontsource-variable/onest";
-import "@fontsource-variable/jetbrains-mono";
+// The receipt type, the brand book's IBM Plex Mono (14 Nov 2026): unlike JetBrains Mono it has ₸ and ә ғ қ ң ұ һ.
+import "@fontsource/ibm-plex-mono/400.css";
+import "@fontsource/ibm-plex-mono/500.css";
+import "@fontsource/ibm-plex-mono/600.css";
+import "@fontsource/ibm-plex-mono/700.css";
 import "../globals.css";
 import { NextIntlClientProvider, hasLocale } from "next-intl";
 import { getMessages, getTranslations, setRequestLocale } from "next-intl/server";
