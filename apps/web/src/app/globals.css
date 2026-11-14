@@ -1163,3 +1163,16 @@ span.ticker-thumb { background: var(--paper-shade); box-shadow: none; }
   .lb-want small { max-width: none; white-space: nowrap; font-size: 0.75rem; }
   .lb-bar { left: 92px; right: 6px; bottom: 7px; }
 }
+
+/* Home lists laid out like the leaderboard (14 Nov, the owner: «align the main page tops as well»): the name takes
+   the row's width, the number sits under it in the accent colour, the details line below. Nothing is cut at the side. */
+.z-row { grid-template-columns: 22px 36px minmax(0, 1fr); grid-template-areas: "rank thumb title" "rank thumb p" "rank thumb sub"; column-gap: 12px; row-gap: 1px; align-items: center; padding: 11px 8px; }
+.z-row.no-thumb { grid-template-columns: 22px minmax(0, 1fr); grid-template-areas: "rank title" "rank p" "rank sub"; }
+.z-row > .z-rank { grid-area: rank; align-self: center; text-align: center; }
+.z-row > .z-thumb { grid-area: thumb; align-self: center; width: 36px; height: 36px; }
+.z-row > .name { display: contents; }
+.z-row .z-title { grid-area: title; font-weight: 600; }
+.z-row .z-sub { grid-area: sub; margin-top: 1px; white-space: normal; overflow: visible; text-overflow: clip; }
+.z-row > .p { grid-area: p; justify-self: start; font-size: 1.0625rem; line-height: 1.25; }
+.z-row.is-first .z-rank { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--stamp); color: var(--paper); font-size: 0.6875rem; }
+.z-row.is-first.is-up .z-rank { background: var(--stamp-red); }
