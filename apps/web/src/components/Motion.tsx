@@ -3,14 +3,22 @@ import { animate, useInView, useReducedMotion } from "motion/react";
 import { useEffect, useRef, useState, type RefObject } from "react";
 
 /**
- * True while the element is on screen, and false again once it has left: its animation plays every time the visitor
- * reaches it, not once at page load while they are still reading the top (the owner, 13 Nov: «animations are done
- * before the user scrolls to them»). With reduced motion it is always true, so nothing moves.
+ * True once `amount` of the element is on screen, and false again only after it has left the screen entirely: its
+ * animation plays every time the visitor reaches it, not once at page load while they are still reading the top (the
+ * owner, 13 Nov: «animations are done before the user scrolls to them»). Resetting only when nothing of it shows
+ * keeps a section that is still partly on screen from fading out (the owner, 14 Nov: «How it works» vanished while
+ * scrolling on to the numbers). With reduced motion it is always true, so nothing moves.
  */
 export function useReplay(ref: RefObject<Element | null>, amount = 0.25): boolean {
   const reduce = useReducedMotion();
   const seen = useInView(ref, { amount });
-  return seen || !!reduce;
+  const anyOnScreen = useInView(ref);
+  const [go, setGo] = useState(false);
+  useEffect(() => {
+    if (seen) setGo(true);
+    else if (!anyOnScreen) setGo(false);
+  }, [seen, anyOnScreen]);
+  return go || !!reduce;
 }
 
 /** A number that counts up from zero each time it comes into view. `format` turns the running value into text. */

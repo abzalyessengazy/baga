@@ -1,5 +1,6 @@
 "use client";
-import { motion, useInView, useReducedMotion } from "motion/react";
+import { motion, useReducedMotion } from "motion/react";
+import { useReplay } from "./Motion";
 import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
@@ -75,8 +76,8 @@ function CouponSlip({ go, d }: { go: boolean; d: number }) {
 export function HowItWorks() {
   const t = useTranslations("home");
   const ref = useRef<HTMLOListElement>(null);
-  const inView = useInView(ref, { amount: 0.5 });
   const reduce = useReducedMotion();
+  const inView = useReplay(ref, 0.5) && !reduce;
   const go = inView || !!reduce;
   // A new cycle remounts the three drawings, so each plays again from its first frame.
   const [cycle, setCycle] = useState(0);
