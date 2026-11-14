@@ -56,7 +56,7 @@ function Board({ b, me, locale }: { b: { rows: BoardRow[]; total: number }; me: 
         <Avatar id={r.avatar} size={40} live={r.rank === 1} />
         <span className="lb-who">
           <span className="lb-name">{r.nickname ?? t("anon", { tag: r.tag.slice(0, 4).toUpperCase() })}{you && <span className="lb-you">{t("you")}</span>}</span>
-          <span className="lb-sub">{t("sub", { count: r.tracked, total: f(r.total) })}</span>
+          <span className="lb-sub">{t("sub", { count: r.tracked, total: f(r.total) })}{r.saved > 0 && <> · {t("subSaved", { saved: f(r.saved) })}</>}</span>
         </span>
         <span className="lb-num lb-tracked"><b>{r.tracked}</b><small>{t("colTracked")}</small></span>
         <span className="lb-num lb-total"><b>{f(r.total)}</b><small>{t("colTotal")}</small></span>

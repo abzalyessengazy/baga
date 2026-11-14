@@ -2,12 +2,16 @@
 import { motion, useReducedMotion } from "motion/react";
 import { useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { formatTenge } from "@baga/core";
+import { formatTenge, LEVELS } from "@baga/core";
+import { Link } from "@/i18n/navigation";
 import { useRouter } from "@/i18n/navigation";
 import { openQuiz, PROFILE_EVENT, type MyProfile } from "@/lib/profileClient";
 import { dayMonth, type DatesT } from "@/lib/dayMonth";
 import { Avatar } from "./Avatar";
 import { CountUp } from "./Motion";
+
+/** One mark per level, from the first tracked product to ten. */
+const LEVEL_ICON: Record<string, string> = { newcomer: "🐣", scout: "🔭", hunter: "🏹", sniper: "🎯", master: "👑" };
 
 type Props = { profile: NonNullable<MyProfile["profile"]>; stats: NonNullable<MyProfile["stats"]>; level: NonNullable<MyProfile["level"]>; hasChannel: boolean };
 
@@ -62,10 +66,35 @@ export function ProfileCard({ profile, stats, level, hasChannel }: Props) {
           <span className="stamp profile-level-stamp">{t(`level.${level.id}`)}</span>
           <span className="profile-next">{level.next ? t("next", { need: level.next.need, level: t(`level.${level.next.id}`) }) : t("top")}</span>
         </div>
-        <div className="meter profile-meter" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(level.progress * 100)}>
-          <motion.div initial={reduce ? false : { width: 0 }} animate={{ width: `${Math.max(4, Math.round(level.progress * 100))}%` }} transition={{ duration: 0.9, ease: [0.23, 1, 0.32, 1], delay: 0.2 }} />
+        {/* All five levels on one track (the owner, 14 Nov: «more visible and cute»): the fill runs to where the visitor is,
+            passed levels are filled stamps, the current one bounces, the rest wait in outline. */}
+        <div className="lvl" role="progressbar" aria-label={t("levelTrack")} aria-valuemin={0} aria-valuemax={LEVELS.length - 1}
+          aria-valuenow={level.index} aria-valuetext={t(`level.${level.id}`)}>
+          <div className="lvl-rail">
+            <motion.div className="lvl-fill" initial={reduce ? false : { width: 0 }}
+              animate={{ width: `${((level.index + (level.next ? level.progress : 0)) / (LEVELS.length - 1)) * 100}%` }}
+              transition={{ duration: 1.1, ease: [0.23, 1, 0.32, 1], delay: 0.25 }} />
+          </div>
+          <ol className="lvl-steps">
+            {LEVELS.map((l, i) => (
+              <li key={l.id} className={i < level.index ? "is-done" : i === level.index ? "is-now" : undefined}>
+                <motion.span className="lvl-dot" aria-hidden initial={reduce ? false : { scale: 0.4, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }} transition={{ type: "spring", stiffness: 420, damping: 16, delay: 0.3 + i * 0.12 }}>
+                  {LEVEL_ICON[l.id]}
+                </motion.span>
+                <span className="lvl-name">{t(`level.${l.id}`)}</span>
+                <span className="lvl-need">{l.from}</span>
+              </li>
+            ))}
+          </ol>
         </div>
       </div>
+      {stats.tracked === 0 ? (
+        <div className="profile-start">
+          <p>{t("startText")}</p>
+          <Link href="/explore" className="btn btn-stamp">{t("startCta")}</Link>
+        </div>
+      ) : <>
       <dl className="profile-tiles">
         {tiles.map(([k, v, fmt, cls], i) => (
           <motion.div key={k} className={cls} initial={reduce ? false : { opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35, delay: 0.1 + i * 0.08 }}>
@@ -75,6 +104,7 @@ export function ProfileCard({ profile, stats, level, hasChannel }: Props) {
         ))}
       </dl>
       <p className="note profile-how">{t("how")}</p>
+      </>}
       <hr className="rule" />
       <div className="profile-rank">
         {stats.rank !== null ? (
@@ -82,7 +112,8 @@ export function ProfileCard({ profile, stats, level, hasChannel }: Props) {
             <p className="profile-rank-line"><b>{t("rank", { rank: stats.rank, total: stats.boardSize })}</b></p>
             <p className="profile-hint">{stats.ahead ? t("ahead", { gap: f(stats.ahead.gap), rank: stats.ahead.rank }) : t("first")}</p>
           </>
-        ) : <p className="profile-hint">{onBoard ? t("noRank") : t("hidden")}</p>}
+        ) : !onBoard ? <p className="profile-hint">{t("hidden")}</p>
+          : stats.tracked > 0 ? <p className="profile-hint">{t("noRank")}</p> : null}
       </div>
       <div className="profile-flags">
         <label><input type="checkbox" checked={onBoard} onChange={async (e) => { const v = e.target.checked; setOnBoard(v); if (!(await flag({ onBoard: v }))) setOnBoard(!v); }} /> {t("flagBoard")}</label>
