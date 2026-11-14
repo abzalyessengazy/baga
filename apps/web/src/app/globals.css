@@ -9,9 +9,10 @@
   --ink-soft: #5d6168;
   --ink-faint: #8b8f96;
   --rule: #b9bcc2;
-  --stamp: #4b3fd1;
-  /* Stamp violet as text on the counter: lighter in dark mode, where #4b3fd1 is hard to read (10 Nov 2026). */
-  --stamp-on-counter: #4b3fd1;
+  /* The brand book's violet since 14 Nov 2026 (was #4b3fd1): 5.9:1 on paper, 4.6:1 on the counter, 6.1:1 under white text. */
+  --stamp: #5b47e0;
+  /* Stamp violet as text on the counter: lighter in dark mode (10 Nov 2026), the brand book's dark violet. */
+  --stamp-on-counter: #5b47e0;
   --stamp-red: #c23b2c;
   --kaspi: #f14635; /* Kaspi's brand red: only the «Открыть на Kaspi» button */
   --technodom: #fc6b3f; /* Technodom's brand orange: only its name chip (other stores' prices, DECISIONS 2026-11-07) */
@@ -19,7 +20,7 @@
   --caution: #8a5300;
   --caution-bg: #fbecc8;
   --slot: #2a2d33;
-  --focus: #4b3fd1;
+  --focus: #5b47e0;
 
   --font-ui: "Onest Variable", system-ui, sans-serif;
   --font-receipt: "JetBrains Mono Variable", ui-monospace, monospace;
@@ -43,7 +44,7 @@
     --paper: #f4f4ef;
     --paper-shade: #e9e9e3;
     --ink-on-counter: #e8eaee;
-    --stamp-on-counter: #aaa2ff;
+    --stamp-on-counter: #9d90ff;
   }
 }
 

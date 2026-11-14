@@ -13,7 +13,7 @@ import kk from "../../messages/kk.json";
  */
 export const OG_SIZE = { width: 1200, height: 630 };
 
-const C = { counter: "#dde0e4", paper: "#fbfbf7", ink: "#1d2025", soft: "#5d6168", faint: "#8b8f96", stamp: "#4b3fd1", red: "#c23b2c" };
+const C = { counter: "#dde0e4", paper: "#fbfbf7", ink: "#1d2025", soft: "#5d6168", faint: "#8b8f96", stamp: "#5b47e0", red: "#c23b2c" };
 const dir = () => join(process.cwd(), "src", "og", "fonts");
 
 /**

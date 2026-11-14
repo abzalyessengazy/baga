@@ -20,7 +20,7 @@ export async function renderConfirmEmail(locale: "ru" | "kk", confirmUrl: string
 <table role="presentation" width="360" style="background:#fbfbf8;padding:24px;border-radius:4px">
 <tr><td style="font-size:20px;font-weight:700;letter-spacing:2px;text-align:center">BAĞA</td></tr>
 <tr><td style="padding:16px 0;border-bottom:1px dashed #b9bcc2;font-size:14px;line-height:1.5">${escapeHtml(t("lead"))}</td></tr>
-<tr><td style="padding-top:20px;text-align:center"><a href="${url}" style="display:inline-block;background:#4b3fd1;color:#fff;padding:12px 20px;text-decoration:none;border-radius:4px">${escapeHtml(t("button"))}</a></td></tr>
+<tr><td style="padding-top:20px;text-align:center"><a href="${url}" style="display:inline-block;background:#5b47e0;color:#fff;padding:12px 20px;text-decoration:none;border-radius:4px">${escapeHtml(t("button"))}</a></td></tr>
 <tr><td style="padding-top:16px;font-size:12px;color:#5d6168;line-height:1.5">${escapeHtml(t("expires"))}</td></tr>
 <tr><td style="padding-top:20px;font-size:11px;color:#8a8e95;text-align:center">${escapeHtml(t("ignore"))}</td></tr>
 </table></td></tr></table></body></html>`;

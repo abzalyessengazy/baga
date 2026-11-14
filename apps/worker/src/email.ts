@@ -75,8 +75,8 @@ export function renderAlertEmail(p: AlertEmail) {
 <tr><td style="padding:16px 0;border-bottom:1px dashed #b9bcc2">${first ? c.firstLead : c.targetLead}<br><strong>${escapeHtml(p.title)}</strong></td></tr>
 <tr><td><table role="presentation" width="100%" style="font-size:14px;padding-top:8px">${rows.map(row).join("")}</table></td></tr>
 ${note ? `<tr><td style="padding-top:12px;font-size:13px;color:#5d6168">${note}</td></tr>` : ""}
-<tr><td style="padding-top:20px;text-align:center"><a href="${escapeHtml(p.kaspiUrl)}" style="display:inline-block;background:#4b3fd1;color:#fff;padding:12px 20px;text-decoration:none;border-radius:4px">${c.buy}</a></td></tr>
-<tr><td style="padding-top:12px;text-align:center;font-size:13px"><a href="${escapeHtml(p.productUrl)}" style="color:#4b3fd1">${c.change}</a> · <a href="${escapeHtml(p.stopUrl)}" style="color:#5d6168">${c.stop}</a></td></tr>
+<tr><td style="padding-top:20px;text-align:center"><a href="${escapeHtml(p.kaspiUrl)}" style="display:inline-block;background:#5b47e0;color:#fff;padding:12px 20px;text-decoration:none;border-radius:4px">${c.buy}</a></td></tr>
+<tr><td style="padding-top:12px;text-align:center;font-size:13px"><a href="${escapeHtml(p.productUrl)}" style="color:#5b47e0">${c.change}</a> · <a href="${escapeHtml(p.stopUrl)}" style="color:#5d6168">${c.stop}</a></td></tr>
 <tr><td style="padding-top:20px;font-size:11px;color:#8a8e95;text-align:center">${c.footer}</td></tr>
 </table></td></tr></table></body></html>`;
   const text = [
@@ -96,7 +96,7 @@ export function renderBoughtEmail(p: { locale: Locale; title: string; answerUrl:
   const c = copy[p.locale];
   const btn = (a: "yes" | "later" | "no", label: string, main: boolean) =>
     `<a href="${escapeHtml(p.answerUrl(a))}" style="display:block;margin-top:8px;padding:12px 16px;text-decoration:none;border-radius:4px;${main
-      ? "background:#4b3fd1;color:#fff" : "background:#fff;color:#1d2025;border:1px solid #b9bcc2"}">${label}</a>`;
+      ? "background:#5b47e0;color:#fff" : "background:#fff;color:#1d2025;border:1px solid #b9bcc2"}">${label}</a>`;
   const html = `<!doctype html><html lang="${p.locale}"><body style="margin:0;background:#e4e6e9;font-family:Menlo,Consolas,monospace;color:#1d2025">
 <table role="presentation" width="100%" style="padding:24px 12px"><tr><td align="center">
 <table role="presentation" width="360" style="background:#fbfbf8;padding:24px;border-radius:4px">

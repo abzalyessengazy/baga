@@ -90,7 +90,7 @@ export function renderTelegramDigest(p: DigestNote): { html: string; buttons: Te
 
 export function renderEmailDigest(p: DigestNote & { stopUrl: string }): { subject: string; html: string; text: string } {
   const { c, mood, rows, rest, sug, my } = parts(p, "email_digest");
-  const tone = (sign: string) => (sign === "↓" ? "#4b3fd1" : sign === "↑" ? "#c23b2c" : "#5d6168");
+  const tone = (sign: string) => (sign === "↓" ? "#5b47e0" : sign === "↑" ? "#c23b2c" : "#5d6168");
   const html = `<!doctype html><html lang="${p.locale}"><body style="margin:0;background:#e4e6e9;font-family:Menlo,Consolas,monospace;color:#1d2025">
 <table role="presentation" width="100%" style="padding:24px 12px"><tr><td align="center">
 <table role="presentation" width="360" style="background:#fbfbf8;padding:24px;border-radius:4px">
@@ -99,8 +99,8 @@ export function renderEmailDigest(p: DigestNote & { stopUrl: string }): { subjec
 ${rows.map((r) => `<tr><td style="padding:10px 0;border-bottom:1px dashed #d9dbe0;font-size:14px"><a href="${esc(r.url)}" style="color:#1d2025">${esc(r.name)}</a><br><span style="color:#5d6168">${r.price}</span>${r.diff ? ` <strong style="color:${tone(r.sign)}">${r.sign} ${r.diff}</strong>` : ""}</td></tr>`).join("\n")}
 ${rest > 0 ? `<tr><td style="padding-top:8px;font-size:13px;color:#5d6168">${esc(c.more(rest))}</td></tr>` : ""}
 ${sug.length ? `<tr><td style="padding-top:18px;font-size:14px"><strong>${esc(c.also[mood])}</strong></td></tr>
-${sug.map((s) => `<tr><td style="padding:8px 0;font-size:14px"><a href="${esc(s.url)}" style="color:#4b3fd1">${esc(s.name)}</a><br><span style="color:#5d6168">${s.price}${s.note ? ` · ${esc(s.note)}` : ""}</span></td></tr>`).join("\n")}` : ""}
-<tr><td style="padding-top:20px;text-align:center"><a href="${esc(my)}" style="display:inline-block;background:#4b3fd1;color:#fff;padding:12px 20px;text-decoration:none;border-radius:4px">${c.my}</a></td></tr>
+${sug.map((s) => `<tr><td style="padding:8px 0;font-size:14px"><a href="${esc(s.url)}" style="color:#5b47e0">${esc(s.name)}</a><br><span style="color:#5d6168">${s.price}${s.note ? ` · ${esc(s.note)}` : ""}</span></td></tr>`).join("\n")}` : ""}
+<tr><td style="padding-top:20px;text-align:center"><a href="${esc(my)}" style="display:inline-block;background:#5b47e0;color:#fff;padding:12px 20px;text-decoration:none;border-radius:4px">${c.my}</a></td></tr>
 <tr><td style="padding-top:12px;text-align:center;font-size:13px"><a href="${esc(p.stopUrl)}" style="color:#5d6168">${c.stop}</a></td></tr>
 <tr><td style="padding-top:20px;font-size:11px;color:#8a8e95;text-align:center">${c.note}<br><br>${c.footer}</td></tr>
 </table></td></tr></table></body></html>`;
