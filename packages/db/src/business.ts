@@ -1,13 +1,15 @@
 import type postgres from "postgres";
-import { PERSON_METRICS_FROM, personReliable } from "@baga/core";
+import { addDays, PERSON_METRICS_FROM, periodRange, type DayRange, type Period, type PeriodKey } from "@baga/core";
 import { alertStats, type AlertStats } from "./alertStats";
 
 /**
  * The owner's business dashboard (/admin/business; DECISIONS.md, 2026-11-11 "Business dashboard"). Read-only
- * numbers for a period of Almaty days ending today, and for the period before it. Three kinds of numbers
+ * numbers for a calendar period of Almaty days (packages/core periods.ts: today 00:00–23:59, Monday–Sunday, calendar
+ * month and year; the owner, 14 Nov 2026), and for the period of the same kind before it. Three kinds of numbers
  * (docs/STATS.md, "KPI definitions"; packages/core/src/metrics.ts):
  * - visit-based: browser tabs (events.sid) active in the period, all history from 3 Nov 2026;
- * - person-based: browsers (events.vid), null unless the period starts on or after PERSON_METRICS_FROM;
+ * - visitor-based: distinct browsers (events.vid), counted from PERSON_METRICS_FROM (browser ids are reliable from
+ *   then; a period starting earlier counts its visitors from that day, and says so); null for a period ending before;
  * - account-based: watchers and trackings, exact for all history.
  * Nothing is estimated: a number the data cannot give is null.
  */
@@ -18,20 +20,30 @@ export interface BizTotals {
   visits: number; opened: number; pasted: number; tracked: number;
   /** Visit-based: tabs whose visit came with a utm_source (posts, campaigns). */
   fromPosts: number;
-  /** Person-based (null before PERSON_METRICS_FROM): browsers, those with a research action, those seen before. */
+  /** Visitor-based (distinct browsers; null for a period ending before PERSON_METRICS_FROM): all, those with a
+   * research action, those seen before, and those who opened a product, pasted a link, started tracking. */
   people: number | null; researchers: number | null; returning: number | null;
+  pOpened: number | null; pPasted: number | null; pTracked: number | null;
   /** Account-based: people who started their alert list in the period, of them with Telegram or a confirmed email now. */
   newPeople: number; newPeopleConnected: number;
   /** Account-based: trackings created in the period. */
   newTrackings: number;
 }
-export interface BizDay { day: string; visits: number; opened: number; tracked: number }
-export interface BizSource { source: string; posts: boolean; visits: number; opened: number; tracked: number }
+/** One bar of the chart: a day, or a month (YYYY-MM-01) for a year. `people` is null before PERSON_METRICS_FROM. */
+export interface BizDay { day: string; visits: number; people: number | null; opened: number; tracked: number }
+/** Products opened by the most distinct visitors in the period. */
+export interface BizTopProduct { title: string; externalId: string; people: number; views: number }
+/** The most active visitors (anonymous browser ids, shortened): visits, active days, products opened, started tracking. */
+export interface BizVisitor { id: string; visits: number; days: number; products: number; tracked: boolean }
+export interface BizSource { source: string; posts: boolean; visits: number; people: number; opened: number; tracked: number }
 export interface BizSaving { title: string; externalId: string; start: number; alert: number; bought: "yes" | "later" | "no" | null; at: string }
 export interface Business {
-  days: number; from: string; to: string;
+  period: Period;
+  from: string; to: string;
   /** The first day person-based numbers are reliable for (packages/core PERSON_METRICS_FROM). */
   personFrom: string;
+  /** Visitors in this period are counted from this day (the period's start, or PERSON_METRICS_FROM when later). */
+  peopleFrom: string;
   /** The first day with any event (visits were not counted before 3 Nov 2026). */
   countedSince: string | null;
   now: BizTotals;
@@ -39,6 +51,10 @@ export interface Business {
   before: BizTotals | null;
   daily: BizDay[];
   sources: BizSource[];
+  topProducts: BizTopProduct[];
+  /** Visitors by how many visits they made in the period: 1, 2, 3–5, 6+. */
+  frequency: { visits: "1" | "2" | "3-5" | "6+"; people: number }[];
+  topVisitors: BizVisitor[];
   /** Monthly Active Price Researchers (people with a research action) over the 30 days to today, counted from `since`
    * when fewer than 30 days have browser ids; null before PERSON_METRICS_FROM. */
   mapr: { n: number; since: string } | null;
@@ -56,67 +72,108 @@ export interface Business {
 
 const dayBefore = (d: string, n = 1) => new Date(Date.parse(`${d}T00:00:00Z`) - n * 86_400_000).toISOString().slice(0, 10);
 
-/** Days are Almaty days; `days` ends today (today counts so far). */
-export async function getBusiness(sql: postgres.Sql, days: number): Promise<Business> {
-  const [range] = await sql<{ from: string; to: string }[]>`
-    select to_char((now() at time zone ${TZ})::date - ${days - 1}::int, 'YYYY-MM-DD') as "from",
-           to_char((now() at time zone ${TZ})::date, 'YYYY-MM-DD') as "to"`;
-  const { from, to } = range!;
-  const prevFrom = dayBefore(from, days), prevTo = dayBefore(from);
+/** Today in Almaty (YYYY-MM-DD). */
+export async function almatyToday(sql: postgres.Sql): Promise<string> {
+  const [r] = await sql<{ d: string }[]>`select to_char((now() at time zone ${TZ})::date, 'YYYY-MM-DD') as d`;
+  return r!.d;
+}
+
+/** The last 7 days to today (the weekly targets), as a period compared with the 7 days before. */
+export function lastSevenDays(today: string): Period {
+  return { key: "week", from: addDays(today, -6), to: today, prev: { from: addDays(today, -13), to: addDays(today, -7) }, running: true, upTo: today, bucket: "day" };
+}
+
+/** A calendar period by key (as seen today in Almaty), or a ready Period. */
+export async function getBusiness(sql: postgres.Sql, which: PeriodKey | Period): Promise<Business> {
+  const period = typeof which === "string" ? periodRange(which, await almatyToday(sql)) : which;
+  const { from, to } = period;
   const start = (d: string) => sql`(${d}::date::timestamp at time zone ${TZ})`;
   const end = (d: string) => sql`((${d}::date + 1)::timestamp at time zone ${TZ})`;
+  const peopleFrom = from < PERSON_METRICS_FROM ? PERSON_METRICS_FROM : from;
 
-  const totals = async (a: string, b: string): Promise<BizTotals> => {
-    const persons = personReliable(a);
-    const [r] = await sql<(Omit<BizTotals, "people" | "researchers" | "returning"> & { people: number; researchers: number; returning: number })[]>`
-      with e as (select name, sid, vid, source from events where at >= ${start(a)} and at < ${end(b)}),
-      seen as (select distinct vid from events where vid is not null and at < ${start(a)})
+  const totals = async ({ from: a, to: b }: DayRange): Promise<BizTotals> => {
+    const pa = a < PERSON_METRICS_FROM ? PERSON_METRICS_FROM : a;
+    const persons = b >= PERSON_METRICS_FROM;
+    const [r] = await sql<(BizTotals & { people: number; researchers: number; returning: number; pOpened: number; pPasted: number; pTracked: number })[]>`
+      with e as (select name, sid, vid, source, at from events where at >= ${start(a)} and at < ${end(b)}),
+      p as (select name, vid from e where vid is not null and at >= ${start(pa)}),
+      seen as (select distinct vid from events where vid is not null and at < ${start(pa)})
       select count(distinct sid)::int as visits,
         count(distinct sid) filter (where name = 'product_view')::int as opened,
         count(distinct sid) filter (where name = 'paste')::int as pasted,
         count(distinct sid) filter (where name = 'track')::int as tracked,
         count(distinct sid) filter (where name = 'visit' and source is not null and source !~ '\\.' and source <> 'direct')::int as "fromPosts",
-        count(distinct vid)::int as people,
-        count(distinct vid) filter (where name in ('product_view', 'paste', 'track'))::int as researchers,
-        count(distinct e.vid) filter (where e.vid in (select vid from seen))::int as returning,
+        (select count(distinct vid) from p)::int as people,
+        (select count(distinct vid) from p where name in ('product_view', 'paste', 'track'))::int as researchers,
+        (select count(distinct vid) from p where vid in (select vid from seen))::int as returning,
+        (select count(distinct vid) from p where name = 'product_view')::int as "pOpened",
+        (select count(distinct vid) from p where name = 'paste')::int as "pPasted",
+        (select count(distinct vid) from p where name = 'track')::int as "pTracked",
         (select count(*) from watchers where not internal and created_at >= ${start(a)} and created_at < ${end(b)})::int as "newPeople",
         (select count(*) from watchers where not internal and created_at >= ${start(a)} and created_at < ${end(b)}
            and (telegram_chat_id is not null or email_confirmed_at is not null))::int as "newPeopleConnected",
         (select count(*) from trackings where watcher_id is not null and not exists (select 1 from watchers tw where tw.id = trackings.watcher_id and tw.internal) and created_at >= ${start(a)} and created_at < ${end(b)})::int as "newTrackings"
       from e`;
-    return { ...r!, people: persons ? r!.people : null, researchers: persons ? r!.researchers : null, returning: persons ? r!.returning : null };
+    const nul = (n: number) => (persons ? n : null);
+    return { ...r!, people: nul(r!.people), researchers: nul(r!.researchers), returning: nul(r!.returning),
+      pOpened: nul(r!.pOpened), pPasted: nul(r!.pPasted), pTracked: nul(r!.pTracked) };
   };
   const [first] = await sql<{ day: string | null }[]>`
     select to_char(min((at at time zone ${TZ})::date), 'YYYY-MM-DD') as day from events`;
   const countedSince = first?.day ?? null;
-  const now = await totals(from, to);
-  const before = countedSince && prevFrom >= countedSince ? await totals(prevFrom, prevTo) : null;
-  // Days before counting began are not shown as zeros.
+  const now = await totals(period);
+  const before = countedSince && period.prev.from >= countedSince ? await totals(period.prev) : null;
+  // Days before counting began, and days still to come, are not shown as zeros.
   const chartFrom = countedSince && countedSince > from ? countedSince : from;
+  const unit = period.bucket;
 
-  const daily = await sql<BizDay[]>`
-    with d as (select generate_series(${chartFrom}::date, ${to}::date, interval '1 day')::date as day),
-    e as (select (at at time zone ${TZ})::date as day, name, sid from events where at >= ${start(from)} and at < ${end(to)})
+  const daily = chartFrom > period.upTo ? [] : (await sql<(Omit<BizDay, "people"> & { people: number })[]>`
+    with d as (select generate_series(date_trunc(${unit}, ${chartFrom}::date), ${period.upTo}::date, ${unit === "month" ? sql`interval '1 month'` : sql`interval '1 day'`})::date as day),
+    e as (select date_trunc(${unit}, (at at time zone ${TZ})::date)::date as day, name, sid, vid, at from events where at >= ${start(chartFrom)} and at < ${end(period.upTo)})
     select to_char(d.day, 'YYYY-MM-DD') as day,
       count(distinct e.sid)::int as visits,
+      count(distinct e.vid) filter (where e.at >= ${start(PERSON_METRICS_FROM)})::int as people,
       count(distinct e.sid) filter (where e.name = 'product_view')::int as opened,
       count(distinct e.sid) filter (where e.name = 'track')::int as tracked
-    from d left join e on e.day = d.day group by d.day order by d.day`;
+    from d left join e on e.day = d.day group by d.day order by d.day`)
+    .map((x) => ({ ...x, people: (unit === "month" ? x.day.slice(0, 7) >= PERSON_METRICS_FROM.slice(0, 7) : x.day >= PERSON_METRICS_FROM) ? x.people : null }));
 
   // Each visit's source, then what that tab went on to do (visit-based).
   const sources = await sql<BizSource[]>`
     with v as (select distinct on (sid) sid, coalesce(source, 'direct') as source from events
                where name = 'visit' and at >= ${start(from)} and at < ${end(to)} order by sid, at),
-    s as (select sid, bool_or(name = 'product_view') as opened, bool_or(name = 'track') as tracked from events
+    s as (select sid, max(vid) as vid, bool_or(name = 'product_view') as opened, bool_or(name = 'track') as tracked from events
           where at >= ${start(from)} and at < ${end(to)} group by sid)
     select v.source, (v.source !~ '\\.' and v.source <> 'direct') as posts,
-      count(*)::int as visits, count(*) filter (where s.opened)::int as opened, count(*) filter (where s.tracked)::int as tracked
+      count(*)::int as visits, count(distinct s.vid)::int as people,
+      count(*) filter (where s.opened)::int as opened, count(*) filter (where s.tracked)::int as tracked
     from v left join s on s.sid = v.sid group by v.source order by 3 desc limit 20`;
 
-  const maprSince = [dayBefore(to, 29), PERSON_METRICS_FROM].sort()[1]!;
-  const mapr = personReliable(to) ? await sql<{ n: number }[]>`
+  // Products opened by the most distinct visitors; visitors by visit count; the most active visitors (visitor-based).
+  const topProducts = await sql<BizTopProduct[]>`
+    select coalesce(p.title, e.external_id) as title, e.external_id as "externalId",
+      count(distinct e.vid)::int as people, count(distinct e.sid)::int as views
+    from events e left join products p on p.external_id = e.external_id
+    where e.name = 'product_view' and e.external_id is not null and e.vid is not null
+      and e.at >= ${start(peopleFrom)} and e.at < ${end(to)}
+    group by 1, 2 order by 3 desc, 4 desc limit 10`;
+  const perVisitor = sql`
+    select vid, count(distinct sid)::int as visits, count(distinct (at at time zone ${TZ})::date)::int as days,
+      count(distinct external_id) filter (where name = 'product_view')::int as products, bool_or(name = 'track') as tracked
+    from events where vid is not null and at >= ${start(peopleFrom)} and at < ${end(to)} group by vid`;
+  const frequency = to < PERSON_METRICS_FROM ? [] : await sql<Business["frequency"]>`
+    with v as (${perVisitor}),
+    b as (select case when visits = 1 then '1' when visits = 2 then '2' when visits <= 5 then '3-5' else '6+' end as visits from v)
+    select k.visits, count(b.visits)::int as people from (values ('1', 1), ('2', 2), ('3-5', 3), ('6+', 4)) k(visits, o)
+    left join b on b.visits = k.visits group by k.visits, k.o order by k.o`;
+  const topVisitors = to < PERSON_METRICS_FROM ? [] : await sql<BizVisitor[]>`
+    with v as (${perVisitor})
+    select left(vid, 6) as id, visits, days, products, tracked from v order by visits desc, days desc, products desc limit 10`;
+
+  const maprSince = [dayBefore(period.upTo, 29), PERSON_METRICS_FROM].sort()[1]!;
+  const mapr = to >= PERSON_METRICS_FROM ? await sql<{ n: number }[]>`
     select count(distinct vid)::int as n from events
-    where vid is not null and name in ('product_view', 'paste', 'track') and at >= ${start(maprSince)} and at < ${end(to)}`
+    where vid is not null and name in ('product_view', 'paste', 'track') and at >= ${start(maprSince)} and at < ${end(period.upTo)}`
     .then((r) => ({ n: r[0]?.n ?? 0, since: maprSince })) : null;
 
   const pastes = await sql<{ outcome: string; n: number }[]>`
@@ -167,7 +224,7 @@ export async function getBusiness(sql: postgres.Sql, days: number): Promise<Busi
   const real = rows.filter((r) => r.start > r.alert);
   const confirmed = real.filter((r) => r.bought === "yes");
   return {
-    days, from, to, personFrom: PERSON_METRICS_FROM, countedSince, now, before, daily, sources, mapr,
+    period, from, to, personFrom: PERSON_METRICS_FROM, peopleFrom, countedSince, now, before, daily, sources, topProducts, frequency, topVisitors, mapr,
     pastes, linkFailures: links?.n ?? 0, people: people!, alerts: { ...stats, trackings7d: t7?.n ?? 0 }, bought: bought!, removed,
     savings: {
       confirmed: confirmed.reduce((s, r) => s + r.start - r.alert, 0), confirmedCount: confirmed.length,

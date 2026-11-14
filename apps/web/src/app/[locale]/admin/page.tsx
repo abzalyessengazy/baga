@@ -39,7 +39,7 @@ export default async function AdminPage({ params, searchParams }: Props) {
   }
   const sql = getSql();
   if (!sql) notFound();
-  const [h, feedback, funnel, pending, storeRuns] = await Promise.all([getAdminHealth(sql), recentFeedback(sql), getFunnel(sql, 7).catch(() => null),
+  const [h, feedback, funnel, pending, storeRuns] = await Promise.all([getAdminHealth(sql), recentFeedback(sql), getFunnel(sql, "week").catch(() => null),
     // Before migration 0018 the store tables do not exist.
     pendingMatches(sql).catch(() => []), latestStoreRuns(sql).catch(() => [])]);
   // Manual checks on request (migration 0020, DECISIONS 2026-11-09); null before the migration.
@@ -112,23 +112,26 @@ export default async function AdminPage({ params, searchParams }: Props) {
 
       {funnel && (
         <section className="receipt admin-card">
-          <h2>{t("funnel", { days: funnel.days })}</h2>
-          <p className="admin-muted">{t("funnelNote", { days: funnel.days })}</p>
+          <h2>{t("funnel", { from: `${funnel.period.from.slice(8, 10)}.${funnel.period.from.slice(5, 7)}`, to: `${funnel.period.to.slice(8, 10)}.${funnel.period.to.slice(5, 7)}` })}</h2>
+          <p className="admin-muted">{t("funnelNote")}</p>
           <div className="admin-scroll">
             <table className="admin-table">
+              <thead><tr><th /><th>{t("colVisits")}</th><th /><th>{t("colPeople")}</th><th /></tr></thead>
               <tbody>
                 {funnel.steps.filter((s) => s.name !== "channel").map((s) => {
-                  const visits = funnel.steps[0]!.sessions;
+                  const visits = funnel.steps[0]!.sessions, people = funnel.steps[0]!.people;
                   const label = { visit: "stepVisit", paste: "stepPaste", product_view: "stepProductView", track: "stepTrack", channel: "stepChannel" }[s.name];
                   return (
                     <tr key={s.name}>
                       <td>{t(label as "stepVisit")}</td><td>{count(s.sessions)}</td>
                       <td>{visits ? `${Math.round((s.sessions / visits) * 100)}%` : "—"}</td>
+                      <td>{count(s.people)}</td>
+                      <td>{people ? `${Math.round((s.people / people) * 100)}%` : "—"}</td>
                     </tr>
                   );
                 })}
-                              <tr><td>{t("stepAccounts")}</td><td>{count(funnel.accounts.newPeople)}</td><td /></tr>
-                <tr><td>{t("stepConnected")}</td><td>{count(funnel.accounts.connected)}</td>
+                <tr><td>{t("stepAccounts")}</td><td /><td /><td>{count(funnel.accounts.newPeople)}</td><td /></tr>
+                <tr><td>{t("stepConnected")}</td><td /><td /><td>{count(funnel.accounts.connected)}</td>
                   <td>{funnel.accounts.newPeople ? `${Math.round((funnel.accounts.connected / funnel.accounts.newPeople) * 100)}%` : "—"}</td></tr>
               </tbody>
             </table>

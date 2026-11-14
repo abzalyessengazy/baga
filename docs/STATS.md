@@ -114,16 +114,23 @@ Three kinds of numbers, never mixed in one rate:
 - **Visit-based**: one browser tab (`events.sid`), all history from 3 Nov 2026. *Visits* = tabs with any event in
   the window; *opened a product*, *pasted a link*, *started tracking*, *from posts* = visits with that event (posts:
   the visit's `source` is a utm_source, i.e. not a site host and not "direct"). Rates divide by visits.
-- **Person-based**: one browser (`events.vid`, live since 11 Nov 2026 about 12:45 Almaty). Used only for windows that
-  start on or after `PERSON_METRICS_FROM` (12 Nov 2026, the first full day); earlier windows show «—». *People*,
+- **Person-based** («уникальные посетители»): one browser (`events.vid`, live since 11 Nov 2026 about 12:45 Almaty),
+  counted once per period. Counted from `PERSON_METRICS_FROM` (12 Nov 2026, the first full day): a period starting
+  earlier counts its visitors from that day and says so; a period ending before it shows «—». The funnel steps
+  (opened a product, pasted, started tracking) are also counted per visitor, over the same period. *People*,
   *researchers* (opened a product, pasted or started tracking), *returning* (seen before the window), *Monthly Active
   Price Researchers* (30 days, counted from 12 Nov until 30 days exist). In-app browsers (Instagram, Telegram) keep
   their own storage, so returning people are undercounted.
 - **Account-based**: `watchers` and `trackings`, exact for all history. *People with alerts*; *connected* = Telegram
   linked or email confirmed (now); in a window: people who started their list in it, and of them those connected.
 
-Windows are Almaty days including today (7 days = today and the 6 before). The "visitors per day" target uses people
-once the 7 days before are person-reliable (from 19 Nov 2026), visits until then, and says which.
+Periods are calendar ones in Almaty time (the owner, 14 Nov 2026; `packages/core/src/periods.ts`): today and yesterday
+00:00–23:59, this and last week Monday 00:00 – Sunday 23:59, this and last calendar month, this year (charted by
+month). A running period counts what has happened so far; it is compared with the whole previous period of the same
+kind. /admin's funnel is this week by the same rules, and its first step is every visit with any event, as on
+/admin/business. Visitors also get: visitors by visit count (1, 2, 3–5, 6+), the ten most active (anonymous id's first
+6 characters), and the products opened by the most visitors. The weekly targets alone use the last 7 days to today;
+the "visitors per day" target uses people once those 7 days are person-reliable (from 18 Nov 2026), visits until then.
 
 **Paste outcome** (the `paste` event's `detail`, from 11 Nov 2026; older events have none): `ok`, `queued` (Kaspi app
 link waiting for the collector), `not_a_url`, `not_kaspi`, `not_a_product`, `short_link_failed`, `check_failed`,

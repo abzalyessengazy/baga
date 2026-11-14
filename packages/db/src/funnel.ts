@@ -1,4 +1,5 @@
 import type postgres from "postgres";
+import { periodRange, PERSON_METRICS_FROM, type Period, type PeriodKey } from "@baga/core";
 
 /**
  * The in-house funnel (migration 0011, DECISIONS.md 2026-11-03 "In-house funnel instead of PostHog"): steps of one
@@ -61,8 +62,9 @@ export async function answerBought(sql: postgres.Sql, by: { code: string } | { w
 }
 
 export interface FunnelStats {
-  days: number;
-  steps: { name: EventName; sessions: number }[];
+  period: Period;
+  /** Per step: visits (tabs) that reached it, and distinct visitors (browsers, from PERSON_METRICS_FROM) who did. */
+  steps: { name: EventName; sessions: number; people: number }[];
   byLocale: { label: string; n: number }[];
   byDevice: { label: string; n: number }[];
   sources: { label: string; n: number }[];
@@ -80,20 +82,34 @@ export interface FunnelStats {
 }
 
 /**
- * Visits (tabs) that reached each step in the last `days` Almaty days including today, counted once per visit: the
- * same window as /admin/business (docs/STATS.md, "KPI definitions"). Connecting alerts is account-based: people who
- * started their list in the window, and of them those with Telegram or a confirmed email now.
+ * Visits (tabs) and distinct visitors (browsers) that reached each step in a calendar period of Almaty days (default:
+ * this week, Monday 00:00 to Sunday 23:59), the same periods and rules as /admin/business (docs/STATS.md, "KPI
+ * definitions"; packages/core periods.ts). Visitors are counted from PERSON_METRICS_FROM. Connecting alerts is
+ * account-based: people who started their alert list in the period, and of them those with Telegram or a confirmed
+ * email now.
  */
-export async function getFunnel(sql: postgres.Sql, days = 7): Promise<FunnelStats> {
-  // A plain timestamp parameter: a shared sql`` fragment reused across parallel queries made postgres.js hang.
-  const [w] = await sql<{ since: Date }[]>`
-    select (((now() at time zone 'Asia/Almaty')::date - ${days - 1}::int)::timestamp at time zone 'Asia/Almaty') as since`;
-  const since = w!.since;
-  const steps = await sql<{ name: EventName; sessions: number }[]>`
-    select name, count(distinct sid)::int as sessions from events where at > ${since} group by name`;
+export async function getFunnel(sql: postgres.Sql, which: PeriodKey = "week"): Promise<FunnelStats> {
+  // Plain timestamp parameters: a shared sql`` fragment reused across parallel queries made postgres.js hang.
+  const [today] = await sql<{ d: string }[]>`select to_char((now() at time zone 'Asia/Almaty')::date, 'YYYY-MM-DD') as d`;
+  const period = periodRange(which, today!.d);
+  const peopleFrom = period.from < PERSON_METRICS_FROM ? PERSON_METRICS_FROM : period.from;
+  const [w] = await sql<{ since: Date; until: Date; pSince: Date }[]>`
+    select (${period.from}::date::timestamp at time zone 'Asia/Almaty') as since,
+           ((${period.to}::date + 1)::timestamp at time zone 'Asia/Almaty') as until,
+           (${peopleFrom}::date::timestamp at time zone 'Asia/Almaty') as "pSince"`;
+  const { since, until, pSince } = w!;
+  const steps = await sql<{ name: EventName; sessions: number; people: number }[]>`
+    select name, count(distinct sid)::int as sessions,
+      count(distinct vid) filter (where at >= ${pSince})::int as people
+    from events where at >= ${since} and at < ${until} group by name`;
+  // «Открыли сайт» is every visit with any step, as /admin/business counts visits (a product page opened straight from
+  // a link can arrive without its visit beacon).
+  const [all] = await sql<{ sessions: number; people: number }[]>`
+    select count(distinct sid)::int as sessions, count(distinct vid) filter (where at >= ${pSince})::int as people
+    from events where at >= ${since} and at < ${until}`;
   const visits = (col: "locale" | "device" | "source") => sql<{ label: string; n: number }[]>`
     select coalesce(${sql(col)}, '—') as label, count(distinct sid)::int as n from events
-    where at > ${since} and name = 'visit' group by 1 order by 2 desc limit 8`;
+    where at >= ${since} and at < ${until} and name = 'visit' group by 1 order by 2 desc limit 8`;
   // One at a time: more parallel queries than pool connections get pipelined, and the Supabase pooler then stalls.
   const byLocale = await visits("locale");
   const byDevice = await visits("device");
@@ -104,7 +120,7 @@ export async function getFunnel(sql: postgres.Sql, days = 7): Promise<FunnelStat
   const [views] = await sql<{ total: number; priced: number; week: number }[]>`
     with v as (
       select distinct on (sid, external_id) external_id, at from events
-      where at > ${since} and name = 'product_view' and external_id is not null order by sid, external_id, at)
+      where at >= ${since} and at < ${until} and name = 'product_view' and external_id is not null order by sid, external_id, at)
     select count(*)::int as total,
            count(*) filter (where f.first < v.at)::int as priced,
            count(*) filter (where f.first < v.at - interval '7 days')::int as week
@@ -114,11 +130,12 @@ export async function getFunnel(sql: postgres.Sql, days = 7): Promise<FunnelStat
   const [accounts] = await sql<{ newPeople: number; connected: number }[]>`
     select count(*)::int as "newPeople",
       count(*) filter (where telegram_chat_id is not null or email_confirmed_at is not null)::int as connected
-    from watchers where created_at >= ${since}`;
-  const by = new Map(steps.map((s) => [s.name, s.sessions]));
+    from watchers where not internal and created_at >= ${since} and created_at < ${until}`;
+  const by = new Map(steps.map((s) => [s.name, s]));
+  by.set("visit", { name: "visit", ...all! });
   return {
     accounts: accounts ?? { newPeople: 0, connected: 0 },
-    days, steps: EVENT_NAMES.map((name) => ({ name, sessions: by.get(name) ?? 0 })),
+    period, steps: EVENT_NAMES.map((name) => ({ name, sessions: by.get(name)?.sessions ?? 0, people: by.get(name)?.people ?? 0 })),
     byLocale, byDevice, sources, bought, asked: asked!.n, returned: returned!.n,
     views: views ?? { total: 0, priced: 0, week: 0 },
   };

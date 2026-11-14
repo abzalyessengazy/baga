@@ -1,21 +1,21 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getTranslations, setRequestLocale } from "next-intl/server";
-import { formatTenge, personReliable, share, targetMark, TARGETS, type TargetMark } from "@baga/core";
-import { getSql, getBusiness, type BizDay, type BizTotals } from "@baga/db";
+import { formatTenge, isPeriodKey, PERIOD_KEYS, personReliable, share, targetMark, TARGETS, type TargetMark } from "@baga/core";
+import { almatyToday, getSql, getBusiness, lastSevenDays, type BizDay, type BizTotals } from "@baga/db";
 import { Link } from "@/i18n/navigation";
 import { adminEnabled, isAdmin } from "@/lib/admin";
 
-type Props = { params: Promise<{ locale: string }>; searchParams: Promise<{ d?: string }> };
+type Props = { params: Promise<{ locale: string }>; searchParams: Promise<{ p?: string }> };
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { robots: { index: false, follow: false } };
 
-const PERIODS = [7, 30, 90] as const;
 const count = (n: number) => new Intl.NumberFormat("ru-RU").format(n);
 const pct = (r: number) => `${Math.round(r * 100)}%`;
 const at = (d: Date) =>
   new Intl.DateTimeFormat("ru-RU", { timeZone: "Asia/Almaty", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(d);
 const dm = (iso: string) => `${iso.slice(8, 10)}.${iso.slice(5, 7)}`;
+const my = (iso: string) => `${iso.slice(5, 7)}.${iso.slice(0, 4)}`;
 const MARK: Record<TargetMark, string> = { on: "✓", half: "½", off: "✗" };
 const OUTCOMES = ["ok", "queued", "not_a_url", "not_kaspi", "not_a_product", "short_link_failed", "check_failed", "rate_limited", "network", "unknown", "none"] as const;
 
@@ -26,7 +26,7 @@ const OUTCOMES = ["ok", "queued", "not_a_url", "not_kaspi", "not_a_product", "sh
  */
 export default async function BusinessPage({ params, searchParams }: Props) {
   const { locale } = await params;
-  const { d } = await searchParams;
+  const { p } = await searchParams;
   setRequestLocale(locale);
   if (!adminEnabled()) notFound();
   const t = await getTranslations("biz");
@@ -39,10 +39,13 @@ export default async function BusinessPage({ params, searchParams }: Props) {
   }
   const sql = getSql();
   if (!sql) notFound();
-  const days = PERIODS.find((p) => String(p) === d) ?? 7;
-  const b = await getBusiness(sql, days);
-  // The targets are weekly numbers whatever the period shown.
-  const w = days === 7 ? b : await getBusiness(sql, 7);
+  // Calendar periods by Almaty time (the owner, 14 Nov): today 00:00–23:59, Monday–Sunday, calendar month and year.
+  const key = isPeriodKey(p) ? p : "today";
+  const b = await getBusiness(sql, key);
+  // The targets are weekly numbers whatever the period shown: the last 7 days to today.
+  const w = await getBusiness(sql, lastSevenDays(await almatyToday(sql)));
+  const range = (r: { from: string; to: string }) => (r.from === r.to ? dm(r.from) : `${dm(r.from)} – ${dm(r.to)}`);
+  const periodName = t(`p_${key}`);
   // Visitors per day: people once 7 full days have browser ids, visits until then (and the row says which).
   const weekPeople = personReliable(w.from) && w.now.people !== null;
   const perDay = weekPeople ? w.now.people! / w.daily.length : w.daily.reduce((s, x) => s + x.visits, 0) / w.daily.length;
@@ -62,13 +65,14 @@ export default async function BusinessPage({ params, searchParams }: Props) {
   const kv = (rows: [string, number | string][]) => (
     <dl className="admin-kv">{rows.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{typeof v === "number" ? count(v) : v}</dd></div>)}</dl>
   );
-  const tile = (k: string, key: keyof BizTotals, ofVisits = false) => {
-    const now = b.now[key], was = b.before?.[key] ?? null;
+  const tile = (k: string, field: keyof BizTotals, of: "visits" | "people" | null = null) => {
+    const now = b.now[field], was = b.before?.[field] ?? null;
+    const base = of ? b.now[of] : null;
     const delta = now !== null && was ? Math.round(((now - was) / was) * 100) : null;
     return (
       <div key={k} className="biz-tile">
         <p className="biz-tile-k">{t(k as "kVisits")}</p>
-        <p className="biz-tile-v">{now === null ? "—" : count(now)}{ofVisits && now !== null && b.now.visits > 0 && <small> · {pct(share(now, b.now.visits))}</small>}</p>
+        <p className="biz-tile-v">{now === null ? "—" : count(now)}{now !== null && base ? <small> · {pct(share(now, base))}</small> : null}</p>
         <p className="biz-tile-d">
           {now === null ? t("noPeople", { date: dm(b.personFrom) }) : (
             <>
@@ -83,6 +87,11 @@ export default async function BusinessPage({ params, searchParams }: Props) {
   const visitFunnel: [string, number][] = [
     [t("fVisits"), b.now.visits], [t("fOpened"), b.now.opened], [t("fPasted"), b.now.pasted], [t("fTracked"), b.now.tracked],
   ];
+  // The same steps counted once per visitor (a browser), over the same period.
+  const peopleFunnel: [string, number][] | null = b.now.people === null ? null : [
+    [t("fPeople"), b.now.people], [t("fOpened"), b.now.pOpened ?? 0], [t("fPasted"), b.now.pPasted ?? 0], [t("fTracked"), b.now.pTracked ?? 0],
+  ];
+  const dayLabel = b.period.bucket === "month" ? my : dm;
   const bar = (name: string, n: number, of: number) => {
     const r = share(n, of);
     return (
@@ -100,13 +109,14 @@ export default async function BusinessPage({ params, searchParams }: Props) {
     <main className="wrap untracked admin biz">
       <h1 className="product-title" style={{ color: "var(--ink-on-counter, var(--ink))" }}>{t("title")}</h1>
       <p className="admin-now">{t("now", { time: at(new Date()) })} · <Link href="/admin">{t("health")}</Link></p>
-      <nav className="biz-periods" aria-label={t("periodTitle", { n: days, from: dm(b.from), to: dm(b.to) })}>
-        {PERIODS.map((p) => (
-          <Link key={p} href={`/admin/business?d=${p}`} aria-current={p === days ? "page" : undefined} className="biz-period">{t("days", { n: p })}</Link>
+      <nav className="biz-periods" aria-label={t("periodTitle", { name: periodName, range: range(b) })}>
+        {PERIOD_KEYS.map((k) => (
+          <Link key={k} href={`/admin/business?p=${k}`} aria-current={k === key ? "page" : undefined} className="biz-period">{t(`p_${k}`)}</Link>
         ))}
       </nav>
       <p className="biz-note">{t("kindsNote", { date: dm(b.personFrom) })}</p>
       {b.countedSince && b.countedSince > b.from && <p className="biz-note">{t("countedNote", { date: dm(b.countedSince) })}</p>}
+      {b.now.people !== null && b.peopleFrom > b.from && <p className="biz-note">{t("peopleFromNote", { date: dm(b.peopleFrom) })}</p>}
 
       <section className="receipt admin-card">
         <h2>{t("targetsTitle", { date: dm(TARGETS.by) })}</h2>
@@ -127,10 +137,10 @@ export default async function BusinessPage({ params, searchParams }: Props) {
       </section>
 
       <section className="receipt admin-card">
-        <h2>{t("periodTitle", { n: days, from: dm(b.from), to: dm(b.to) })}</h2>
+        <h2>{t("periodTitle", { name: periodName, range: range(b) })}</h2>
         <h3>{t("gVisits")}</h3>
         <div className="biz-tiles">
-          {tile("kVisits", "visits")}{tile("kOpened", "opened", true)}{tile("kPasted", "pasted", true)}{tile("kTracked", "tracked", true)}{tile("kFromPosts", "fromPosts", true)}
+          {tile("kVisits", "visits")}{tile("kOpened", "opened", "visits")}{tile("kPasted", "pasted", "visits")}{tile("kTracked", "tracked", "visits")}{tile("kFromPosts", "fromPosts", "visits")}
         </div>
         <h3>{t("gPeople")}</h3>
         <div className="biz-tiles">
@@ -139,28 +149,32 @@ export default async function BusinessPage({ params, searchParams }: Props) {
             <p className="biz-tile-v">{b.mapr ? count(b.mapr.n) : "—"}</p>
             <p className="biz-tile-d">{b.mapr ? t("maprSince", { date: dm(b.mapr.since) }) : t("noPeople", { date: dm(b.personFrom) })}</p>
           </div>
-          {tile("kPeople", "people")}{tile("kResearchers", "researchers")}{tile("kReturning", "returning")}
+          {tile("kPeople", "people")}{tile("kResearchers", "researchers", "people")}{tile("kReturning", "returning", "people")}
+          {tile("kOpened", "pOpened", "people")}{tile("kPasted", "pPasted", "people")}{tile("kTracked", "pTracked", "people")}
         </div>
         <h3>{t("gAccounts")}</h3>
         <div className="biz-tiles">
           {tile("kNewPeople", "newPeople")}{tile("kNewConnected", "newPeopleConnected")}{tile("kNewTrackings", "newTrackings")}
         </div>
-        <p className="biz-def">{t("maprNote")} {t("kpiNote", { n: days })}</p>
+        <p className="biz-def">{t("maprNote")} {t("kpiNote", { range: range(b.period.prev) })}</p>
       </section>
 
       <section className="receipt admin-card">
-        <h2>{t("dailyTitle")}</h2>
-        <div className="biz-charts">
-          <Bars title={t("dVisits")} days={b.daily} pick={(x) => x.visits} />
-          <Bars title={t("dOpened")} days={b.daily} pick={(x) => x.opened} />
-          <Bars title={t("dTracked")} days={b.daily} pick={(x) => x.tracked} />
-        </div>
+        <h2>{t(b.period.bucket === "month" ? "monthlyTitle" : "dailyTitle")}</h2>
+        {b.daily.length === 0 ? <p className="admin-muted">{t("noDays")}</p> : (
+          <div className="biz-charts">
+            <Bars title={t("dVisits")} days={b.daily} pick={(x) => x.visits} label={dayLabel} />
+            <Bars title={t("dPeople")} days={b.daily} pick={(x) => x.people ?? 0} label={dayLabel} />
+            <Bars title={t("dOpened")} days={b.daily} pick={(x) => x.opened} label={dayLabel} />
+            <Bars title={t("dTracked")} days={b.daily} pick={(x) => x.tracked} label={dayLabel} />
+          </div>
+        )}
         <details className="biz-details">
           <summary>{t("tableView")}</summary>
           <div className="admin-scroll">
             <table className="admin-table">
-              <thead><tr><th>{t("colDay")}</th><th>{t("dVisits")}</th><th>{t("dOpened")}</th><th>{t("dTracked")}</th></tr></thead>
-              <tbody>{b.daily.map((x) => <tr key={x.day}><td>{dm(x.day)}</td><td>{x.visits}</td><td>{x.opened}</td><td>{x.tracked}</td></tr>)}</tbody>
+              <thead><tr><th>{t("colDay")}</th><th>{t("dVisits")}</th><th>{t("dPeople")}</th><th>{t("dOpened")}</th><th>{t("dTracked")}</th></tr></thead>
+              <tbody>{b.daily.map((x) => <tr key={x.day}><td>{dayLabel(x.day)}</td><td>{x.visits}</td><td>{x.people ?? "—"}</td><td>{x.opened}</td><td>{x.tracked}</td></tr>)}</tbody>
             </table>
           </div>
         </details>
@@ -171,6 +185,10 @@ export default async function BusinessPage({ params, searchParams }: Props) {
           <h2>{t("funnelTitle")}</h2>
           <h3>{t("gVisits")}</h3>
           <ol className="biz-funnel">{visitFunnel.map(([name, n]) => bar(name, n, b.now.visits))}</ol>
+          <h3>{t("gPeople")}</h3>
+          {peopleFunnel
+            ? <ol className="biz-funnel">{peopleFunnel.map(([name, n]) => bar(name, n, b.now.people ?? 0))}</ol>
+            : <p className="admin-muted">{t("noPeople", { date: dm(b.personFrom) })}</p>}
           <h3>{t("gAccounts")}</h3>
           <ol className="biz-funnel">
             {bar(t("fNewPeople"), b.now.newPeople, b.now.newPeople)}
@@ -211,16 +229,54 @@ export default async function BusinessPage({ params, searchParams }: Props) {
         </section>
       )}
 
+      {b.now.people !== null && (
+        <section className="receipt admin-card">
+          <h2>{t("whoTitle")}</h2>
+          <div className="admin-grid">
+            <div>
+              <h3>{t("freqTitle")}</h3>
+              {kv(b.frequency.map((f): [string, string] => [t(`f_${f.visits.replace("-", "_").replace("+", "")}` as "f_1"), `${count(f.people)} · ${pct(share(f.people, b.now.people ?? 0))}`]))}
+            </div>
+            <div>
+              <h3>{t("topVisitorsTitle")}</h3>
+              {b.topVisitors.length ? (
+                <div className="admin-scroll">
+                  <table className="admin-table">
+                    <thead><tr><th>{t("colVisitor")}</th><th>{t("colVisits")}</th><th>{t("colDays")}</th><th>{t("colProducts")}</th><th>{t("colTracks")}</th></tr></thead>
+                    <tbody>{b.topVisitors.map((v) => (
+                      <tr key={v.id}><td><code>{v.id}</code></td><td>{v.visits}</td><td>{v.days}</td><td>{v.products}</td><td>{v.tracked ? t("yes") : "—"}</td></tr>
+                    ))}</tbody>
+                  </table>
+                </div>
+              ) : <p className="admin-muted">{t("noVisitors")}</p>}
+            </div>
+          </div>
+          <h3>{t("topProductsTitle")}</h3>
+          {b.topProducts.length ? (
+            <div className="admin-scroll">
+              <table className="admin-table">
+                <thead><tr><th>{t("colProduct")}</th><th>{t("colPeople")}</th><th>{t("colViews")}</th></tr></thead>
+                <tbody>{b.topProducts.map((r) => (
+                  <tr key={r.externalId}><td className="biz-name"><Link href={`/p/${r.externalId}`}>{r.title}</Link></td><td>{count(r.people)}</td><td>{count(r.views)}</td></tr>
+                ))}</tbody>
+              </table>
+            </div>
+          ) : <p className="admin-muted">{t("noVisitors")}</p>}
+          <p className="biz-def">{t("whoNote", { date: dm(b.peopleFrom) })}</p>
+        </section>
+      )}
+
       <section className="receipt admin-card">
         <h2>{t("sourcesTitle")}</h2>
         <div className="admin-scroll">
           <table className="admin-table">
-            <thead><tr><th>{t("colSource")}</th><th>{t("colVisits")}</th><th>{t("colOpened")}</th><th>{t("colTracked")}</th></tr></thead>
+            <thead><tr><th>{t("colSource")}</th><th>{t("colVisits")}</th><th>{t("colPeople")}</th><th>{t("colOpened")}</th><th>{t("colTracked")}</th></tr></thead>
             <tbody>
               {b.sources.map((s) => (
                 <tr key={s.source} className={s.posts ? "is-post" : undefined}>
                   <td>{s.source === "direct" ? t("direct") : s.source}{s.posts && <span className="biz-chip">{t("post")}</span>}</td>
                   <td>{count(s.visits)}</td>
+                  <td>{count(s.people)}</td>
                   <td>{count(s.opened)} · {pct(share(s.opened, s.visits))}</td>
                   <td>{count(s.tracked)} · {pct(share(s.tracked, s.visits))}</td>
                 </tr>
@@ -269,7 +325,7 @@ export default async function BusinessPage({ params, searchParams }: Props) {
 }
 
 /** One measure per day as bars from a zero baseline, the latest day inked; each bar's tooltip names day and value. */
-function Bars({ title, days, pick }: { title: string; days: BizDay[]; pick: (d: BizDay) => number }) {
+function Bars({ title, days, pick, label: dm }: { title: string; days: BizDay[]; pick: (d: BizDay) => number; label: (iso: string) => string }) {
   const values = days.map(pick);
   const max = Math.max(1, ...values);
   const W = 300, H = 96, top = 14, base = H - 16;
