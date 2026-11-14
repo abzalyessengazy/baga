@@ -23,8 +23,11 @@ export const addedByPerson = (sql: postgres.Sql) => sql`(not p.is_seed and (
 export const NEWEST_ORDER = (sql: postgres.Sql) =>
   sql`(p.first_seen_at at time zone 'Asia/Almaty')::date desc, ${addedByPerson(sql)} desc, p.first_seen_at desc`;
 
-/** «Чаще всего отслеживают» lists a product from this many people tracking it. */
-export const MIN_TRACKERS = 2;
+/**
+ * «Чаще всего отслеживают» lists a product from this many people tracking it: 1 since 14 Nov 2026 (the owner: with 2,
+ * one product qualified and the list showed a single row). Most people first, then the latest tracked.
+ */
+export const MIN_TRACKERS = 1;
 
 /** A product in a plain list (most tracked, newest). */
 export interface StatsProduct { externalId: string; title: string; titleKk: string | null; imageUrl: string | null; price: number | null; at: Date }
@@ -108,8 +111,8 @@ export async function getPlatformStats(sql: postgres.Sql, dayCount = 14, listCou
   const product = (r: { external_id: string; title: string; title_kk: string | null; image_url: string | null; price: number | null; at: Date }): StatsProduct =>
     ({ externalId: r.external_id, title: r.title, titleKk: r.title_kk, imageUrl: r.image_url, price: r.price, at: r.at });
   // Ordered by how many people track a product; the counts themselves stay private while they are small. Only
-  // products with a price that MIN_TRACKERS or more people track (owner, 11 Nov: with one person each, "most tracked"
-  // was really "recently tracked"); the slip hides itself until there is one.
+  // products with a price that MIN_TRACKERS or more people track (owner, 11 Nov: 2, as with one person each "most tracked"
+  // was really "recently tracked"; back to 1 on 14 Nov, the owner's choice). The slip hides itself until there is one.
   const tracked = await sql<{ external_id: string; title: string; title_kk: string | null; image_url: string | null; price: number | null; at: Date }[]>`
     select p.external_id, p.title, p.title_kk, p.image_url, s.current_min_price as price, max(t.created_at) as at
     from trackings t join products p on p.id = t.product_id join product_state s on s.product_id = p.id
