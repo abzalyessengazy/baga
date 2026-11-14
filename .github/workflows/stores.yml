@@ -1,7 +1,7 @@
 name: Store prices
 on:
   # Other stores' prices for exactly matched products (DECISIONS.md, 2026-11-07 "Technodom as a second price
-  # source"; CLAUDE.md rule 6a). After Kaspi's Visit-time (ends 08:45 UTC), so never at the same time as a Kaspi
+  # source", 2026-11-14 "Sulpak as a third price source"; CLAUDE.md rule 6a): Technodom, then Sulpak, one at a time. After Kaspi's Visit-time (ends 08:45 UTC), so never at the same time as a Kaspi
   # request: the worker sends requests only 08:46-03:50 UTC, across midnight (13:46-08:50 Almaty), and exits without
   # any otherwise.
   # The main start is cron-job.org's workflow_dispatch at 08:50 UTC (GitHub never fired this schedule on 8 Nov);

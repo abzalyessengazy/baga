@@ -45,12 +45,12 @@ export function reportIssues(r: OwnerReport, now = new Date(), failures: Workflo
   if (r.catalog.products > 0 && share(r.catalog.fresh3d, r.catalog.products) < 0.9) {
     out.push(`Only ${pct(share(r.catalog.fresh3d, r.catalog.products))} of products checked in the last 3 days`);
   }
-  if (!r.store.startedAt) out.push("Technodom has never run");
-  else if (now.getTime() - new Date(r.store.startedAt).getTime() > 36 * 3600_000) out.push("Technodom has not run for over 36 h");
-  if (r.store.aborted) out.push(`Technodom run stopped: ${r.store.aborted}`);
+  if (!r.store.startedAt) out.push("The store run (Technodom, Sulpak) has never run");
+  else if (now.getTime() - new Date(r.store.startedAt).getTime() > 36 * 3600_000) out.push("The store run (Technodom, Sulpak) has not run for over 36 h");
+  if (r.store.aborted) out.push(`A store run stopped: ${r.store.aborted}`);
   if (r.manual24h.blocked > 0) out.push(`Manual checks blocked by Kaspi (${r.manual24h.blocked})`);
   if (r.alerts.failed24h > 0) out.push(`${r.alerts.failed24h} notifications failed to send`);
-  if (r.store.pendingMatches > 0) out.push(`Review ${r.store.pendingMatches} Technodom matches (admin)`);
+  if (r.store.pendingMatches > 0) out.push(`Review ${r.store.pendingMatches} store matches (admin)`);
   return out.map(esc);
 }
 
@@ -113,7 +113,7 @@ export function renderOwnerReport(r: OwnerReport, commits: Commit[], now = new D
   out.push("", "<b>Data today</b>");
   out.push(`Kaspi ${c.running ? "⏳ running" : c.runs ? "✅" : "❌"} ${num(c.requests)} requests · ${num(c.checked)} checked · ${num(c.changed)} price changes`);
   if (c.lastOk && c.aborted.length) out.push(`Kaspi: ${c.aborted.length} earlier stop${c.aborted.length > 1 ? "s" : ""} (${c.aborted.map(esc).join("; ")}), last run ok`);
-  out.push(`Technodom ${r.store.aborted ? "⚠️" : "✅"} ${num(r.store.priced)} priced · ${r.store.cheaperThere} cheaper than Kaspi`);
+  out.push(`Stores ${r.store.aborted ? "⚠️" : "✅"} ${num(r.store.priced)} priced · ${r.store.cheaperThere} cheaper than Kaspi`);
   const recovered = failures.filter((f) => f.recovered);
   if (recovered.length) out.push(`GitHub: ${recovered.map((f) => `${esc(f.name)} failed ${f.failed}×, then ok`).join(" · ")}`);
   out.push(`${pct(share(r.catalog.fresh3d, r.catalog.products))} of ${num(r.catalog.products)} products fresh · ${num(r.catalog.seedQueue)} waiting to be added`);

@@ -136,7 +136,7 @@ export interface PendingMatch { id: number; ourTitle: string; externalId: string
 export async function pendingMatches(sql: postgres.Sql, limit = 50): Promise<PendingMatch[]> {
   return sql<PendingMatch[]>`
     select m.id, p.title as "ourTitle", p.external_id as "externalId", m.store_title as "storeTitle",
-           mk.base_url || '/p/' || m.store_slug as url, m.reason, s.current_min_price as "kaspiPrice"
+           mk.base_url || mk.product_path || m.store_slug as url, m.reason, s.current_min_price as "kaspiPrice"
     from store_matches m join products p on p.id = m.product_id join marketplaces mk on mk.id = m.marketplace_id
     left join product_state s on s.product_id = p.id
     where m.status = 'pending' and not (coalesce(m.reason, '') = any(${SIMILAR_REASONS as unknown as string[]}))
@@ -150,7 +150,7 @@ export async function pendingMatches(sql: postgres.Sql, limit = 50): Promise<Pen
 export interface StoreOffer { store: string; name: string; url: string; title: string | null; price: number; oldPrice: number | null; observedAt: Date; kind: "exact" | "similar" }
 export async function storeOffers(sql: postgres.Sql, productId: number): Promise<StoreOffer[]> {
   const rows = await sql<StoreOffer[]>`
-    select mk.code as store, mk.name, mk.base_url || '/p/' || m.store_slug as url, m.store_title as title,
+    select mk.code as store, mk.name, mk.base_url || mk.product_path || m.store_slug as url, m.store_title as title,
            sp.price, sp.old_price as "oldPrice", sp.observed_at as "observedAt",
            case when m.status = 'confirmed' then 'exact' else 'similar' end as kind
     from store_matches m join marketplaces mk on mk.id = m.marketplace_id
@@ -175,4 +175,55 @@ export async function latestStoreRuns(sql: postgres.Sql, limit = 5) {
   return sql<{ store: string; startedAt: Date; finishedAt: Date | null; requests: number; priced: number; matched: number; failed: number; aborted: string | null }[]>`
     select mk.code as store, r.started_at as "startedAt", r.finished_at as "finishedAt", r.requests, r.priced, r.matched, r.failed, r.aborted_reason as aborted
     from store_runs r join marketplaces mk on mk.id = r.marketplace_id order by r.id desc limit ${limit}`;
+}
+
+/**
+ * Sulpak's index (migration 0029; DECISIONS.md 2026-11-14): its categories and the items read from their listings.
+ * Sulpak has no product sitemap, so these stand in for one.
+ */
+export const STORE_INDEX = {
+  /** A category's listings are read again after this many days. */
+  recrawlDays: 7,
+  /** Items not seen in a listing for this long are left out of matching. */
+  itemMaxAgeDays: 30,
+} as const;
+
+/** Saves the store's category addresses (new ones only). */
+export async function saveStoreCategories(sql: postgres.Sql, marketplaceId: number, slugs: string[]): Promise<void> {
+  if (!slugs.length) return;
+  await sql`insert into store_categories (marketplace_id, slug)
+    select ${marketplaceId}, s from unnest(${sql.array(slugs)}::text[]) as s on conflict do nothing`;
+}
+export async function storeCategories(sql: postgres.Sql, marketplaceId: number) {
+  return sql<{ slug: string; pages: number | null; nextPage: number; crawledAt: Date | null }[]>`
+    select slug, pages, next_page as "nextPage", crawled_at as "crawledAt" from store_categories where marketplace_id = ${marketplaceId}`;
+}
+/** Our Kaspi leaf categories with priced active products: tracked ones first, then the most products. */
+export async function ourLeafCategories(sql: postgres.Sql) {
+  return sql<{ leaf: string; products: number; tracked: number }[]>`
+    select p.category_path[array_length(p.category_path, 1)] as leaf, count(*)::int as products,
+           count(*) filter (where exists (select 1 from trackings t where t.product_id = p.id and t.status = 'active'))::int as tracked
+    from products p join product_state s on s.product_id = p.id
+    where p.status = 'active' and s.current_min_price is not null and array_length(p.category_path, 1) > 0
+    group by 1 order by 3 desc, 2 desc`;
+}
+export async function saveListingPage(sql: postgres.Sql, marketplaceId: number, category: string, page: number, pages: number,
+  items: { sku: string; slug: string; title: string; price: number | null; oldPrice: number | null; onOrder: boolean }[]): Promise<void> {
+  if (items.length) await sql`
+    insert into store_items (marketplace_id, sku, slug, title, category, price, old_price, on_order, seen_at)
+    select ${marketplaceId}, x.sku, x.slug, x.title, ${category}, nullif(x.price, 0), nullif(x.old, 0), x.on_order, now()
+    from unnest(${sql.array(items.map((i) => i.sku))}::text[], ${sql.array(items.map((i) => i.slug))}::text[], ${sql.array(items.map((i) => i.title))}::text[],
+      ${sql.array(items.map((i) => i.price ?? 0))}::int[], ${sql.array(items.map((i) => i.oldPrice ?? 0))}::int[], ${sql.array(items.map((i) => i.onOrder))}::bool[])
+      as x(sku, slug, title, price, old, on_order)
+    on conflict (marketplace_id, sku) do update set slug = excluded.slug, title = excluded.title, category = excluded.category,
+      price = excluded.price, old_price = excluded.old_price, on_order = excluded.on_order, seen_at = now()`;
+  const done = page >= pages || !items.length;
+  await sql`update store_categories set pages = ${pages}, next_page = ${done ? 1 : page + 1},
+    crawled_at = case when ${done} then now() else crawled_at end
+    where marketplace_id = ${marketplaceId} and slug = ${category}`;
+}
+export interface StoreItem { sku: string; slug: string; title: string; price: number | null; oldPrice: number | null; onOrder: boolean; seenAt: Date }
+export async function storeItems(sql: postgres.Sql, marketplaceId: number): Promise<StoreItem[]> {
+  return sql<StoreItem[]>`select sku, slug, title, price, old_price as "oldPrice", on_order as "onOrder", seen_at as "seenAt" from store_items
+    where marketplace_id = ${marketplaceId} and seen_at > now() - make_interval(days => ${STORE_INDEX.itemMaxAgeDays})`;
 }

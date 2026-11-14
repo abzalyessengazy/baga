@@ -16,7 +16,7 @@ import { dayMoves } from "./movers";
 import { requestManualCheck, finishManualCheck, queuedManualChecks, MANUAL_CHECKS } from "./manual";
 import { cityChecksDue, saveCityPrice, latestCityPrice, noteCityView, cityDailyLows } from "./cities";
 import { getShop, productSellers, saveShopFeedback } from "./shops";
-import { decideMatch, matchesToPrice, saveMatch, saveStorePrice, storeMarketplaceId, storeOffers } from "./stores";
+import { decideMatch, matchesToPrice, saveMatch, saveStorePrice, storeMarketplaceId, storeOffers, saveStoreCategories, storeCategories, saveListingPage, storeItems } from "./stores";
 import { claimDigest, digestDue, getBoard, getProfile, getProfileStats, saveProfile, setProfileFlags, stopDigestByChat, suggestFor } from "./profile";
 import { getPlatformStats } from "./stats";
 import type { ProductSnapshot } from "@baga/kaspi";
@@ -55,7 +55,7 @@ describe.skipIf(!url)("database (disposable Postgres)", () => {
   afterAll(async () => { await sql?.end(); });
 
   beforeEach(async () => {
-    await sql`truncate short_link_queue, manual_checks, city_prices, store_prices, store_matches, store_runs, notifications, trackings, email_requests, watchers, seller_feedback, seller_daily, offers_current,
+    await sql`truncate short_link_queue, manual_checks, city_prices, store_items, store_categories, store_prices, store_matches, store_runs, notifications, trackings, email_requests, watchers, seller_feedback, seller_daily, offers_current,
       sellers, price_observations, product_state, collection_schedule, products restart identity cascade`;
   });
 
@@ -385,6 +385,24 @@ describe.skipIf(!url)("database (disposable Postgres)", () => {
   });
 
   describe("other stores (migration 0018)", () => {
+    it("Sulpak: its index fills page by page and resumes; its offers link to /g/ (migration 0029)", async () => {
+      const mid = await storeMarketplaceId(sql, "sulpak");
+      await saveStoreCategories(sql, mid, ["smartfoniy", "monitoriy"]);
+      const item = (sku: string, price: number | null) => ({ sku, slug: `smartfoniy-x-${sku}`, title: `Смартфон X ${sku}`, price, oldPrice: null, onOrder: false });
+      await saveListingPage(sql, mid, "smartfoniy", 1, 2, [item("1", 100_000), item("2", null)]);
+      expect((await storeCategories(sql, mid)).find((c) => c.slug === "smartfoniy")).toMatchObject({ pages: 2, nextPage: 2, crawledAt: null });
+      await saveListingPage(sql, mid, "smartfoniy", 2, 2, [item("1", 99_000)]);
+      const c = (await storeCategories(sql, mid)).find((x) => x.slug === "smartfoniy")!;
+      expect(c.nextPage).toBe(1);
+      expect(c.crawledAt).toBeInstanceOf(Date);
+      expect((await storeItems(sql, mid)).map((i) => [i.sku, i.price]).sort()).toEqual([["1", 99_000], ["2", null]]);
+      const [p] = await sql<{ id: number }[]>`insert into products (marketplace_id, external_id, title)
+        values ((select id from marketplaces where code = 'kaspi'), '500000001', 'Смартфон X 1') returning id`;
+      const m = await saveMatch(sql, { productId: p!.id, marketplaceId: mid, sku: "1", slug: "smartfoniy-x-1", title: "Смартфон X 1", method: "strict", status: "confirmed" });
+      await saveStorePrice(sql, m.id, { price: 99_000, oldPrice: null, inStock: true });
+      expect(await storeOffers(sql, p!.id)).toEqual([expect.objectContaining({ store: "sulpak", name: "Sulpak", url: "https://www.sulpak.kz/g/smartfoniy-x-1", price: 99_000 })]);
+    });
+
     async function product(externalId: string) {
       await saveSnapshot(sql, { marketplace: "kaspi", externalId, title: `Product ${externalId}`, imageUrl: null, categoryPath: ["Cat"], reviews: null, rating: null,
         offers: [{ sellerId: "m1", sellerName: "Shop", sellerRating: 4.9, sellerReviews: 100, price: 50_000, deliveryDuration: null, preorderDays: 0 }],

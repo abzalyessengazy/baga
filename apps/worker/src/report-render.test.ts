@@ -34,9 +34,9 @@ describe("reportIssues", () => {
       "Kaspi collector sent only 300 requests today",
       "Kaspi run stopped: 429 &lt;Too Many&gt;",
       "Only 65% of products checked in the last 3 days",
-      "Technodom has not run for over 36 h",
+      "The store run (Technodom, Sulpak) has not run for over 36 h",
       "1 notifications failed to send",
-      "Review 22 Technodom matches (admin)",
+      "Review 22 store matches (admin)",
     ]);
     expect(reportIssues({ ...base, collector: { ...base.collector, runs: 0 } }, now)).toEqual(["Kaspi collector did not run today"]);
   });
