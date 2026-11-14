@@ -8,6 +8,7 @@ import { TearCoupon } from "./TearCoupon";
 import { ConsentNote } from "./ConsentNote";
 import { EmailConnect, type EmailInitial } from "./EmailConnect";
 import { track as trackStep } from "@/lib/analytics";
+import { BoardNudge } from "./BoardNudge";
 
 export interface TrackInitial {
   /** dropPct: a percentage target waiting for the product's first price (migration 0010). */
@@ -187,6 +188,8 @@ export function TrackPanel({ productId, shortLink, current, initial, related }: 
           {(tg.url || initial.emailReady) && <ConsentNote />}
         </motion.div>
       )}
+      {/* Just set a price: the moment to invite them onto the leaderboard (14 Nov). */}
+      {just && <BoardNudge />}
       <div className="track-actions">
         <button type="button" className="link-btn" onClick={() => setOpen(true)}>{t("change")}</button>
         <Link href="/my">{t("myItems")}</Link>

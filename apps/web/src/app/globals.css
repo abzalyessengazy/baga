@@ -1179,3 +1179,10 @@ span.ticker-thumb { background: var(--paper-shade); box-shadow: none; }
 .z-row > .p { grid-area: p; justify-self: start; font-size: 1.0625rem; line-height: 1.25; }
 .z-row.is-first .z-rank { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--stamp); color: var(--paper); font-size: 0.6875rem; }
 .z-row.is-first.is-up .z-rank { background: var(--stamp-red); }
+
+/* After the first price: one quiet line inviting onto the leaderboard (BoardNudge, 14 Nov). */
+.board-nudge { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin-top: 14px; padding: 12px; border-radius: 8px;
+  background: color-mix(in srgb, var(--stamp) 8%, var(--paper)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--stamp) 25%, transparent); }
+.board-nudge-icon { font-size: 1.125rem; }
+.board-nudge-text { flex: 1 1 160px; font: 600 0.875rem/1.35 var(--font-ui); color: var(--ink); }
+.board-nudge-btn { padding: 8px 14px; font-size: 0.8125rem; }
