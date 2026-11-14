@@ -1179,6 +1179,11 @@ span.ticker-thumb { background: var(--paper-shade); box-shadow: none; }
 .z-row > .p { grid-area: p; justify-self: start; font-size: 1.0625rem; line-height: 1.25; }
 .z-row.is-first .z-rank { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--stamp); color: var(--paper); font-size: 0.6875rem; }
 .z-row.is-first.is-up .z-rank { background: var(--stamp-red); }
+/* Readable rows (14 Nov, the owner: «why it became all bold»): IBM Plex Mono at 600 reads as a wall of bold. The product
+   name is set in the UI type at a regular weight, the price stays the one strong line, rank and date stay receipt type. */
+.z-row .z-title { font-family: var(--font-ui); font-weight: 500; font-size: 0.9375rem; line-height: 1.4; letter-spacing: 0; color: var(--ink); }
+.z-row > .p { font-weight: 700; font-size: 1.125rem; letter-spacing: -0.01em; margin-top: 2px; }
+.z-row .z-sub { font-size: 0.75rem; color: var(--ink-faint); }
 
 /* After the first price: one quiet line inviting onto the leaderboard (BoardNudge, 14 Nov). */
 .board-nudge { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin-top: 14px; padding: 12px; border-radius: 8px;
