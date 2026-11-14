@@ -1,4 +1,5 @@
 "use client";
+import { formatCount } from "@baga/core";
 import { CountChip } from "@/components/SellerChips";
 import { motion, useInView, useReducedMotion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
@@ -12,7 +13,7 @@ import { PickSlider } from "./PickSlider";
 import { dayMonth, type DatesT } from "@/lib/dayMonth";
 import { CountUp } from "./Motion";
 
-const count = (n: number) => new Intl.NumberFormat("ru-RU").format(n);
+const count = (n: number) => formatCount(n);
 /** Calendar days from the first observed day to the shown day (the live day included), both included. */
 const historyDays = (first: string | null, last: string) =>
   first ? Math.round((Date.parse(last) - Date.parse(first)) / 86_400_000) + 1 : 0;

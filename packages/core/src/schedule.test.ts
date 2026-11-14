@@ -57,7 +57,7 @@ describe("schedule", () => {
 
 describe("money", () => {
   it("formats tenge", () => {
-    expect(formatTenge(749364)).toBe("749 364 ₸");
+    expect(formatTenge(749364)).toBe("749 364 ₸");
   });
   it("rounds floats from the API", () => {
     expect(toTenge(749364.0)).toBe(749364);

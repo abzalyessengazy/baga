@@ -2,7 +2,7 @@
 import { motion } from "motion/react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { formatTenge, shortTitle } from "@baga/core";
+import { formatTenge, shortTitle, formatCount } from "@baga/core";
 import type { Market } from "@baga/db";
 import { Link } from "@/i18n/navigation";
 import { cachedMarket, cachedStats, loadMarket, loadStats, type Stats, type StatsDrop, type StatsItem, type StatsMoves } from "@/lib/market";
@@ -194,7 +194,7 @@ function CategorySlip({ rows, locale }: { rows: Market["categories"]; locale: L 
 function ShopsSlip({ shops }: { shops: NonNullable<Stats["shops"]> }) {
   const t = useTranslations("home");
   const [side, setSide] = useState<"top" | "low">("top");
-  const count = (n: number) => new Intl.NumberFormat("ru-RU").format(n);
+  const count = (n: number) => formatCount(n);
   return (
     <Screen more="/shops?sort=rating" moreLabel={t("explore")} note={t("shopsNote")}>
       {(go) => (

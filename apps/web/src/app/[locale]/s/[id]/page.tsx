@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getTranslations, setRequestLocale } from "next-intl/server";
-import { priceNote, formatTenge, reviewGrowth, shortTitle, SHOP_FEEDBACK } from "@baga/core";
+import { priceNote, formatTenge, reviewGrowth, shortTitle, SHOP_FEEDBACK, formatCount } from "@baga/core";
 import { getSql, getShop, type ShopView } from "@baga/db";
 import { Link } from "@/i18n/navigation";
 import { dayMonth } from "@/lib/dayMonth";
@@ -41,7 +41,7 @@ export default async function ShopPage({ params }: Props) {
   const td = await getTranslations("dates");
   const L = locale as "ru" | "kk";
   const f = (n: number) => formatTenge(n, L);
-  const num = (n: number) => new Intl.NumberFormat("ru-RU").format(n);
+  const num = (n: number) => formatCount(n);
   const kind = chipKind(s.rating, s.reviews);
   const notes = s.products.map((p) => priceNote(p.price, p.others, s.rating, s.reviews));
   const noteKinds = new Set<LegendKind>(notes.flatMap((n) => (n ? [n.kind] : [])));

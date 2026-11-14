@@ -1,5 +1,5 @@
 import { useTranslations } from "next-intl";
-import { isEstablished, sellerLabel, type PriceNote, type SellerLabel } from "@baga/core";
+import { isEstablished, sellerLabel, type PriceNote, type SellerLabel, formatCount } from "@baga/core";
 
 /**
  * Shop evidence as small chips (DECISIONS.md, 2026-11-05 "Shop evidence, not verdicts"): an icon and the numbers,
@@ -31,7 +31,7 @@ export function chipKind(rating: number | null, reviews: number | null): ChipKin
   return isEstablished(rating, reviews) ? "established" : sellerLabel(rating, reviews);
 }
 
-const num = (n: number) => new Intl.NumberFormat("ru-RU").format(n);
+const num = (n: number) => formatCount(n);
 
 /** Kaspi rating and review count of one shop. */
 export function SellerChip({ rating, reviews }: { rating: number | null; reviews: number | null }) {
