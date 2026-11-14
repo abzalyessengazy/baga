@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { addEvent, markViewed, EVENT_NAMES, getSql, type EventName } from "@baga/db";
+import { addEvent, markViewed, dropTeamVisitor, EVENT_NAMES, getSql, type EventName } from "@baga/db";
+import { currentWatcher } from "@/lib/watcher";
 import { allow } from "@/lib/rateLimit";
 import { clientIp } from "@/lib/turnstile";
 
@@ -20,10 +21,14 @@ export async function POST(req: Request) {
   const sid = str(b.sid, /^[A-Za-z0-9_-]{16,32}$/);
   const sql = getSql();
   if (!sid || !sql) return done;
+  const vid = str(b.vid, /^[A-Za-z0-9_-]{16,32}$/);
+  // The owner's own browsers (migration 0030) leave no trace in the numbers, past or future.
+  const me = await currentWatcher().catch(() => null);
+  if (me && (await dropTeamVisitor(sql, me.watcher.id, vid).catch(() => false))) return done;
   const externalId = str(b.externalId, /^\d{5,12}$/);
   if (b.name === "product_view" && externalId) await markViewed(sql, externalId).catch(() => {});
   await addEvent(sql, {
-    name: b.name as EventName, sid, vid: str(b.vid, /^[A-Za-z0-9_-]{16,32}$/),
+    name: b.name as EventName, sid, vid,
     locale: b.locale === "kk" ? "kk" : b.locale === "ru" ? "ru" : null,
     device: b.device === "mobile" || b.device === "desktop" ? b.device : null,
     source: str(b.source, /^[a-z0-9.\-_]{1,64}$/i)?.toLowerCase() ?? null,

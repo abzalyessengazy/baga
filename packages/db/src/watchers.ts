@@ -9,6 +9,8 @@ export interface Watcher {
   id: string; locale: "ru" | "kk"; telegramChatId: string | null; telegramLinkCode: string | null;
   /** Migration 0008: the address alerts go to once confirmed. */
   email: string | null; emailConfirmed: boolean;
+  /** The owner's own browsers (migration 0030): left out of the board and the numbers. */
+  internal?: boolean;
 }
 export interface WatchedItem {
   /** externalId is null while the tracking waits on an unresolved short link (migration 0009); pagePath links to

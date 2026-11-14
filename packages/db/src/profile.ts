@@ -10,12 +10,14 @@ export interface Profile {
   nickname: string | null; avatar: string | null; visitReason: string | null; interests: string[]; saveGoal: number | null;
   /** When the questions were answered; null = not yet. */
   profileAt: Date | null; onBoard: boolean; digest: boolean; since: Date;
+  /** A team browser (migration 0030): never on the board, not in the numbers. */
+  internal: boolean;
 }
 
 export async function getProfile(sql: postgres.Sql, watcherId: string): Promise<Profile | null> {
   const [p] = await sql<Profile[]>`
     select nickname, avatar, visit_reason as "visitReason", interests, save_goal as "saveGoal", profile_at as "profileAt",
-           on_board as "onBoard", digest, created_at as since
+           on_board as "onBoard", digest, created_at as since, internal
     from watchers where id = ${watcherId}`;
   return p ?? null;
 }
@@ -86,7 +88,7 @@ async function boardRows(sql: postgres.Sql): Promise<(BoardRow & { id: string })
            coalesce(sv.saved, 0)::int as saved,
            (row_number() over (order by a.potential desc, a.tracked desc, w.created_at))::int as rank
     from agg a join watchers w on w.id = a.watcher_id left join saved sv on sv.watcher_id = w.id
-    where w.on_board
+    where w.on_board and not w.internal
     order by rank`;
 }
 

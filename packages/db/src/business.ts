@@ -79,10 +79,10 @@ export async function getBusiness(sql: postgres.Sql, days: number): Promise<Busi
         count(distinct vid)::int as people,
         count(distinct vid) filter (where name in ('product_view', 'paste', 'track'))::int as researchers,
         count(distinct e.vid) filter (where e.vid in (select vid from seen))::int as returning,
-        (select count(*) from watchers where created_at >= ${start(a)} and created_at < ${end(b)})::int as "newPeople",
-        (select count(*) from watchers where created_at >= ${start(a)} and created_at < ${end(b)}
+        (select count(*) from watchers where not internal and created_at >= ${start(a)} and created_at < ${end(b)})::int as "newPeople",
+        (select count(*) from watchers where not internal and created_at >= ${start(a)} and created_at < ${end(b)}
            and (telegram_chat_id is not null or email_confirmed_at is not null))::int as "newPeopleConnected",
-        (select count(*) from trackings where watcher_id is not null and created_at >= ${start(a)} and created_at < ${end(b)})::int as "newTrackings"
+        (select count(*) from trackings where watcher_id is not null and not exists (select 1 from watchers tw where tw.id = trackings.watcher_id and tw.internal) and created_at >= ${start(a)} and created_at < ${end(b)})::int as "newTrackings"
       from e`;
     return { ...r!, people: persons ? r!.people : null, researchers: persons ? r!.researchers : null, returning: persons ? r!.returning : null };
   };
@@ -129,15 +129,15 @@ export async function getBusiness(sql: postgres.Sql, days: number): Promise<Busi
     select count(*)::int as watchers,
       count(*) filter (where telegram_chat_id is not null or email_confirmed_at is not null)::int as connected,
       count(*) filter (where last_seen_at > created_at + interval '1 day')::int as "returnedAfterADay"
-    from watchers`;
+    from watchers where not internal`;
   const [bounds] = await sql<{ a: Date; b: Date }[]>`select ${start(from)} as a, ${end(to)} as b`;
   const stats = await alertStats(sql, { from: bounds!.a, to: bounds!.b });
   const [t7] = await sql<{ n: number }[]>`
-    select count(*)::int as n from trackings where watcher_id is not null and created_at > now() - interval '7 days'`;
+    select count(*)::int as n from trackings where watcher_id is not null and not exists (select 1 from watchers tw where tw.id = trackings.watcher_id and tw.internal) and created_at > now() - interval '7 days'`;
   const [bought] = await sql<Business["bought"][]>`
     select count(*) filter (where bought = 'yes')::int as yes, count(*) filter (where bought = 'later')::int as later,
       count(*) filter (where bought = 'no')::int as no, count(*) filter (where bought_asked_at is not null)::int as asked
-    from trackings where watcher_id is not null`;
+    from trackings where watcher_id is not null and not exists (select 1 from watchers tw where tw.id = trackings.watcher_id and tw.internal)`;
   // «Почему убираете?» (migration 0026): null before the migration.
   const removed = await sql<NonNullable<Business["removed"]>[]>`
     select count(*) filter (where removed_reason = 'bought')::int as bought,
@@ -145,7 +145,7 @@ export async function getBusiness(sql: postgres.Sql, days: number): Promise<Busi
       count(*) filter (where removed_reason = 'changed_mind')::int as changed_mind,
       count(*) filter (where removed_reason = 'price_never_dropped')::int as price_never_dropped,
       count(*) filter (where removed_reason is null)::int as none
-    from trackings where status = 'removed' and removed_at >= ${start(from)} and removed_at < ${end(to)}`
+    from trackings where status = 'removed' and not exists (select 1 from watchers tw where tw.id = trackings.watcher_id and tw.internal) and removed_at >= ${start(from)} and removed_at < ${end(to)}`
     .then((r) => r[0] ?? null).catch(() => null);
 
   // Same rule as the daily report: start price when tracking began (else the first after), alert price the lowest a
@@ -162,6 +162,7 @@ export async function getBusiness(sql: postgres.Sql, days: number): Promise<Busi
         (select o.min_price from price_observations o where o.product_id = t.product_id and o.observed_at > t.created_at
            and o.min_price is not null order by o.observed_at limit 1))::int as start
     from hit h join trackings t on t.id = h.tracking_id join products p on p.id = t.product_id
+    where not exists (select 1 from watchers tw where tw.id = t.watcher_id and tw.internal)
     order by h.at desc limit 50`;
   const real = rows.filter((r) => r.start > r.alert);
   const confirmed = real.filter((r) => r.bought === "yes");

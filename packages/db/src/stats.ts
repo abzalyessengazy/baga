@@ -117,6 +117,7 @@ export async function getPlatformStats(sql: postgres.Sql, dayCount = 14, listCou
     select p.external_id, p.title, p.title_kk, p.image_url, s.current_min_price as price, max(t.created_at) as at
     from trackings t join products p on p.id = t.product_id join product_state s on s.product_id = p.id
     where p.status = 'active' and t.status <> 'removed' and s.current_min_price is not null
+      and not exists (select 1 from watchers tw where tw.id = t.watcher_id and tw.internal)
     group by p.id, s.current_min_price
     having count(distinct coalesce(t.watcher_id::text, t.user_id::text)) >= ${MIN_TRACKERS}
     order by count(distinct coalesce(t.watcher_id::text, t.user_id::text)) desc, max(t.created_at) desc limit ${listCount}`;

@@ -112,7 +112,8 @@ export function ProfileCard({ profile, stats, level, hasChannel }: Props) {
             <p className="profile-rank-line"><b>{t("rank", { rank: stats.rank, total: stats.boardSize })}</b></p>
             <p className="profile-hint">{stats.ahead ? t("ahead", { gap: f(stats.ahead.gap), rank: stats.ahead.rank }) : t("first")}</p>
           </>
-        ) : !onBoard ? <p className="profile-hint">{t("hidden")}</p>
+        ) : profile.internal ? <p className="profile-hint">{t("team")}</p>
+          : !onBoard ? <p className="profile-hint">{t("hidden")}</p>
           : stats.tracked > 0 ? <p className="profile-hint">{t("noRank")}</p> : null}
       </div>
       <div className="profile-flags">

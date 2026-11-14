@@ -142,19 +142,19 @@ export async function ownerReport(sql: postgres.Sql): Promise<OwnerReport> {
     from manual_checks where requested_at > now() - interval '24 hours'`;
 
   const [people] = await sql<OwnerReport["people"][]>`
-    select (select count(*) from watchers)::int as watchers,
-      (select count(*) from watchers where created_at > now() - interval '24 hours')::int as "newWatchers",
-      (select count(*) from watchers where telegram_chat_id is not null or email_confirmed_at is not null)::int as connected,
-      (select count(*) from trackings where watcher_id is not null and status = 'active')::int as "activeTrackings",
-      (select count(*) from trackings where watcher_id is not null and created_at > now() - interval '24 hours')::int as "newTrackings",
-      (select count(*) from trackings where watcher_id is not null and created_at > now() - interval '7 days')::int as "newTrackings7d"`;
+    select (select count(*) from watchers where not internal)::int as watchers,
+      (select count(*) from watchers where not internal and created_at > now() - interval '24 hours')::int as "newWatchers",
+      (select count(*) from watchers where not internal and (telegram_chat_id is not null or email_confirmed_at is not null))::int as connected,
+      (select count(*) from trackings where watcher_id is not null and not exists (select 1 from watchers tw where tw.id = trackings.watcher_id and tw.internal) and status = 'active')::int as "activeTrackings",
+      (select count(*) from trackings where watcher_id is not null and not exists (select 1 from watchers tw where tw.id = trackings.watcher_id and tw.internal) and created_at > now() - interval '24 hours')::int as "newTrackings",
+      (select count(*) from trackings where watcher_id is not null and not exists (select 1 from watchers tw where tw.id = trackings.watcher_id and tw.internal) and created_at > now() - interval '7 days')::int as "newTrackings7d"`;
 
   const [alerts] = await sql<OwnerReport["alerts"][]>`
     select count(*) filter (where type = 'target_reached' and status = 'sent' and sent_at > now() - interval '24 hours')::int as "targetSent24h",
       count(*) filter (where type = 'first_price' and status = 'sent' and sent_at > now() - interval '24 hours')::int as "firstPriceSent24h",
       count(*) filter (where status = 'failed' and created_at > now() - interval '24 hours')::int as "failed24h",
-      (select count(*) from trackings where bought = 'yes')::int as "boughtYes",
-      (select count(*) from trackings where bought is not null)::int as "boughtAnswered"
+      (select count(*) from trackings where bought = 'yes' and not exists (select 1 from watchers tw where tw.id = trackings.watcher_id and tw.internal))::int as "boughtYes",
+      (select count(*) from trackings where bought is not null and not exists (select 1 from watchers tw where tw.id = trackings.watcher_id and tw.internal))::int as "boughtAnswered"
     from notifications`;
 
   // Start price: the lowest price we had observed when the tracking began (else the first one after it);
@@ -169,7 +169,7 @@ export async function ownerReport(sql: postgres.Sql): Promise<OwnerReport> {
            and o.min_price is not null order by o.observed_at desc limit 1),
         (select o.min_price from price_observations o where o.product_id = t.product_id and o.observed_at > t.created_at
            and o.min_price is not null order by o.observed_at limit 1)) - h.alert_price as drop
-      from hit h join trackings t on t.id = h.tracking_id
+      from hit h join trackings t on t.id = h.tracking_id where not exists (select 1 from watchers tw where tw.id = t.watcher_id and tw.internal)
     )
     select coalesce(sum(drop) filter (where bought = 'yes'), 0)::int as confirmed,
       count(*) filter (where bought = 'yes' and drop > 0)::int as "confirmedCount",

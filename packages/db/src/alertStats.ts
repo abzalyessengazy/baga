@@ -38,6 +38,6 @@ export async function alertStats(sql: postgres.Sql, window?: { from: Date; to: D
       count(*) filter (where n.clicked_at is not null)::int as clicks,
       count(distinct t.product_id) filter (where n.clicked_at is not null)::int as "clickedProducts"
     from notifications n join trackings t on t.id = n.tracking_id
-    where true ${w}`;
+    where not exists (select 1 from watchers tw where tw.id = t.watcher_id and tw.internal) ${w}`;
   return r!;
 }

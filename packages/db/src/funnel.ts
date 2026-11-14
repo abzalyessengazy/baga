@@ -14,8 +14,10 @@ export interface FunnelEvent {
 }
 
 export async function addEvent(sql: postgres.Sql, e: FunnelEvent): Promise<void> {
+  // A team browser's id (migration 0030) is never stored, even without its watcher cookie.
   await sql`insert into events (name, sid, vid, locale, device, source, external_id, detail)
-    values (${e.name}, ${e.sid}, ${e.vid ?? null}, ${e.locale}, ${e.device}, ${e.source}, ${e.externalId}, ${e.detail})`;
+    select ${e.name}, ${e.sid}, ${e.vid ?? null}, ${e.locale}, ${e.device}, ${e.source}, ${e.externalId}, ${e.detail}
+    where ${e.vid ?? null}::text is null or not exists (select 1 from internal_visitors iv where iv.vid = ${e.vid ?? null})`;
 }
 
 /**
@@ -120,4 +122,18 @@ export async function getFunnel(sql: postgres.Sql, days = 7): Promise<FunnelStat
     byLocale, byDevice, sources, bought, asked: asked!.n, returned: returned!.n,
     views: views ?? { total: 0, priced: 0, week: 0 },
   };
+}
+
+/**
+ * A funnel step from a team browser (migration 0030): its browser id joins internal_visitors and every step it ever
+ * stored is deleted, so the owner's own checks never count. True when the watcher is a team one.
+ */
+export async function dropTeamVisitor(sql: postgres.Sql, watcherId: string, vid: string | null): Promise<boolean> {
+  const [w] = await sql<{ internal: boolean }[]>`select internal from watchers where id = ${watcherId}`;
+  if (!w?.internal) return false;
+  if (vid) {
+    const r = await sql`insert into internal_visitors (vid) values (${vid}) on conflict do nothing`;
+    if (r.count) await sql`delete from events where vid = ${vid}`;
+  }
+  return true;
 }

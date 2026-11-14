@@ -3,7 +3,7 @@ import type { LevelId } from "@baga/core";
 /** /api/my/profile as the browser gets it. */
 export type MyProfile = {
   watcher: boolean;
-  profile?: { nickname: string | null; avatar: string | null; visitReason: string | null; interests: string[]; saveGoal: number | null; profileAt: string | null; onBoard: boolean; digest: boolean; since: string } | null;
+  profile?: { nickname: string | null; avatar: string | null; visitReason: string | null; interests: string[]; saveGoal: number | null; profileAt: string | null; onBoard: boolean; digest: boolean; since: string; internal?: boolean } | null;
   stats?: { tracked: number; total: number; potential: number; saved: number; rank: number | null; boardSize: number; tag: string | null; ahead: { rank: number; gap: number } | null };
   level?: { id: LevelId; index: number; next: { id: LevelId; need: number; from: number } | null; progress: number };
 };
