@@ -18,7 +18,7 @@ import { jsonLdHtml } from "@/lib/jsonLd";
 import { SellerTable, type SellerRow } from "@/components/SellerTable";
 import { CityPicker } from "@/components/CityPicker";
 import { CityProvider, CityOnly } from "@/components/CityView";
-import { visitorCity, cityPrice } from "@/lib/city";
+import { visitorCity, cityPrice, cityHistory, cityViewed } from "@/lib/city";
 
 type Props = { params: Promise<{ locale: string; id: string }>; searchParams: Promise<{ s?: string | string[]; city?: string | string[] }> };
 const fmtDate = (iso: string, locale: string) =>
@@ -105,13 +105,24 @@ export default async function ProductPage({ params, searchParams }: Props) {
   }
   const v = r.view;
   const L = locale as "ru" | "kk";
-  // Prices by city (DECISIONS.md 2026-11-10): pharmacy and baby care are sold by local shops. For those, the visitor's
-  // city replaces Almaty's price and sellers; history, verdict and alerts stay Almaty's (the reference city).
+  // Prices by city (DECISIONS.md 2026-11-10, 2026-11-14): pharmacy and baby care are sold by local shops. For those, the
+  // visitor's city replaces Almaty's price, sellers and history, and a tracking set there is judged by that city's
+  // prices; the verdict stays Almaty's (the reference city).
   const local = !v.delisted && isCityDependent(v.categoryPath);
   const city = local ? await visitorCity((await searchParams).city) : REFERENCE_CITY;
   // Every city's prices are on the page (CityView): a tap on another city switches without a request (12 Nov 2026).
   const cities: City[] = local ? [...CITY_LIST] : [REFERENCE_CITY];
   const cityPrices = new Map(await Promise.all(cities.map(async (c) => [c, await cityPrice(v.externalId, c)] as const)));
+  const cityHistories = new Map(await Promise.all(cities.map(async (c) => [c, await cityHistory(v.externalId, c)] as const)));
+  // Only cities people choose are asked for a product's sellers (the owner, 14 Nov).
+  if (local) cityViewed(v.externalId, city);
+  /** What the chart says before it has two days to draw: never «starts today» for a product we have checked for days. */
+  const emptyHistory = (h: { day: string }[], inCity: string, sold: boolean) => {
+    const since = fmtDate(v.observedSince.slice(0, 10), locale);
+    if (h.length === 1) return t("historyOnePoint", { date: fmtDate(h[0]!.day, locale) });
+    if (!sold && Date.now() - Date.parse(v.observedSince) > 86_400_000) return t("historyNotSold", { city: inCity.charAt(0).toUpperCase() + inCity.slice(1), date: since });
+    return undefined;
+  };
   const f = (n: number) => formatTenge(n, L);
   const verdict = v.minPrice !== null ? computeVerdict(v.history, v.minPrice) : null;
   const verdictText = !verdict ? null
@@ -266,7 +277,10 @@ export default async function ProductPage({ params, searchParams }: Props) {
         <SaleCheck history={v.history} locale={L} />
         <hr className="rule" />
         <h2 className="receipt-caption" style={{ fontSize: "inherit", fontWeight: 400, margin: "0 0 6px" }}>{t("historyTitle")}</h2>
-        <PriceChart history={v.history} />
+        {perCity(({ city, showCity, cityName, totalPrice }) => {
+          const h = showCity ? cityHistories.get(city) ?? [] : v.history;
+          return <PriceChart key={city} history={h} empty={emptyHistory(h, showCity ? cityName : t("cityIn.almaty"), totalPrice !== null || h.length > 0)} />;
+        })}
         <hr className="rule" />
         <h2 className="receipt-caption" style={{ fontSize: "inherit", fontWeight: 400, margin: "0 0 6px" }}>{t("sellersTitle")}</h2>
         {perCity(({ city, sellerRows, shownCount, checkedAt, shownIn, offerCount }) => (<>

@@ -14,7 +14,7 @@ import { requestWatcherEmail, EMAIL_REQUEST_LIMITS, deleteWatcherTracking, listW
 import { saveSnapshot, queueShortLink } from "./queries";
 import { dayMoves } from "./movers";
 import { requestManualCheck, finishManualCheck, queuedManualChecks, MANUAL_CHECKS } from "./manual";
-import { cityChecksDue, saveCityPrice, latestCityPrice } from "./cities";
+import { cityChecksDue, saveCityPrice, latestCityPrice, noteCityView, cityDailyLows } from "./cities";
 import { getShop, productSellers, saveShopFeedback } from "./shops";
 import { decideMatch, matchesToPrice, saveMatch, saveStorePrice, storeMarketplaceId, storeOffers } from "./stores";
 import { claimDigest, digestDue, getBoard, getProfile, getProfileStats, saveProfile, setProfileFlags, stopDigestByChat, suggestFor } from "./profile";
@@ -347,6 +347,20 @@ describe.skipIf(!url)("database (disposable Postgres)", () => {
   });
 
   describe("prices by city (migration 0023)", () => {
+    it("asks only the cities someone tracks the product in or opened it with (migration 0028)", async () => {
+      const [p] = await sql<{ id: number }[]>`insert into products (marketplace_id, external_id, title, category_path)
+        values ((select id from marketplaces where code = 'kaspi'), '400000001', 'Виусид', ${sql.array(["Аптека", "Лекарства"])}::text[]) returning id`;
+      await sql`insert into product_state (product_id, last_checked_at) values (${p!.id}, now())`;
+      expect(await cityChecksDue(sql, 10)).toEqual([]);
+      await noteCityView(sql, "400000001", "atyrau");
+      expect((await cityChecksDue(sql, 10)).map((r) => r.city)).toEqual(["atyrau"]);
+      const w = await watcher();
+      await sql`insert into trackings (watcher_id, product_id, external_id, target_drop_pct, status, city) values (${w}, ${p!.id}, '400000001', 10, 'active', 'astana')`;
+      expect((await cityChecksDue(sql, 10)).map((r) => r.city)).toEqual(["astana", "atyrau"]);
+      await saveCityPrice(sql, p!.id, "astana", [{ sellerId: "1", sellerName: "A", sellerRating: 4.9, sellerReviews: 10, price: 50_438, deliveryDuration: null }], null);
+      expect((await cityChecksDue(sql, 10)).map((r) => r.city)).toEqual(["atyrau"]);
+      expect((await cityDailyLows(sql, p!.id, "astana")).map((d) => d.price)).toEqual([50_438]);
+    });
     const save = (externalId: string, categoryPath: string[]) => saveSnapshot(sql, { marketplace: "kaspi", externalId, title: `Product ${externalId}`, imageUrl: null, categoryPath, reviews: null, rating: null,
       offers: [{ sellerId: "m1", sellerName: "Shop", sellerRating: 4.9, sellerReviews: 100, price: 3_000, deliveryDuration: null, preorderDays: 0 }],
       minPrice: 3_000, offerCount: 1, inStock: true, fetchedAt: new Date().toISOString() }, null, null);

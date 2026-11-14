@@ -98,7 +98,8 @@ const targetCols = (t: TrackTarget) => "price" in t ? { price: t.price, pct: nul
  * gets no "first price" message (the visitor saw it on the page). A percentage target is only for a product with
  * no price yet; the caller turns it into a price when there is one.
  */
-export async function upsertWatcherTracking(sql: postgres.Sql, watcherId: string, externalId: string, target: TrackTarget, limit: number): Promise<TrackResult> {
+/** `city`: for goods sold by local shops, the city whose prices judge the tracking (migration 0028); null = Almaty. */
+export async function upsertWatcherTracking(sql: postgres.Sql, watcherId: string, externalId: string, target: TrackTarget, limit: number, city: string | null = null): Promise<TrackResult> {
   const [prod] = await sql<{ id: number | null; queued: boolean }[]>`
     select (select id from products where external_id = ${externalId}) as id,
            exists (select 1 from seed_queue where external_id = ${externalId} and status = 'pending') as queued`;
@@ -110,10 +111,12 @@ export async function upsertWatcherTracking(sql: postgres.Sql, watcherId: string
     if ((n?.n ?? 0) >= limit) return { ok: false, reason: "limit" };
   }
   const [t] = await sql<{ id: string }[]>`
-    insert into trackings (watcher_id, external_id, product_id, target_price, target_drop_pct, status, first_price_sent_at)
-    values (${watcherId}, ${externalId}, ${prod.id}, ${targetCols(target).price}, ${targetCols(target).pct}, 'active', ${prod.id ? new Date() : null})
+    insert into trackings (watcher_id, external_id, product_id, target_price, target_drop_pct, status, first_price_sent_at, city)
+    values (${watcherId}, ${externalId}, ${prod.id}, ${targetCols(target).price}, ${targetCols(target).pct}, 'active',
+      ${prod.id && (city === null || "price" in target) ? new Date() : null}, ${city})
     on conflict (watcher_id, external_id) where watcher_id is not null do update
       set target_price = excluded.target_price, target_drop_pct = excluded.target_drop_pct, status = 'active', alert_state = 'armed', above_since = null, removed_at = null,
+          city = excluded.city,
           -- A new target (or tracking again after "bought") may be asked "Вы купили?" again (migration 0011).
           bought = null, bought_at = null, bought_asked_at = null, bought_code = null
     returning id`;

@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
-import { DROP_PRESETS, targetForDrop } from "@baga/core";
+import { DROP_PRESETS, REFERENCE_CITY, isCityDependent, targetForDrop } from "@baga/core";
 import { getSql, getProductByExternalId, type TrackTarget, upsertWatcherTracking, upsertWatcherShortLinkTracking, deleteWatcherTracking, REMOVED_REASONS, setWatcherLocale } from "@baga/db";
 import { allow } from "@/lib/rateLimit";
 import { clientIp } from "@/lib/turnstile";
 import { ensureWatcher, currentWatcher, telegramConnectUrl, WATCHER_LIMIT } from "@/lib/watcher";
+import { cityPrice, visitorCity } from "@/lib/city";
 
 /**
  * Starts (or updates) tracking a product for this visitor, before registration exists (DECISIONS.md, 2026-11-02).
@@ -29,14 +30,20 @@ export async function POST(req: Request) {
   if (!sql || !watcher) return NextResponse.json({ code: "not_ready" }, { status: 503 });
   await setWatcherLocale(sql, watcher.id, locale);
   let t: TrackTarget = target ? { price: target } : { dropPct: dropPct! };
-  const current = !target && productId ? (await getProductByExternalId(sql, productId))?.currentMinPrice ?? null : null;
+  // Goods sold by local shops are tracked in the visitor's chosen city and judged by its prices (migration 0028).
+  const product = productId ? await getProductByExternalId(sql, productId) : null;
+  const chosen = product && isCityDependent(product.categoryPath ?? []) ? await visitorCity() : REFERENCE_CITY;
+  const city = chosen === REFERENCE_CITY ? null : chosen;
+  const current = !target && productId
+    ? (city ? (await cityPrice(productId, city))?.minPrice ?? null : product?.currentMinPrice ?? null)
+    : null;
   if (current !== null) {
     const price = targetForDrop(current, dropPct!);
     if (!price) return NextResponse.json({ code: "invalid_target" }, { status: 400 });
     t = { price };
   }
   const r = productId
-    ? await upsertWatcherTracking(sql, watcher.id, productId, t, WATCHER_LIMIT)
+    ? await upsertWatcherTracking(sql, watcher.id, productId, t, WATCHER_LIMIT, city)
     : await upsertWatcherShortLinkTracking(sql, watcher.id, shortLink!, t, WATCHER_LIMIT);
   if (!r.ok) return NextResponse.json({ code: r.reason }, { status: r.reason === "limit" ? 409 : 404 });
   return NextResponse.json({

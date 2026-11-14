@@ -23,7 +23,9 @@ export async function saveCityPrice(sql: postgres.Sql, productId: number, city: 
 
 /**
  * City checks that are due: active products in a city-dependent category, already collected for Almaty, whose city
- * row is missing or older than CITY_CHECKS.recheckHours. Products someone tracks or opened recently come first.
+ * row is missing or older than CITY_CHECKS.recheckHours, and only in a city where someone tracks the product or opened
+ * its page with that city chosen in the last CITY_CHECKS.viewedDays days (the owner, 14 Nov: «only check for those
+ * cities user selects»; migration 0028). Tracked first.
  */
 export async function cityChecksDue(sql: postgres.Sql, limit: number, onlyProduct?: number) {
   const roots = [...new Set(CITY_DEPENDENT_CATEGORIES.map((c) => c[0]!))];
@@ -36,7 +38,10 @@ export async function cityChecksDue(sql: postgres.Sql, limit: number, onlyProduc
       ${onlyProduct ? sql`and p.id = ${onlyProduct}` : sql``}
       and not exists (select 1 from city_prices cp where cp.product_id = p.id and cp.city = c.city
         and cp.observed_at > now() - make_interval(hours => ${CITY_CHECKS.recheckHours}))
-    order by exists (select 1 from trackings t where t.external_id = p.external_id and t.status = 'active') desc,
+      and (exists (select 1 from trackings t where t.product_id = p.id and t.status = 'active' and t.city = c.city)
+        or exists (select 1 from city_views v where v.product_id = p.id and v.city = c.city
+          and v.last_at > now() - make_interval(days => ${CITY_CHECKS.viewedDays})))
+    order by exists (select 1 from trackings t where t.product_id = p.id and t.status = 'active' and t.city = c.city) desc,
       p.last_viewed_at desc nulls last, p.id, c.city
     limit ${limit * 4}`;
   return rows.filter((r) => isCityDependent(r.categoryPath)).slice(0, limit);
@@ -48,4 +53,20 @@ export async function latestCityPrice(sql: postgres.Sql, productId: number, city
     select observed_at as "observedAt", min_price as "minPrice", offer_count as "offerCount", sellers
     from city_prices where product_id = ${productId} and city = ${city} order by observed_at desc limit 1`;
   return r ? { city, ...r } : null;
+}
+
+/** A product page opened with another city chosen: that city is checked for the product (at most one write an hour). */
+export async function noteCityView(sql: postgres.Sql, externalId: string, city: City): Promise<void> {
+  await sql`insert into city_views (product_id, city)
+    select id, ${city} from products where external_id = ${externalId}
+    on conflict (product_id, city) do update set last_at = now() where city_views.last_at < now() - interval '1 hour'`;
+}
+
+/** One city's observed daily lows (Almaty days), oldest first: the history of a product in that city. */
+export async function cityDailyLows(sql: postgres.Sql, productId: number, city: City, days = 365) {
+  return sql<{ day: string; price: number }[]>`
+    select to_char(date_trunc('day', observed_at at time zone 'Asia/Almaty'), 'YYYY-MM-DD') as day, min(min_price)::int as price
+    from city_prices where product_id = ${productId} and city = ${city} and min_price is not null
+      and observed_at > now() - make_interval(days => ${days})
+    group by 1 order by 1`;
 }

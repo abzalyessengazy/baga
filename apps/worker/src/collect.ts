@@ -9,7 +9,7 @@ import { queuedManualChecks, finishManualCheck, manualPausedUntil, cityChecksDue
 import { saveSnapshot, claimNotifications, startSend, markSent, markFailed, tidyDeliveries, connectionOptions, requestProduct, attachShortLinkTrackings, weekMovers } from "@baga/db";
 import {
   evaluateAlert, priorityFor, newProductTurn, isStablePrice, isCalmPrice, intervalFor, laterVariants, CALM, STABLE, INTERVAL_MINUTES, PRIORITY_ORDER, USER_INTEREST, CATALOG, SEED_MIN_PRICE, backoffMinutes, isSuspiciousJump, type TrackingAlertState,
-  KASPI_CRAWL_DELAY_MS, CITIES, CITY_CHECKS, isCityDependent, isInVisitWindow, isManualCheckTime, needsPageRefresh, msUntilVisitWindow, targetForDrop, almatyDay, runningSale, type Priority,
+  KASPI_CRAWL_DELAY_MS, CITIES, CITY_CHECKS, REFERENCE_CITY, type City, isCityDependent, isInVisitWindow, isManualCheckTime, needsPageRefresh, msUntilVisitWindow, targetForDrop, almatyDay, runningSale, type Priority,
 } from "@baga/core";
 import postgres from "postgres";
 import { env } from "./env";
@@ -302,6 +302,9 @@ async function checkCities(runId: number, limit: number, onlyProduct?: number): 
       const offers = await kaspi.fetchOffers(r.externalId, 50, CITIES[r.city]);
       await saveCityPrice(sql, r.productId, r.city, offers, runId);
       breaker.record(true);
+      // Trackings in this city are judged by its prices (migration 0028), as Almaty's are after a product check.
+      const cheapest = [...offers].sort((a, b) => a.price - b.price)[0];
+      await afterSave(r.productId, r.externalId, cheapest?.price ?? null, cheapest?.sellerName ?? null, r.city);
     } catch (e) {
       if (e instanceof KaspiRequestRefused) break;
       const http = e instanceof KaspiHttpError ? e : null;
@@ -502,11 +505,14 @@ async function reschedule(productId: number, minPrice: number | null) {
  * alerts are evaluated; messages go out at once to every channel the watcher connected (Telegram, a confirmed
  * email address), with no Kaspi request, so a visitor hears within minutes.
  */
-async function afterSave(productId: number, externalId: string, price: number | null, seller: string | null) {
+async function afterSave(productId: number, externalId: string, price: number | null, seller: string | null, city: City = REFERENCE_CITY) {
+  // Only the trackings judged by this city's prices: Almaty (city null) after a product check, another city after its
+  // sellers request (migration 0028).
+  const inCity = city === REFERENCE_CITY ? sql`coalesce(city, 'almaty') = 'almaty'` : sql`city = ${city}`;
   if (price !== null) {
     const pending = await sql<{ id: string; pct: number }[]>`
       select id, target_drop_pct as pct from trackings
-      where product_id = ${productId} and target_price is null and target_drop_pct is not null and status <> 'removed'`;
+      where product_id = ${productId} and target_price is null and target_drop_pct is not null and status <> 'removed' and ${inCity}`;
     for (const p of pending) {
       const target = targetForDrop(price, p.pct);
       if (target) await sql`update trackings set target_price = ${target} where id = ${p.id} and target_price is null`;
@@ -521,12 +527,13 @@ async function afterSave(productId: number, externalId: string, price: number | 
         update trackings t set first_price_sent_at = now()
         from watchers w
         where t.product_id = ${productId} and t.watcher_id = w.id and t.status = 'active' and t.first_price_sent_at is null
+          and ${city === REFERENCE_CITY ? tx`coalesce(t.city, 'almaty') = 'almaty'` : tx`t.city = ${city}`}
           and (w.telegram_chat_id is not null or w.email_confirmed_at is not null)
         returning t.id, w.telegram_chat_id is not null as tg, w.email_confirmed_at is not null as mail`;
       for (const w of waiting) await queueNotification(tx, w, "first_price", price, `${w.id}:first`);
     });
   }
-  if (price !== null) await evaluateTrackings(productId, externalId, price, seller);
+  if (price !== null) await evaluateTrackings(productId, externalId, price, seller, city);
   await sendAfterCheck();
 }
 
@@ -542,16 +549,17 @@ async function queueNotification(sql: postgres.Sql | postgres.TransactionSql, t:
     values (${t.id}, ${type}, 'email', ${price}, ${`${key}:email`}) on conflict (idempotency_key) do nothing`;
 }
 
-async function evaluateTrackings(productId: number, externalId: string, price: number, seller: string | null) {
+async function evaluateTrackings(productId: number, externalId: string, price: number, seller: string | null, city: City = REFERENCE_CITY) {
   const rows = await sql<{ id: string; target_price: number; alert_state: "armed" | "triggered"; episode: number; last_triggered_at: Date | null; above_since: Date | null; tg: boolean; mail: boolean }[]>`
     select t.id, t.target_price, t.alert_state, t.episode, t.last_triggered_at, t.above_since,
            coalesce(w.telegram_chat_id is not null, false) as tg, coalesce(w.email_confirmed_at is not null, false) as mail
     from trackings t left join watchers w on w.id = t.watcher_id
-    where t.product_id = ${productId} and t.status = 'active' and t.target_price is not null`;
+    where t.product_id = ${productId} and t.status = 'active' and t.target_price is not null
+      and ${city === REFERENCE_CITY ? sql`coalesce(t.city, 'almaty') = 'almaty'` : sql`t.city = ${city}`}`;
   // One confirmation request per product and check, however many watchers crossed their price. A failed or refused
   // confirmation sends nothing (the next check tries again); a 403/429 stops the run like any other request.
   let confirmed: Promise<number | null> | undefined;
-  const confirm = () => (confirmed ??= kaspi.fetchOffers(externalId).then((o) => o[0]?.price ?? null, (e) => {
+  const confirm = () => (confirmed ??= kaspi.fetchOffers(externalId, 50, CITIES[city]).then((o) => o[0]?.price ?? null, (e) => {
     if (e instanceof KaspiHttpError && e.isBlocking) breaker.blockedOnce();
     if (!(e instanceof KaspiRequestRefused)) console.error(`confirmation ${externalId}: ${e}`);
     return null;

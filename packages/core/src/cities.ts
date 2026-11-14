@@ -38,6 +38,8 @@ export const CITY_CHECKS = {
   recheckHours: 20,
   /** At most this many city requests in one collector run, so they never crowd out the daily checks. */
   maxPerRun: 150,
+  /** A city is checked for a product while someone tracks it there or opened its page there within this many days. */
+  viewedDays: 14,
   /** Sellers kept per city check, cheapest first. */
   sellersKept: 10,
 } as const;

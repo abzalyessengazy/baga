@@ -340,3 +340,11 @@ Six polite requests (honest User-Agent, ≥10 s apart, no block): robots.txt, th
 
 ## 2026-11-14 — IBM Plex Mono switched on (completes "One brand")
 - **Done 14 Nov** (the owner installed `@fontsource/ibm-plex-mono` 5.2.7): the site's receipt type is IBM Plex Mono (400/500/600/700; weights above 700 render as 700), link previews use its static subsets (src/og/fonts). Checked in the browser: the Kazakh and ₸ subsets load, no page wider than the screen, a Kazakh link preview draws ₸ and қ in Plex. `@fontsource-variable/jetbrains-mono` is no longer imported; remove it from apps/web/package.json with the next dependency change.
+
+## 2026-11-14 — Pharmacy: history, alerts and checks by the chosen city (amends 2026-11-10 "Pharmacy prices by city")
+**The bug** (the owner, 14 Nov: Виусид tracked since 9 Nov, still «История начнётся с сегодняшней проверки»). The product was checked every day, but it is not sold in Almaty, our reference city: every Almaty check found no seller, so the history (Almaty only) stayed empty, and the owner's tracking (a % target waiting for a first Almaty price) could never alert. Astana, Shymkent and Atyrau had prices every day in city_prices, unused.
+**Decisions** (migration 0028).
+- A tracking on goods sold by local shops keeps the visitor's chosen city (`trackings.city`, null = Almaty) and is judged by that city's prices: after each city check the collector turns a % target into a price, sends the first price, and runs the same alert rules (with its confirmation request in that city).
+- The product page draws the chosen city's history from city_prices; for a city where the product is not sold it says so, with the date checks began, instead of «starts today».
+- **Only cities people choose are asked** (the owner: «only check for those cities user selects»): a city is checked for a product while someone tracks it there or opened its page with that city chosen in the last 14 days (`city_views`). The migration keeps the pairs checked in the last 3 days for two more weeks.
+- Existing trackings have no city (Almaty): someone tracking a product sold only elsewhere sets their price again with their city chosen.

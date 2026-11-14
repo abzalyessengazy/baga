@@ -14,7 +14,8 @@ type Range = 30 | 90 | 0;
  * and date (the lowest in violet); otherwise the dashed lines give the lowest and highest, and tapping or hovering a bar
  * shows its date and price.
  */
-export function PriceChart({ history }: { history: DailyLow[] }) {
+/** `empty`: what to say while there are fewer than two days to draw (the default says the history starts today). */
+export function PriceChart({ history, empty }: { history: DailyLow[]; empty?: string }) {
   const t = useTranslations("product");
   const td = useTranslations("dates") as unknown as DatesT;
   const locale = useLocale() as "ru" | "kk";
@@ -35,7 +36,7 @@ export function PriceChart({ history }: { history: DailyLow[] }) {
     return history.filter((d) => last - Date.parse(d.day) < range * DAY);
   }, [history, range]);
 
-  if (history.length < 2) return <div className="empty-history">{t("noHistory")}</div>;
+  if (history.length < 2) return <div className="empty-history">{empty ?? t("noHistory")}</div>;
 
   const first = Date.parse(data[0]!.day);
   const slots = Math.round((Date.parse(data[data.length - 1]!.day) - first) / DAY) + 1;
