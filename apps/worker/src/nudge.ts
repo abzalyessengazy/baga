@@ -4,7 +4,7 @@ import { almatyDay, DIGEST } from "@baga/core";
 import { env } from "./env";
 import { sendViaResend } from "./email";
 import { renderEmailDigest, renderTelegramDigest } from "./nudge-render";
-import { sendTelegram } from "./telegram";
+import { sendTelegram, sendTelegramPhotos } from "./telegram";
 
 /**
  * The 3-day note to people who track something (DECISIONS.md, 2026-11-13 "Profiles, leaderboard and the 3-day note";
@@ -43,7 +43,10 @@ async function main() {
     if (!(await claimDigest(sql, d.watcherId))) { skipped++; continue; }
     try {
       if (channel === "telegram") {
-        await sendTelegram(token!, d.chatId!, renderTelegramDigest(note));
+        const msg = renderTelegramDigest(note);
+        // The photos are a nicety: if Telegram cannot fetch them, the note still goes.
+        await sendTelegramPhotos(token!, d.chatId!, msg.photos).catch((e) => console.error(`[nudge] photos skipped: ${e}`));
+        await sendTelegram(token!, d.chatId!, msg);
       } else {
         const msg = renderEmailDigest({ ...note, stopUrl: `${site}/${d.locale}/email?digest=${d.stopCode}` });
         await sendViaResend(key!, env.emailFrom(), d.email!, msg, `${site}/api/digest-stop?c=${d.stopCode}`, `digest:${d.watcherId}:${almatyDay(new Date())}`);

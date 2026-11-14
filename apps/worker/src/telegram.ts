@@ -95,6 +95,26 @@ export class DeliveryError extends Error {
 }
 
 /** `previewUrl` shows that link's preview card under the message (the 3-day note); without it no preview is shown. */
+/**
+ * Product photos ahead of a note: one photo, or an album of 2–10 (sendMediaGroup). Telegram's servers fetch the
+ * picture links (Kaspi's image server), the way a reader's browser does on the site; our server requests nothing from
+ * Kaspi. No buttons can ride on an album, so the note follows as its own message.
+ */
+export async function sendTelegramPhotos(token: string, chatId: string, urls: string[]): Promise<void> {
+  if (!urls.length) return;
+  const one = urls.length === 1;
+  const res = await fetch(`https://api.telegram.org/bot${token}/${one ? "sendPhoto" : "sendMediaGroup"}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(one
+      ? { chat_id: chatId, photo: urls[0], disable_notification: true }
+      : { chat_id: chatId, media: urls.slice(0, 10).map((u) => ({ type: "photo", media: u })), disable_notification: true }),
+    signal: AbortSignal.timeout(20_000),
+  });
+  const body = (await res.json().catch(() => ({}))) as { ok?: boolean; description?: string };
+  if (!res.ok || !body.ok) throw new DeliveryError(`telegram photos ${res.status}: ${body.description ?? ""}`.slice(0, 300), isPermanentHttpStatus(res.status));
+}
+
 export async function sendTelegram(token: string, chatId: string, msg: { html: string; buttons: TelegramButton[]; previewUrl?: string | null }): Promise<number> {
   const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
     method: "POST",

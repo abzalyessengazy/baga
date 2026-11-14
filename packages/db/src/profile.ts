@@ -163,7 +163,7 @@ export async function suggestFor(sql: postgres.Sql, watcherId: string, limit = 6
     limit ${limit}`;
 }
 
-export interface DigestItem { externalId: string; title: string; titleKk: string | null; now: number; was: number; move: -1 | 0 | 1; target: number | null }
+export interface DigestItem { externalId: string; title: string; titleKk: string | null; imageUrl: string | null; now: number; was: number; move: -1 | 0 | 1; target: number | null }
 export interface DigestDue {
   watcherId: string; locale: "ru" | "kk"; chatId: string | null; email: string | null; stopCode: string | null; nickname: string | null;
   items: DigestItem[];
@@ -176,10 +176,10 @@ export interface DigestDue {
  */
 export async function digestDue(sql: postgres.Sql, limit = 200): Promise<DigestDue[]> {
   const rows = await sql<{ watcherId: string; locale: "ru" | "kk"; chatId: string | null; email: string | null; stopCode: string | null; nickname: string | null;
-    externalId: string; title: string; titleKk: string | null; now: number; was: number | null; target: number | null }[]>`
+    externalId: string; title: string; titleKk: string | null; imageUrl: string | null; now: number; was: number | null; target: number | null }[]>`
     select w.id as "watcherId", w.locale, w.telegram_chat_id::text as "chatId",
            case when w.email_confirmed_at is not null then w.email end as email, w.email_stop_code as "stopCode", w.nickname,
-           p.external_id as "externalId", p.title, p.title_kk as "titleKk", s.current_min_price as now, t.target_price as target,
+           p.external_id as "externalId", p.title, p.title_kk as "titleKk", p.image_url as "imageUrl", s.current_min_price as now, t.target_price as target,
            (select o.min_price from price_observations o where o.product_id = p.id and o.min_price is not null
               and o.observed_at <= now() - make_interval(days => ${DIGEST.everyDays}) order by o.observed_at desc limit 1) as was
     from watchers w join trackings t on t.watcher_id = w.id and t.status = 'active'
@@ -194,7 +194,7 @@ export async function digestDue(sql: postgres.Sql, limit = 200): Promise<DigestD
     if (r.was === null) continue;
     let d = by.get(r.watcherId);
     if (!d) by.set(r.watcherId, d = { watcherId: r.watcherId, locale: r.locale, chatId: r.chatId, email: r.email, stopCode: r.stopCode, nickname: r.nickname, items: [] });
-    d.items.push({ externalId: r.externalId, title: r.title, titleKk: r.titleKk, now: r.now, was: r.was, move: moveDirection(r.was, r.now), target: r.target });
+    d.items.push({ externalId: r.externalId, title: r.title, titleKk: r.titleKk, imageUrl: r.imageUrl, now: r.now, was: r.was, move: moveDirection(r.was, r.now), target: r.target });
   }
   return [...by.values()].slice(0, limit);
 }

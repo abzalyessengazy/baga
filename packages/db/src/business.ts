@@ -63,6 +63,8 @@ export interface Business {
   pastes: { outcome: string; n: number }[];
   linkFailures: number;
   people: { watchers: number; connected: number; returnedAfterADay: number };
+  /** The 3-day note, all time: people who got at least one, and people who turned it off («Не присылать сводку»). */
+  digest: { received: number; stopped: number; stoppedReceived: number };
   /** Notification numbers for the period (alertStats), and trackings created in the last 7 days (the target). */
   alerts: AlertStats & { trackings7d: number };
   bought: { yes: number; later: number; no: number; asked: number };
@@ -187,6 +189,10 @@ export async function getBusiness(sql: postgres.Sql, which: PeriodKey | Period):
       count(*) filter (where telegram_chat_id is not null or email_confirmed_at is not null)::int as connected,
       count(*) filter (where last_seen_at > created_at + interval '1 day')::int as "returnedAfterADay"
     from watchers where not internal`;
+  const digest = await sql<Business["digest"][]>`
+    select count(*) filter (where digest_sent_at is not null)::int as received, count(*) filter (where not digest)::int as stopped,
+      count(*) filter (where not digest and digest_sent_at is not null)::int as "stoppedReceived"
+    from watchers where not internal`.then((r) => r[0]!);
   const [bounds] = await sql<{ a: Date; b: Date }[]>`select ${start(from)} as a, ${end(to)} as b`;
   const stats = await alertStats(sql, { from: bounds!.a, to: bounds!.b });
   const [t7] = await sql<{ n: number }[]>`
@@ -225,7 +231,7 @@ export async function getBusiness(sql: postgres.Sql, which: PeriodKey | Period):
   const confirmed = real.filter((r) => r.bought === "yes");
   return {
     period, from, to, personFrom: PERSON_METRICS_FROM, peopleFrom, countedSince, now, before, daily, sources, topProducts, frequency, topVisitors, mapr,
-    pastes, linkFailures: links?.n ?? 0, people: people!, alerts: { ...stats, trackings7d: t7?.n ?? 0 }, bought: bought!, removed,
+    pastes, linkFailures: links?.n ?? 0, people: people!, digest, alerts: { ...stats, trackings7d: t7?.n ?? 0 }, bought: bought!, removed,
     savings: {
       confirmed: confirmed.reduce((s, r) => s + r.start - r.alert, 0), confirmedCount: confirmed.length,
       caught: real.reduce((s, r) => s + r.start - r.alert, 0), caughtCount: real.length, rows: real,

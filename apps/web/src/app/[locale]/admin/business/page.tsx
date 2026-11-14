@@ -316,6 +316,13 @@ export default async function BusinessPage({ params, searchParams }: Props) {
             : <p className="admin-muted">{t("removedPending")}</p>}
         </section>
         <section className="receipt admin-card">
+          <h2>{t("digestTitle")}</h2>
+          {kv([[t("dgReceived"), b.digest.received],
+            [t("dgStopped"), `${count(b.digest.stoppedReceived)} · ${pct(share(b.digest.stoppedReceived, b.digest.received))}`],
+            [t("dgStoppedAll"), b.digest.stopped]])}
+          <p className="biz-def">{t("digestNote")}</p>
+        </section>
+        <section className="receipt admin-card">
           <h2>{t("peopleTitle")}</h2>
           {kv([[t("pWatchers"), b.people.watchers], [t("pConnected"), b.people.connected], [t("pReturned"), b.people.returnedAfterADay]])}
         </section>
