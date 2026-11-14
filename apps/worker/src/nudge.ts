@@ -14,6 +14,9 @@ import { sendTelegram, sendTelegramPhotos } from "./telegram";
  * can never send it twice. No Kaspi request. `--dry` prints the notes and sends nothing.
  */
 const dry = process.argv.includes("--dry");
+/** `--team-test`: a sample note to the team's own profiles only (by email when it is confirmed), not recorded as
+ * their note and with «[Тест]» in the subject. For the owner to see what people get. */
+const teamTest = process.argv.includes("--team-test");
 const url = process.env.DATABASE_URL?.trim();
 if (!url) throw new Error("DATABASE_URL is not set");
 const sql = postgres(url, { max: 1, idle_timeout: 5, ...connectionOptions(url) });
@@ -22,7 +25,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 async function main() {
   let due;
   try {
-    due = await digestDue(sql);
+    due = await digestDue(sql, 200, { team: teamTest });
   } catch (e) {
     // Before migration 0027 there is nothing to send: not a failed run.
     if ((e as { code?: string }).code === "42703") { console.log("[nudge] profile columns are missing (migration 0027 not applied): nothing sent"); return; }
@@ -33,14 +36,15 @@ async function main() {
   for (const d of due) {
     const suggestions = await suggestFor(sql, d.watcherId, DIGEST.suggestions).catch(() => []);
     const note = { locale: d.locale, nickname: d.nickname, items: d.items, suggestions, site };
-    const channel = d.chatId && token ? "telegram" : d.email && d.stopCode && key ? "email" : null;
+    const byEmail = d.email && d.stopCode && key ? "email" : null, byTelegram = d.chatId && token ? "telegram" : null;
+    const channel = teamTest ? byEmail ?? byTelegram : byTelegram ?? byEmail;
     if (dry) {
       console.log(`\n--- ${channel ?? "no channel configured"} · ${d.locale} · ${d.items.length} product(s) ---`);
       console.log(d.chatId ? renderTelegramDigest(note).html : renderEmailDigest({ ...note, stopUrl: `${site}/${d.locale}/email?digest=…` }).text);
       continue;
     }
     if (!channel) { skipped++; continue; }
-    if (!(await claimDigest(sql, d.watcherId))) { skipped++; continue; }
+    if (!teamTest && !(await claimDigest(sql, d.watcherId))) { skipped++; continue; }
     try {
       if (channel === "telegram") {
         const msg = renderTelegramDigest(note);
@@ -49,7 +53,8 @@ async function main() {
         await sendTelegram(token!, d.chatId!, msg);
       } else {
         const msg = renderEmailDigest({ ...note, stopUrl: `${site}/${d.locale}/email?digest=${d.stopCode}` });
-        await sendViaResend(key!, env.emailFrom(), d.email!, msg, `${site}/api/digest-stop?c=${d.stopCode}`, `digest:${d.watcherId}:${almatyDay(new Date())}`);
+        if (teamTest) msg.subject = `[Тест] ${msg.subject}`;
+        await sendViaResend(key!, env.emailFrom(), d.email!, msg, `${site}/api/digest-stop?c=${d.stopCode}`, `digest:${d.watcherId}:${almatyDay(new Date())}${teamTest ? `:test:${Date.now()}` : ""}`);
       }
       sent++;
     } catch (e) {

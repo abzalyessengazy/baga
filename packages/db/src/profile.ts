@@ -174,7 +174,9 @@ export interface DigestDue {
  * and DIGEST.dueHours passed since the last note (or since they came). Each product's price now against its last
  * observed price from DIGEST.everyDays days ago or earlier (a product first seen later is left out).
  */
-export async function digestDue(sql: postgres.Sql, limit = 200): Promise<DigestDue[]> {
+/** `team`: only the team's own profiles (watchers.internal), whenever asked: a sample note for the owner to look at. */
+export async function digestDue(sql: postgres.Sql, limit = 200, opts: { team?: boolean } = {}): Promise<DigestDue[]> {
+  const team = !!opts.team;
   const rows = await sql<{ watcherId: string; locale: "ru" | "kk"; chatId: string | null; email: string | null; stopCode: string | null; nickname: string | null;
     externalId: string; title: string; titleKk: string | null; imageUrl: string | null; now: number; was: number | null; target: number | null }[]>`
     select w.id as "watcherId", w.locale, w.telegram_chat_id::text as "chatId",
@@ -186,7 +188,8 @@ export async function digestDue(sql: postgres.Sql, limit = 200): Promise<DigestD
     join products p on p.id = t.product_id join product_state s on s.product_id = p.id
     where w.digest and (w.telegram_chat_id is not null or w.email_confirmed_at is not null)
       and s.current_min_price is not null
-      and coalesce(w.digest_sent_at, w.created_at) < now() - make_interval(hours => ${DIGEST.dueHours})
+      and (${team} or coalesce(w.digest_sent_at, w.created_at) < now() - make_interval(hours => ${DIGEST.dueHours}))
+      and (not ${team} or w.internal)
     order by w.created_at, t.created_at
     limit ${limit * 20}`;
   const by = new Map<string, DigestDue>();

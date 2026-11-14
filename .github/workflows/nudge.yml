@@ -13,6 +13,10 @@ on:
         description: "Print the notes, send nothing"
         type: boolean
         default: false
+      team_test:
+        description: "Send a sample note to the team's own profiles only (by email when confirmed)"
+        type: boolean
+        default: false
 concurrency: { group: nudge, cancel-in-progress: false }
 permissions:
   contents: read
@@ -26,7 +30,7 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @baga/worker nudge ${{ inputs.dry && '--dry' || '' }}
+      - run: pnpm --filter @baga/worker nudge ${{ inputs.dry && '--dry' || '' }} ${{ inputs.team_test && '--team-test' || '' }}
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
