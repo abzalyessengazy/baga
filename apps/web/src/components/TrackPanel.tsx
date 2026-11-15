@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useLocale, useTranslations } from "next-intl";
 import { DROP_PRESETS, formatTenge, targetForDrop } from "@baga/core";
@@ -47,7 +47,17 @@ export function TrackPanel({ productId, shortLink, current, initial, related }: 
   // Alerts need somewhere to go: until Telegram or a confirmed address is connected, the coupon says so loudly.
   const [mail, setMail] = useState<"form" | "sent" | "confirmed">(initial.email.address ? (initial.email.confirmed ? "confirmed" : "sent") : "form");
   const [waitTg, setWaitTg] = useState(false); // the Telegram button was tapped: watch for the link
+  // Without Telegram or a confirmed address a tracking can never write (16 Nov: 5 of 15 trackers connected one). Right
+  // after the price is set, the next step is brought into view; the leaderboard nudge and similar products wait for it.
+  const channelRef = useRef<HTMLDivElement>(null);
   const reached = tg.linked || mail === "confirmed";
+  useEffect(() => {
+    if (!just || reached) return;
+    const id = setTimeout(() => channelRef.current?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "center" }), 650);
+    return () => clearTimeout(id);
+    // Once, when the price was just set.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [just]);
   // Funnel steps (lib/analytics.ts): this page, and a channel connected during this visit.
   useEffect(() => { trackStep("product_view", { externalId: productId }); }, [productId]);
   const [reachedAtStart] = useState(reached);
@@ -148,7 +158,7 @@ export function TrackPanel({ productId, shortLink, current, initial, related }: 
     <motion.div key="tracked" className="track-card" role="status" {...swap}>
       <motion.span className="stamp" initial={just && !reduce ? { scale: 1.9, opacity: 0, rotate: -14 } : false}
         animate={{ scale: 1, opacity: 0.92, rotate: -4 }} transition={{ type: "spring", stiffness: 520, damping: 17, delay: 0.1 }}>
-        {t("trackingStamp")}
+        {reached ? t("trackingStamp") : t("almostStamp")}
       </motion.span>
       <p className="track-target">
         {just && (
@@ -159,7 +169,8 @@ export function TrackPanel({ productId, shortLink, current, initial, related }: 
         )}
         {tracked.price !== null ? t("yourTarget", { price: f(tracked.price) }) : t("yourDrop", { pct: tracked.pct ?? 0 })}
       </p>
-      <p className="note">{tracked.price === null ? t("dropNote") : current === null ? t("firstPriceNote") : t("targetNote")}</p>
+      {/* «Сообщим…» only once there is somewhere to write: until then the next step says it plainly (16 Nov). */}
+      {reached && <p className="note">{tracked.price === null ? t("dropNote") : current === null ? t("firstPriceNote") : t("targetNote")}</p>}
       {reached ? (
         <>
           {tg.linked && <p className="channel-ok">✓ {t("telegramLinked")}</p>}
@@ -169,13 +180,13 @@ export function TrackPanel({ productId, shortLink, current, initial, related }: 
           {initial.emailReady && <EmailConnect initial={initial.email} onState={setMail} />}
         </>
       ) : (
-        <motion.div className="channel-needed" role="alert"
+        <motion.div className="channel-needed" role="alert" ref={channelRef}
           initial={reduce ? false : { opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: just ? 0.55 : 0, duration: 0.3 }}>
           <p className="channel-title">{t("channelTitle")}</p>
           <p className="channel-text">{mail === "sent" ? t("channelConfirm") : t("channelText")}</p>
           {tg.url ? (
             <>
-              <a className="btn btn-stamp" href={tg.url} target="_blank" rel="noopener" style={{ width: "100%" }} onClick={() => setWaitTg(true)}>{t("telegramConnect")}</a>
+              <a className={`btn btn-stamp${waitTg ? "" : " is-pulse"}`} href={tg.url} target="_blank" rel="noopener" style={{ width: "100%" }} onClick={() => setWaitTg(true)}>{t("telegramConnect")}</a>
               <p className="note">{waitTg ? t("telegramWaiting") : t("telegramHint")}</p>
             </>
           ) : !initial.emailReady ? <p className="note">{t("telegramSoon")}</p> : null}
@@ -189,7 +200,7 @@ export function TrackPanel({ productId, shortLink, current, initial, related }: 
         </motion.div>
       )}
       {/* Just set a price: the moment to invite them onto the leaderboard (14 Nov). */}
-      {just && <BoardNudge />}
+      {just && reached && <BoardNudge />}
       <div className="track-actions">
         <button type="button" className="link-btn" onClick={() => setOpen(true)}>{t("change")}</button>
         <Link href="/my">{t("myItems")}</Link>
@@ -212,7 +223,7 @@ export function TrackPanel({ productId, shortLink, current, initial, related }: 
         ) : form)}
       </AnimatePresence>
       <AnimatePresence>
-        {related && tracked !== null && (
+        {related && tracked !== null && reached && (
           <motion.div key="related" className="related" initial={just && !reduce ? { opacity: 0, y: 24 } : false} animate={{ opacity: 1, y: 0 }}
             transition={{ type: "spring", stiffness: 200, damping: 24, delay: just ? 0.7 : 0 }} data-pop={just ? "" : undefined}>
             {related}
