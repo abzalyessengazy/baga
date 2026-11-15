@@ -1195,6 +1195,16 @@ span.ticker-thumb { background: var(--paper-shade); box-shadow: none; }
 .board-nudge-icon { font-size: 1.125rem; }
 .board-nudge-text { flex: 1 1 160px; font: 600 0.875rem/1.35 var(--font-ui); color: var(--ink); }
 .board-nudge-btn { padding: 8px 14px; font-size: 0.8125rem; }
+.board-nudge-form { flex: 1 1 100%; min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+.board-nudge-row { display: flex; gap: 8px; align-items: center; }
+.board-nudge-row input { flex: 1; min-width: 0; font: 600 1rem/1.2 var(--font-ui); padding: 10px; border: 1.5px solid var(--rule); border-radius: 8px; background: #fff; color: var(--ink); -webkit-text-fill-color: var(--ink); }
+.board-nudge-row input:focus { outline: 2px solid var(--stamp); outline-offset: 1px; border-color: transparent; }
+.board-nudge-row input[aria-invalid="true"] { border-color: var(--stamp-red); }
+.board-nudge-row .board-nudge-btn { flex: none; width: auto; min-height: 44px; margin-top: 0; align-items: center; }
+.board-nudge-row .quiz-dice { background: #fff; }
+.board-nudge p.board-nudge-text { margin: 0; }
+.board-nudge p.board-nudge-text > :first-child { vertical-align: middle; }
+.board-nudge-link { font-weight: 600; }
 
 /* «Чёрная пятница: проверяем скидки» (15 Nov 2026): one receipt per product, the store chips beside Kaspi. */
 .bf-kicker { margin: 0 0 6px; font: 700 0.75rem/1 var(--font-receipt); letter-spacing: 0.12em; text-transform: uppercase; color: var(--stamp-on-counter, var(--stamp)); }

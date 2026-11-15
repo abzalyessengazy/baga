@@ -391,3 +391,8 @@ Rule 6 pauses manual checks for 7 days after a 403/429. The owner, the same even
 
 ## 2026-11-15 — Report and 3-day note right after the store run
 The owner: «3 day note is more important. lets create jobs». GitHub does run the scheduled report and note jobs, but hours late (14 Nov: the 10:30 UTC note at 16:41 and 18:23 UTC). The store run is started on time by cron-job.org at 08:50 UTC and ends about 11:15 UTC; its main run (workflow_dispatch) now starts report.yml and nudge.yml itself when it ends, with the workflow's own token (actions: write). No new token or outside service. Both skip what is done (the report once a day; each note is claimed), and their own schedules stay as backups.
+
+## 2026-11-15 — The nickname asked in one step after tracking; the bot receives button presses
+
+- **Nickname.** On 15 Nov, 3 visitors had a nickname and none of the 38 people on the leaderboard did: the line under the coupon opened the five-question form, too much right after setting a price. Now that line shows the visitor's place («Вы на табло экономии: №4 из 39») and asks for the nickname in place, with the dice for an idea; an avatar is picked for them and can be changed in the profile. Same rules and checks as the form (`/api/my/profile`); once saved, the form is not offered unasked.
+- **Telegram buttons.** The bot's webhook was registered before the buttons existed and delivered typed messages only, so «Не присылать сводку» and the «Купили?» answers never arrived. The owner re-ran `pnpm --filter @baga/worker telegram:webhook` with `SITE_URL=https://bagaapp.com` (message + callback_query). Run it again whenever the bot gets a new kind of update.
