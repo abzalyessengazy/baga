@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bestCandidate, kaspiColour, looseCandidates, mismatch, storeIndex, storeTokens, titleMemory, titleTokens } from "./matching";
+import { bestCandidate, esimOnly, kaspiColour, looseCandidates, mismatch, storeIndex, storeTokens, titleMemory, titleTokens } from "./matching";
 
 // Real pairs from the 7 Nov 2026 Technodom test requests (Kaspi title, Technodom address, Technodom title).
 const same = (kaspi: string, slug: string, title?: string) => expect(mismatch(kaspi, storeTokens(slug, title))).toBeNull();
@@ -90,5 +90,35 @@ describe("exact product matching (DECISIONS 2026-11-07)", () => {
     const one = storeIndex(["naushniki-besprovodnye-soundcore-liberty-5-a3957-white-298516"]);
     expect(bestCandidate("Наушники Soundcore Liberty 5 синий", one)).toBeNull();
     expect(bestCandidate("Наушники Soundcore Liberty 5 синий", one, true)).toBe("naushniki-besprovodnye-soundcore-liberty-5-a3957-white-298516");
+  });
+});
+
+describe("SIM kind (15 Nov 2026: no iPhone matched Sulpak)", () => {
+  const sulpak = storeTokens("smartfoniy-apple-iphone-17-pro-max-256gb-cosmic-orange-mfyn4hxa", "Смартфон Apple iPhone 17 Pro Max 12/256GB Cosmic Orange");
+  it("NanoSIM+eSIM matches an item that names no SIM", () => {
+    expect(titleTokens("Смартфон Apple iPhone 17 Pro Max 256Gb NanoSIM+eSIM оранжевый")).toEqual(["apple", "iphone", "17", "pro", "max"]);
+    expect(mismatch("Смартфон Apple iPhone 17 Pro Max 256Gb NanoSIM+eSIM оранжевый", sulpak, "Смартфон Apple iPhone 17 Pro Max 12/256GB Cosmic Orange")).toBeNull();
+  });
+  it("an eSIM-only phone never does", () => {
+    expect(esimOnly("Смартфон Apple iPhone 17 Pro Max 256Gb dual eSIM оранжевый")).toBe(true);
+    expect(esimOnly("Смартфон Apple iPhone 17 Pro Max 256Gb NanoSIM+eSIM оранжевый")).toBe(false);
+    expect(esimOnly("Смартфон Samsung Galaxy A17 Dual Sim 128Gb черный")).toBe(false);
+    expect(mismatch("Смартфон Apple iPhone 17 Pro Max 256Gb dual eSIM оранжевый", sulpak, "Смартфон Apple iPhone 17 Pro Max 12/256GB Cosmic Orange")).toBe("esim only");
+  });
+  it("a word that only ends in -sim stays", () => {
+    expect(titleTokens("Кофемашина Nespresso Lattissima One EN510")).toContain("lattissima");
+  });
+});
+
+describe("Apple colour names", () => {
+  it("an untranslated colour is never «no colour»", () => {
+    const g = storeTokens("smartfoniy-apple-iphone-18-pro-max-256gb-glacier-x1", "Смартфон Apple iPhone 18 Pro Max 12/256GB Glacier");
+    expect(mismatch("Смартфон Apple iPhone 18 Pro Max 256Gb NanoSIM+eSIM черный", g, "Смартфон Apple iPhone 18 Pro Max 12/256GB Glacier")).toBe("colour differs");
+  });
+  it("Sage is green, Mist Blue light blue", () => {
+    const s = storeTokens("smartfoniy-apple-iphone-17-256gb-sage-x2", "Смартфон Apple iPhone 17 8/256GB Sage");
+    expect(mismatch("Смартфон Apple iPhone 17 256Gb NanoSIM+eSIM зеленый", s, "Смартфон Apple iPhone 17 8/256GB Sage")).toBeNull();
+    const m = storeTokens("smartfoniy-apple-iphone-17-256gb-mist-blue-x3", "Смартфон Apple iPhone 17 8/256GB Mist Blue");
+    expect(mismatch("Смартфон Apple iPhone 17 256Gb NanoSIM+eSIM голубой", m, "Смартфон Apple iPhone 17 8/256GB Mist Blue")).toBeNull();
   });
 });

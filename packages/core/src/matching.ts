@@ -6,13 +6,16 @@
  * - the store item has no variant word the Kaspi title lacks (Pro, Max, Plus, Ultra, Play, 2…): Pro ≠ Pro Max;
  * - memory sizes agree (storage, and RAM when both state it): 6/128 ≠ 8/128;
  * - colours agree when both state one: a white item is never a blue item's match;
- * - the Kaspi title must carry a model number (a bare "Apple iPhone прозрачный" is a case, not a phone).
+ * - the Kaspi title must carry a model number (a bare "Apple iPhone прозрачный" is a case, not a phone);
+ * - the SIM kind is not a model word (15 Nov 2026: Sulpak never writes it, so no iPhone matched): «NanoSIM+eSIM», the
+ *   version shops in Kazakhstan sell (Technodom's own Kaspi links pair such listings with its items that name no SIM),
+ *   matches an item that names none; an eSIM-only phone («dual eSIM») never does, unless the item says eSIM too.
  * Store item tokens come from its address (slug) and, once fetched, its own title.
  */
 
 const COLORS: [RegExp, string[]][] = [
   [/темно-син|тёмно-син/, ["deep", "navy", "dark-blue"]],
-  [/голуб/, ["light-blue", "sky", "goluboy"]],
+  [/голуб/, ["light-blue", "sky", "goluboy", "mist-blue"]],
   [/бирюз/, ["teal", "turquoise", "biryuzovyy"]],
   [/син/, ["blue", "siniy", "sinyaya", "sinij"]],
   [/черн|чёрн/, ["black", "chernyy", "chernyi", "chernaya", "chernyj", "midnight"]],
@@ -22,7 +25,7 @@ const COLORS: [RegExp, string[]][] = [
   [/сер(ый|ая|ое|ые)(?![а-яё])/, ["grey", "gray", "seryy", "seryi"]],
   [/золот/, ["gold", "zolotistyy"]],
   [/розов/, ["pink", "rozovyy", "rose"]],
-  [/зелен|зелён/, ["green", "zelenyy", "zelenaya"]],
+  [/зелен|зелён/, ["green", "zelenyy", "zelenaya", "sage"]],
   [/мятн/, ["mint"]],
   [/фиолет|лаванд/, ["purple", "violet", "lavender", "light-violet", "fioletovyy"]],
   [/бордов/, ["burgundy", "bordo", "bordovyy", "dark-red", "cherry"]],
@@ -34,7 +37,10 @@ const COLORS: [RegExp, string[]][] = [
 ];
 const STORE_COLOR_WORDS = new Set(
   COLORS.flatMap(([, v]) => v).flatMap((v) => v.split("-"))
-    .concat(["mint", "titanium", "natural", "desert", "teal", "burgundy", "magenta", "cream", "lavender", "cosmic", "ultramarine"]),
+    // Apple's own names (15 Nov 2026): a name we cannot translate surely («Glacier») is still a colour, so it never
+    // passes as "no colour stated"; it is left for the owner as «похожий» at most.
+    .concat(["mint", "titanium", "natural", "desert", "teal", "burgundy", "magenta", "cream", "lavender", "cosmic", "ultramarine",
+      "glacier", "sage", "mist", "starlight", "ultramarine", "frost", "fog", "stone", "obsidian", "porcelain", "hazel", "jade"]),
 );
 const VARIANTS = new Set(["pro", "max", "plus", "ultra", "mini", "lite", "fe", "air", "neo", "edge", "slim", "absolute", "mix",
   "x", "s", "e", "c", "se", "prime", "nfc", "play", "go", "2", "3", "4", "5", "ii", "iii"]);
@@ -74,10 +80,18 @@ export function tokensMemory(tokens: string[]): Memory {
   return { ram: null, storage: null };
 }
 
-/** Lower-case Latin/number tokens of a Kaspi title, without memory sizes and the screen size in cm ("191 см"). */
+/** SIM words in a Kaspi title: not model words («NanoSIM+eSIM», «dual eSIM», «Dual Sim»). */
+const SIM_PHRASE = /\b(?:dual\s*)?(?:nano-?\s*)?e?-?sim\b(?:\s*\+\s*(?:nano-?\s*)?e?-?sim\b)?/gi;
+/** An eSIM-only phone: «dual eSIM» or eSIM without a physical SIM named. */
+export function esimOnly(title: string): boolean {
+  const t = title.toLowerCase();
+  return /dual\s*e-?sim/.test(t) || (/\be-?sim\b/.test(t) && !/nano-?\s*sim|\bsim\s*\+|\+\s*e?sim|dual\s*sim/.test(t));
+}
+
+/** Lower-case Latin/number tokens of a Kaspi title, without memory sizes, the SIM kind and the screen size in cm ("191 см"). */
 export function titleTokens(title: string): string[] {
   const cm = /\b(\d{2,3})\s*см\b/.exec(title)?.[1];
-  return plusWord(title.toLowerCase()).replace(/\d+\s*(гб|gb|тб|tb)/g, " ").replace(/[а-яёәғқңөұүһі]+/g, " ")
+  return plusWord(title.replace(SIM_PHRASE, " ").toLowerCase()).replace(/\d+\s*(гб|gb|тб|tb)/g, " ").replace(/[а-яёәғқңөұүһі]+/g, " ")
     .split(/[^a-z0-9]+/).filter((x) => x && x !== cm && (x.length > 1 || /\d/.test(x) || VARIANTS.has(x)));
 }
 
@@ -103,6 +117,7 @@ export function mismatch(kaspiTitle: string, store: string[], storeTitle?: strin
   if (!tok.some((x) => /\d/.test(x))) return "no model number";
   const set = new Set(store);
   if (!tok.every((x) => set.has(x))) return "model differs";
+  if (esimOnly(kaspiTitle) && !set.has("esim")) return "esim only";
   const ours = new Set(tok);
   const num = (x: string | undefined) => !!x && /^\d+(gb|tb)?$/.test(x);
   for (let i = 0; i < store.length; i++) {

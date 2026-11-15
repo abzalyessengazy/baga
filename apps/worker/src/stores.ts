@@ -219,7 +219,9 @@ async function runSulpak() {
       if (p === "gone") { await setMatchStatus(sql, m.matchId, "rejected", "page gone"); continue; }
       if (!p) continue;
       if (p.sku !== m.sku) { await setMatchStatus(sql, m.matchId, "rejected", `item changed to ${p.sku}`); continue; }
-      if (m.title && norm(p.title) !== norm(m.title)) {
+      // Every Sulpak pair is a title match: re-checked against today's rules and title on each pricing (15 Nov 2026:
+      // three iPads paired before Apple's «Starlight» counted as a colour), not only when the store renames it.
+      {
         const why = mismatch(m.ourTitle, storeTokens(m.slug, p.title), p.title);
         if (why && !isSimilarReason(why)) { await setMatchStatus(sql, m.matchId, "rejected", why); continue; }
         if (why) await setMatchStatus(sql, m.matchId, "pending", why);
