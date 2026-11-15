@@ -76,15 +76,23 @@ export function intervalFor(priority: Priority, p: { calm: boolean; inStock: boo
   const base = INTERVAL_MINUTES[priority];
   if (priority === "hot" || priority === "tracked") return base;
   if (!p.inStock) return Math.max(base, OUT_OF_STOCK_INTERVAL_MINUTES);
-  // A cheap product nobody tracks or opened (the owner, 15 Nov: a 500 ₸ dish mat from the category-coverage seeds):
-  // weekly. It proved its category reads fine; its price moves matter to nobody yet.
-  if (p.price != null && p.price < CHEAP.price) return Math.max(base, CHEAP.intervalMinutes);
+  // Under AUTO_MIN_PRICE and nobody tracks it: no automatic checks (the owner, 15 Nov). A person opening it again
+  // still brings it to the next run (queueLane lane 1); tracking it puts it back on its tier.
+  if (p.price != null && p.price < AUTO_MIN_PRICE) return PARKED_MINUTES;
   const calm = priority === "catalog" && p.calm ? Math.max(base, CALM.intervalMinutes) : base;
   return p.variant ? Math.max(calm, VARIANT_INTERVAL_MINUTES) : calm;
 }
 
-/** Below this price a product nobody watches is checked weekly and kept off the home lists (15 Nov 2026). */
-export const CHEAP = { price: 5_000, intervalMinutes: 7 * 24 * 60 } as const;
+/** Below this price a product is kept off the home and drop lists (15 Nov 2026). */
+export const CHEAP = { price: 5_000 } as const;
+
+/**
+ * Below this price a product nobody tracks gets no automatic check (the owner, 15 Nov 2026: «i dont want to check
+ * anything cheaper than 50k tenge at all with automatic checks»): only people's products are checked there, when they
+ * track it or open it again. PARKED_MINUTES is "not by schedule": a year, so the row stays valid.
+ */
+export const AUTO_MIN_PRICE = 50_000;
+export const PARKED_MINUTES = 365 * 24 * 60;
 
 /** Whether daily lows (the last STABLE.days days, observed days only) say the price is stable. */
 export function isStablePrice(lows: number[]): boolean {

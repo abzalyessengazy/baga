@@ -23,7 +23,7 @@ const sql = postgres(env.databaseUrl(), { max: 2, ...connectionOptions(env.datab
  * `--manual` (DECISIONS.md 2026-11-09, CLAUDE.md rule 6): only the products visitors asked for outside the window
  * (manual_checks, at most 40 a day), started by .github/workflows/manual.yml when a visitor asks. Never in the
  * collector's minutes (isManualCheckTime: not 03:55–08:50 UTC), the same pacing, User-Agent and breaker; the
- * first 403/429 pauses manual checks for 7 days.
+ * first 403/429 pauses manual checks until 14:00 Almaty the next day (MANUAL_CHECKS.resumeAtAlmaty).
  */
 const MANUAL = process.argv.includes("--manual");
 // Every request this run makes (page, offers, re-checks, alert confirmations) goes through this gate.

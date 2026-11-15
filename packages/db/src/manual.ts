@@ -10,8 +10,12 @@ export const MANUAL_CHECKS = {
   perDay: 40,
   /** Per visitor (daily-rotating IP hash), per Almaty day. */
   perVisitor: 3,
-  /** The first 403/429 pauses manual checks this long. */
-  pauseDays: 7,
+  /**
+   * A 403/429 pauses manual checks for the rest of that Almaty day; they resume the next day at this time, after the
+   * collector's window (the owner, 15 Nov 2026: «if kaspi is blocking again. so be it for today … open tomorrow after
+   * 2 pm»; it was 7 days).
+   */
+  resumeAtAlmaty: "14:00",
 } as const;
 
 const almatyToday = (sql: postgres.Sql) => sql`(now() at time zone 'Asia/Almaty')::date`;
@@ -24,9 +28,9 @@ export type ManualTarget = { externalId: string } | { linkCode: string };
 /** When manual checks resume after a block, or null. */
 export async function manualPausedUntil(sql: postgres.Sql): Promise<Date | null> {
   const [r] = await sql<{ until: Date | null }[]>`
-    select max(finished_at) + make_interval(days => ${MANUAL_CHECKS.pauseDays}) as until from manual_checks
-    where status = 'blocked' and finished_at > now() - make_interval(days => ${MANUAL_CHECKS.pauseDays})`;
-  return r?.until ?? null;
+    select max(((finished_at at time zone 'Asia/Almaty')::date + 1 + ${MANUAL_CHECKS.resumeAtAlmaty}::time) at time zone 'Asia/Almaty') as until
+    from manual_checks where status = 'blocked' and finished_at > now() - interval '2 days'`;
+  return r?.until && r.until.getTime() > Date.now() ? r.until : null;
 }
 
 /** Records a visitor's request within the caps. One open request per product or link; the caps hold under concurrency. */

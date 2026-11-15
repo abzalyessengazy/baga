@@ -75,7 +75,7 @@ the home page already shows (the week's biggest drop and the 4 visible rows of t
 more on products from 5 000 ₸, not a product whose cheapest offer needs a seller check, and never a product whose own
 page says «Дороже обычного» (the page's verdict on the same daily lows and current price; owner, 12 Nov 2026). A week's drop that also fell since yesterday (it is in the day list) comes first, biggest first; the rotation
 follows (owner, 15 Nov 2026: the same products two days running). Home and drop lists leave out products under
-5 000 ₸ (`CHEAP.price`), which nobody watching are checked weekly; the day counts still include them.
+5 000 ₸ (`CHEAP.price`); the day counts still include them. A product nobody tracks under 50 000 ₸ (`AUTO_MIN_PRICE`) is not checked automatically, only when a person opens it again.
 
 ## Other numbers
 
