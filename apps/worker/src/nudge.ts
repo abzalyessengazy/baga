@@ -1,5 +1,6 @@
 import postgres from "postgres";
-import { claimDigest, connectionOptions, digestDue, suggestFor } from "@baga/db";
+import { randomBytes } from "node:crypto";
+import { claimDigest, connectionOptions, digestDue, suggestFor, accessCodeFor } from "@baga/db";
 import { almatyDay, DIGEST } from "@baga/core";
 import { env } from "./env";
 import { sendViaResend } from "./email";
@@ -35,7 +36,9 @@ async function main() {
   let sent = 0, failed = 0, skipped = 0;
   for (const d of due) {
     const suggestions = await suggestFor(sql, d.watcherId, DIGEST.suggestions).catch(() => []);
-    const note = { locale: d.locale, nickname: d.nickname, items: d.items, suggestions, site };
+    // Sign-in links (migration 0032): set the person's code the first time; a dry run writes nothing.
+    const accessCode = dry ? null : await accessCodeFor(sql, d.watcherId, randomBytes(18).toString("base64url")).catch(() => null);
+    const note = { locale: d.locale, nickname: d.nickname, items: d.items, suggestions, site, accessCode };
     const byEmail = d.email && d.stopCode && key ? "email" : null, byTelegram = d.chatId && token ? "telegram" : null;
     const channel = teamTest ? byEmail ?? byTelegram : byTelegram ?? byEmail;
     if (dry) {

@@ -61,12 +61,21 @@ export function brief(s: string, max = 34): string {
 /** Drops first, then rises, then the unchanged; the note shows the first DIGEST.maxItems. */
 const ordered = (items: DigestItem[]) => [...items].sort((a, b) => (a.move === b.move ? 0 : a.move === -1 ? -1 : b.move === -1 ? 1 : b.move - a.move));
 
-export interface DigestNote { locale: Locale; nickname: string | null; items: DigestItem[]; suggestions: Suggestion[]; site: string }
+export interface DigestNote {
+  locale: Locale; nickname: string | null; items: DigestItem[]; suggestions: Suggestion[]; site: string;
+  /** The person's sign-in code (migration 0032): every BAĞA link in the note then signs the reader in. */
+  accessCode?: string | null;
+}
 
 function parts(p: DigestNote, source: string) {
   const c = copy[p.locale];
   const f = (n: number) => formatTenge(n, p.locale);
-  const link = (path: string) => `${p.site}/${p.locale}${path}?utm_source=${source}&utm_medium=digest`;
+  // With a code, each link goes through /api/my/enter, so it opens the person's own list in any browser (Telegram's
+  // own included; DECISIONS.md 2026-11-16 "Sign-in links in alerts").
+  const link = (path: string) => {
+    const page = `/${p.locale}${path}?utm_source=${source}&utm_medium=digest`;
+    return p.accessCode ? `${p.site}/api/my/enter?c=${p.accessCode}&l=${p.locale}&to=${encodeURIComponent(page)}` : `${p.site}${page}`;
+  };
   const mood = digestMood(p.items.map((i) => i.move));
   const all = ordered(p.items);
   const shown = all.slice(0, DIGEST.maxItems);

@@ -44,4 +44,15 @@ describe("3-day note", () => {
     const items = Array.from({ length: 8 }, (_, i) => item({ externalId: String(100000 + i), move: 0, was: 500, now: 500 }));
     expect(renderTelegramDigest({ ...base, items, suggestions: [] }).html).toContain("и ещё 3");
   });
+  it("with a sign-in code, every BAĞA link signs the reader in and keeps its page and source", () => {
+    const code = "c".repeat(24);
+    const m = renderTelegramDigest({ ...base, items: [item({})], suggestions: [sug], accessCode: code });
+    const links = [...m.html.matchAll(/href="([^"]+)"/g)].map((x) => x[1]!).concat(m.buttons.map((b) => ("url" in b ? b.url : "")).filter(Boolean));
+    expect(links.length).toBeGreaterThan(1);
+    for (const l of links) expect(l.startsWith(`https://bagaapp.com/api/my/enter?c=${code}&l=ru&to=`)).toBe(true);
+    expect(links.some((l) => decodeURIComponent(l).includes("/ru/p/111111?utm_source=tg_digest"))).toBe(true);
+    const e = renderEmailDigest({ ...base, items: [item({})], suggestions: [], accessCode: code, stopUrl: "https://bagaapp.com/ru/email?digest=x" });
+    expect(e.html).toContain(`/api/my/enter?c=${code}`);
+    expect(e.html).toContain("https://bagaapp.com/ru/email?digest=x"); // the stop link stays as it is
+  });
 });
