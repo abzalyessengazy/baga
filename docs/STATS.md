@@ -57,10 +57,10 @@ products one run checks, so a slower pace does not shrink it. The receipt says �
 цифрах» lists and /explore keep Rules D and W.
 
 ## Home receipt top row (`getMarket` `people`, `watched`; owner, 15 Nov 2026)
-«Уже с BAĞA»: distinct browsers ever (events.vid, since 11 Nov 2026; the team's removed). «Товаров под наблюдением»:
+«Людей с BAĞA»: distinct browsers ever (events.vid, since 11 Nov 2026; the team's removed). «Товаров под наблюдением»:
 products with an active tracking, the team's left out. «Хотят сэкономить»: each active tracking's current price above
 its target, summed (the leaderboard's sum): what people want to save, not money saved. The catalog (products,
-sellers, days of history) is one small line under them.
+sellers) is one small line under them.
 
 ## Rule W: now against the previous 7 days (`weekMovers`, `packages/db/src/movers.ts`)
 

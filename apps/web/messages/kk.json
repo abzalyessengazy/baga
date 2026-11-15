@@ -708,11 +708,11 @@
     "shopsAll": "Барлық сатушылар",
     "shopsTitle": "Сатушылар",
     "latestWhen": "Соңғы тексеру бойынша",
-    "valPeople": "BAĞA-мен бірге",
+    "valPeople": "BAĞA-мен адам",
     "valWatched": "Бақылаудағы тауар",
     "valWant": "Үнемдегісі келеді",
     "mln": "млн ₸",
-    "catalogLine": "{products} тауар · {sellers} сатушы · {days} күн тарих",
+    "catalogLine": "{products} тауар · {sellers} сатушы",
     "compareWith": "Бағаны салыстырамыз:"
   },
   "dates": {

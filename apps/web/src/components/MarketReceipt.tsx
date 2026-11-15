@@ -17,10 +17,6 @@ const count = (n: number) => formatCount(n);
 const millions = (n: number, mln: string) => n >= 1_000_000
   ? <>{(Math.floor(n / 100_000) / 10).toFixed(1).replace(".", ",").replace(",0", "")}<small className="mk-unit"> {mln}</small></>
   : <>{formatCount(n)}<small className="mk-unit"> ₸</small></>;
-/** Calendar days from the first observed day to the shown day (the live day included), both included. */
-const historyDays = (first: string | null, last: string) =>
-  first ? Math.round((Date.parse(last) - Date.parse(first)) / 86_400_000) + 1 : 0;
-
 // Printer feed: the paper advances in small steps, like a thermal printer.
 const printerEase = (t: number) => Math.round(t * 28) / 28;
 
@@ -68,7 +64,7 @@ export function MarketReceipt() {
                   <div><dt><StatIcon name="eye" />{t("valWatched")}</dt><dd><CountUp value={m!.watched?.products ?? 0} format={count} duration={1.2} /></dd></div>
                   <div><dt><StatIcon name="down" />{t("valWant")}</dt><dd className="is-want">{millions(m!.watched?.want ?? 0, t("mln"))}</dd></div>
                 </dl>
-                <p className="mk-catalog">{t("catalogLine", { products: m!.catalog.products, sellers: m!.catalog.sellers, days: historyDays(m!.catalog.firstDay, m!.day ?? m!.catalog.firstDay ?? "") })}</p>
+                <p className="mk-catalog">{t("catalogLine", { products: m!.catalog.products, sellers: m!.catalog.sellers })}</p>
                 {/* The other stores we compare with (the owner, 15 Nov): their name chips, never their logos (CLAUDE.md design). */}
                 <p className="mk-stores">{t("compareWith")} <span className="store-chip is-technodom">Technodom</span> <span className="store-chip is-sulpak">Sulpak</span></p>
                 {/* Every product's latest check against the one before it (Rule L, docs/STATS.md; the owner, 15 Nov): not
