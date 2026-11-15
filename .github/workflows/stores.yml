@@ -11,6 +11,9 @@ on:
     - cron: "30 10,13,16 * * *"
   workflow_dispatch:
 concurrency: { group: stores, cancel-in-progress: false }
+permissions:
+  contents: read
+  actions: write # to start the owner report and the 3-day note when the main run ends
 jobs:
   stores:
     runs-on: ubuntu-latest
@@ -24,3 +27,14 @@ jobs:
       - run: pnpm --filter @baga/worker stores
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      # GitHub runs scheduled jobs hours late (14 Nov 2026: the 10:30 UTC note at 16:41), so the main run, started on time
+      # by cron-job.org, starts the owner report and the 3-day note itself when it ends (DECISIONS.md, 2026-11-15
+      # "Report and 3-day note right after the store run"). Both skip what is done: the report once a day, each note is
+      # claimed. Their own schedules stay as backups.
+      - name: Start the owner report and the 3-day note
+        if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run report.yml -R "$GITHUB_REPOSITORY"
+          gh workflow run nudge.yml -R "$GITHUB_REPOSITORY"

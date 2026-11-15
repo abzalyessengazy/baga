@@ -388,3 +388,6 @@ The owner: «do all». /black-friday has «Напомнить в Telegram» unti
 
 ## 2026-11-15 — The manual-check pause lifted early, by the owner
 Rule 6 pauses manual checks for 7 days after a 403/429. The owner, the same evening (15 Nov, 19:10 Almaty): «try lifting it now. if works, don't do anything, keep running. and also check tomorrow». The single blocked check of 13:51 (one 403/429 right after the 5 s test run) is marked failed with a note, so the pause ends now; the pace is 10 s again. If Kaspi answers 403/429 again, the same rule pauses manual checks for 7 days, and that pause is not lifted early.
+
+## 2026-11-15 — Report and 3-day note right after the store run
+The owner: «3 day note is more important. lets create jobs». GitHub does run the scheduled report and note jobs, but hours late (14 Nov: the 10:30 UTC note at 16:41 and 18:23 UTC). The store run is started on time by cron-job.org at 08:50 UTC and ends about 11:15 UTC; its main run (workflow_dispatch) now starts report.yml and nudge.yml itself when it ends, with the workflow's own token (actions: write). No new token or outside service. Both skip what is done (the report once a day; each note is claimed), and their own schedules stay as backups.
