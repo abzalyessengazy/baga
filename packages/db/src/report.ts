@@ -1,6 +1,7 @@
 import type postgres from "postgres";
 import { personReliable } from "@baga/core";
 import { alertStats, type AlertStats } from "./alertStats";
+import { SIMILAR_REASONS } from "./stores";
 
 /**
  * The daily owner report (DECISIONS.md, 2026-11-11 "Daily owner report"): numbers read from the database only,
@@ -129,7 +130,10 @@ export async function ownerReport(sql: postgres.Sql): Promise<OwnerReport> {
     from store_runs where started_at > now() - interval '24 hours'`;
   const [cmp] = await sql<{ pending: number; compared: number; cheaper: number }[]>`
     with lp as (select distinct on (match_id) match_id, price, in_stock, observed_at from store_prices order by match_id, observed_at desc)
-    select (select count(*) from store_matches where status = 'pending')::int as pending,
+    -- Only pairs /admin asks about: colour-only doubts are shown as «похожий» and need nobody (15 Nov: the report said
+    -- «Review 53», /admin showed none).
+    select (select count(*) from store_matches where status = 'pending'
+              and not (coalesce(reason, '') = any(${SIMILAR_REASONS as unknown as string[]})))::int as pending,
       count(lp.match_id)::int as compared,
       count(*) filter (where lp.price < s.current_min_price * 0.99)::int as cheaper
     from store_matches m join lp on lp.match_id = m.id join product_state s on s.product_id = m.product_id
