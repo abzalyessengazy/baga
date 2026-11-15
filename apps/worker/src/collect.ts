@@ -15,7 +15,7 @@ import postgres from "postgres";
 import { env } from "./env";
 import { CircuitBreaker } from "./breaker";
 import { renderAlertEmail, renderBoughtEmail, sendViaResend } from "./email";
-import { renderTelegramAlert, renderTelegramBoughtAsk, sendTelegram, sendTelegramCard, DeliveryError } from "./telegram";
+import { renderTelegramAlert, renderTelegramBoughtAsk, sendTelegram, sendTelegramCard, DeliveryError, type TelegramButton } from "./telegram";
 import { renderChannelPost } from "./channel";
 
 const sql = postgres(env.databaseUrl(), { max: 2, ...connectionOptions(env.databaseUrl()) });
@@ -619,7 +619,8 @@ async function sendTelegramQueued() {
     });
     try {
       await startSend(sql, q.id);
-      const messageId = "photo" in msg ? await sendTelegramCard(token, q.chat_id, msg) : await sendTelegram(token, q.chat_id, msg);
+      // Alerts go as a product card (the photo with the message); "Вы купили?" as text.
+      const messageId = "photo" in msg ? await sendTelegramCard(token, q.chat_id, msg as { html: string; buttons: TelegramButton[]; photo: string | null }) : await sendTelegram(token, q.chat_id, msg);
       await markSent(sql, q.id, String(messageId));
     } catch (e) {
       await deliveryFailed(q.id, e);
