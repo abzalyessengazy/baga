@@ -13,6 +13,10 @@ import { PickSlider } from "./PickSlider";
 import { CountUp } from "./Motion";
 
 const count = (n: number) => formatCount(n);
+/** «2,3 млн ₸» (one decimal, comma) with the unit set small so it fits its column; under a million the full sum. */
+const millions = (n: number, mln: string) => n >= 1_000_000
+  ? <>{(Math.floor(n / 100_000) / 10).toFixed(1).replace(".", ",").replace(",0", "")}<small className="mk-unit"> {mln}</small></>
+  : <>{formatCount(n)}<small className="mk-unit"> ₸</small></>;
 /** Calendar days from the first observed day to the shown day (the live day included), both included. */
 const historyDays = (first: string | null, last: string) =>
   first ? Math.round((Date.parse(last) - Date.parse(first)) / 86_400_000) + 1 : 0;
@@ -58,11 +62,13 @@ export function MarketReceipt() {
               <>
                 {/* The whole catalog, then the latest complete day in one line (docs/STATS.md). Numbers with one- or
                     two-word labels only: the method lives on /explore and /shops, not here. */}
+                {/* What people use BAĞA for first (the owner, 15 Nov), then the catalog in one small line (docs/STATS.md). */}
                 <dl className="mk-stats">
-                  <div><dt><StatIcon name="box" />{t("products")}</dt><dd><CountUp value={m!.catalog.products} format={count} duration={1.2} /></dd></div>
-                  <div><dt><StatIcon name="store" />{t("sellers")}</dt><dd><CountUp value={m!.catalog.sellers} format={count} duration={1.2} /></dd></div>
-                  <div><dt><StatIcon name="calendar" />{t("days")}</dt><dd><CountUp value={historyDays(m!.catalog.firstDay, m!.day ?? m!.catalog.firstDay ?? "")} format={count} duration={1.2} /></dd></div>
+                  <div><dt><StatIcon name="people" />{t("valPeople")}</dt><dd><CountUp value={m!.people} format={count} duration={1.2} /></dd></div>
+                  <div><dt><StatIcon name="eye" />{t("valWatched")}</dt><dd><CountUp value={m!.watched?.products ?? 0} format={count} duration={1.2} /></dd></div>
+                  <div><dt><StatIcon name="down" />{t("valWant")}</dt><dd className="is-want">{millions(m!.watched?.want ?? 0, t("mln"))}</dd></div>
                 </dl>
+                <p className="mk-catalog">{t("catalogLine", { products: m!.catalog.products, sellers: m!.catalog.sellers, days: historyDays(m!.catalog.firstDay, m!.day ?? m!.catalog.firstDay ?? "") })}</p>
                 {/* Every product's latest check against the one before it (Rule L, docs/STATS.md; the owner, 15 Nov): not
                     one day's checks, so the arrows do not shrink on a day the collector checks fewer products. */}
                 {m!.latest?.compared ? (
@@ -88,13 +94,6 @@ export function MarketReceipt() {
               </>
             )}
             {has && <PickSlider picks={m!.picks ?? (m!.pick ? [m!.pick] : [])} />}
-            {/* The receipt's total line (the owner, 15 Nov): everyone who has come so far. */}
-            {has && m!.people > 0 && (
-              <p className="mk-total">
-                <span>{t("people")}</span>
-                <b><CountUp value={m!.people} format={count} duration={1.2} /></b>
-              </p>
-            )}
           </section>
         </motion.div>
       </div>

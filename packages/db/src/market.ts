@@ -44,6 +44,12 @@ export interface Market {
   latest: { compared: number; down: number; up: number };
   /** «Уже экономят с BAĞA» (the owner, 15 Nov 2026): distinct browsers (events.vid) ever, the team's removed. Browser ids exist since 11 Nov 2026. */
   people: number;
+  /**
+   * What people use BAĞA for (the owner, 15 Nov 2026), the team's own trackings left out: products with an active
+   * tracking, and «хотят сэкономить», each active tracking's current price above its target, summed (the leaderboard's
+   * own sum). What people want to save, not money saved.
+   */
+  watched: { products: number; want: number };
   /** Products seen in stock on the latest shift and on MARKET_CONFIG.lowsMinDays or more days, whose latest daily low is below every earlier one. */
   newLows: number;
   spread: { products: number; over10: number; over25: number; medianPct: number | null; top: MarketSpread[] };
@@ -178,6 +184,11 @@ export async function getMarket(sql: postgres.Sql, now = new Date()): Promise<Ma
       count(*) filter (where abs(now - was) * 100 >= ${MOVE_MIN_PCT} * was and now > was)::int as up
     from x`;
   const [people] = await sql<{ n: number }[]>`select count(distinct vid)::int as n from events where vid is not null`;
+  const [watched] = await sql<{ products: number; want: number }[]>`
+    select count(distinct t.product_id)::int as products, coalesce(sum(greatest(s.current_min_price - t.target_price, 0)), 0)::int as want
+    from trackings t left join product_state s on s.product_id = t.product_id
+    where t.status = 'active' and t.watcher_id is not null
+      and not exists (select 1 from watchers w where w.id = t.watcher_id and w.internal)`;
   const deals = await weekMovers(sql, "down", c.deals);
   const picks = await picksOfDay(sql, moves, deals);
   const pick = picks[0] ?? null;
@@ -188,6 +199,7 @@ export async function getMarket(sql: postgres.Sql, now = new Date()): Promise<Ma
     compared: moves.compared, down, up, same: moves.compared - down - up,
     latest: latest ?? { compared: 0, down: 0, up: 0 },
     people: people?.n ?? 0,
+    watched: watched ?? { products: 0, want: 0 },
     newLows: lows?.n ?? 0,
     spread: { products: spread?.products ?? 0, over10: spread?.over10 ?? 0, over25: spread?.over25 ?? 0, medianPct: spread?.median ?? null, top },
     categories, deals, pick, picks, shops,

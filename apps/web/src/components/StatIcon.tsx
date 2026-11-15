@@ -2,7 +2,7 @@
  * Small line icons for stat labels, in the label's colour (DESIGN: one accent; icons stay ink-soft, numbers carry the
  * colour). 14 px, decorative: the label next to them says what the number is.
  */
-export type StatIconName = "box" | "store" | "calendar" | "down" | "up";
+export type StatIconName = "box" | "store" | "calendar" | "down" | "up" | "people" | "eye";
 
 const PATHS: Record<StatIconName, string> = {
   box: "M3 6.5 10 3l7 3.5v7L10 17l-7-3.5v-7Zm0 0L10 10l7-3.5M10 10v7",
@@ -10,6 +10,8 @@ const PATHS: Record<StatIconName, string> = {
   calendar: "M4 5.5h12v11H4v-11Zm0 3.5h12M7.5 3.5v3M12.5 3.5v3",
   down: "M3 6l5 5 3-3 6 6m0 0v-4.5m0 4.5h-4.5",
   up: "M3 14l5-5 3 3 6-6m0 0v4.5m0-4.5h-4.5",
+  people: "M7.5 9a2.75 2.75 0 1 0 0-5.5 2.75 2.75 0 0 0 0 5.5ZM2.5 16.5c0-2.8 2.2-5 5-5s5 2.2 5 5M13 4a2.5 2.5 0 0 1 0 5M14.5 11.8c1.8.6 3 2.4 3 4.7",
+  eye: "M2 10s3-5.5 8-5.5S18 10 18 10s-3 5.5-8 5.5S2 10 2 10Zm8 2.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z",
 };
 
 export function StatIcon({ name }: { name: StatIconName }) {
