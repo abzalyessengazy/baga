@@ -516,8 +516,9 @@ describe.skipIf(!url)("database (disposable Postgres)", () => {
     });
 
     it("home lists: a price unchanged for days, shops by rating, moves in tenge", async () => {
-      await product("300000031", [[6, 700], [5, 700], [4, 700], [3, 700], [2, 700], [1, 700], [0, 700]]);
-      await product("300000032", [[3, 900], [2, 700], [1, 700], [0, 700]]); // three days at 700: under STABLE_MIN_DAYS
+      await product("300000031", [[6, 7000], [5, 7000], [4, 7000], [3, 7000], [2, 7000], [1, 7000], [0, 7000]]);
+      await product("300000032", [[3, 9000], [2, 7000], [1, 7000], [0, 7000]]); // three days at 7 000: under STABLE_MIN_DAYS
+      await product("300000033", [[6, 700], [5, 700], [4, 700], [3, 700], [2, 700], [1, 700], [0, 700]]); // under CHEAP.price: off the lists
       const s = await getPlatformStats(sql);
       expect(s.stable.map((x) => [x.externalId, x.days])).toEqual([["300000031", 7]]);
       expect(s.shops).toEqual({ top: [], low: [] });
