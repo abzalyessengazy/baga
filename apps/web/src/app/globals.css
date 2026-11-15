@@ -456,6 +456,7 @@ a { color: inherit; }
 
 /* "Удалить мои данные" */
 .forget-btn { color: var(--ink-soft) !important; font-size: var(--step--1); }
+.forget-btn + .forget-btn { margin-left: 16px; }
 .forget .channel-text { margin: 0 0 4px; }
 
 /* ---------- product page ---------- */

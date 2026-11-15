@@ -6,12 +6,13 @@
  */
 import { createKaspiClient, buildSnapshot, KaspiHttpError, KaspiParseError, KaspiRequestRefused, canonicalProductUrl, parseKaspiUrl, queuedLinkUrl, variantLinkCode } from "@baga/kaspi";
 import { queuedManualChecks, finishManualCheck, manualPausedUntil, cityChecksDue, saveCityPrice } from "@baga/db";
-import { saveSnapshot, claimNotifications, startSend, markSent, markFailed, tidyDeliveries, connectionOptions, requestProduct, attachShortLinkTrackings, weekMovers } from "@baga/db";
+import { accessCodeFor, saveSnapshot, claimNotifications, startSend, markSent, markFailed, tidyDeliveries, connectionOptions, requestProduct, attachShortLinkTrackings, weekMovers } from "@baga/db";
 import {
   evaluateAlert, priorityFor, newProductTurn, isStablePrice, isCalmPrice, intervalFor, laterVariants, CALM, STABLE, INTERVAL_MINUTES, PRIORITY_ORDER, USER_INTEREST, CATALOG, SEED_MIN_PRICE, backoffMinutes, isSuspiciousJump, type TrackingAlertState,
   KASPI_CRAWL_DELAY_MS, CITIES, CITY_CHECKS, REFERENCE_CITY, type City, isCityDependent, isInVisitWindow, isManualCheckTime, needsPageRefresh, msUntilVisitWindow, targetForDrop, almatyDay, runningSale, type Priority,
 } from "@baga/core";
 import postgres from "postgres";
+import { randomBytes } from "node:crypto";
 import { env } from "./env";
 import { CircuitBreaker } from "./breaker";
 import { renderAlertEmail, renderBoughtEmail, sendViaResend } from "./email";
@@ -594,11 +595,20 @@ async function evaluateTrackings(productId: number, externalId: string, price: n
 }
 
 /** Queued Telegram messages for watchers (first price, target reached). Only the Telegram API is called. */
+/**
+ * A link into BAĞA that also signs the reader in, in whatever browser opens it (Telegram's own included; DECISIONS.md
+ * 2026-11-16 "Sign-in links in alerts", migration 0032): /api/my/enter with the person's code, then the page.
+ */
+async function enterUrl(watcherId: string, locale: "ru" | "kk", to: string): Promise<string> {
+  const code = await accessCodeFor(sql, watcherId, randomBytes(18).toString("base64url"));
+  return `${env.siteUrl()}/api/my/enter?c=${code}&l=${locale}&to=${encodeURIComponent(to)}`;
+}
+
 async function sendTelegramQueued() {
   const token = env.telegramBotToken();
   if (!token) return;
-  const queued = await sql<{ id: number; type: "first_price" | "target_reached" | "bought_ask"; price: number; target_price: number | null; chat_id: string; locale: "ru" | "kk"; title: string; external_id: string; current: number | null; offer_count: number; bought_code: string | null; image: string | null; low30: number | null; seller: string | null }[]>`
-    select n.id, n.type, n.price, t.target_price, w.telegram_chat_id::text as chat_id, w.locale, p.title, p.external_id,
+  const queued = await sql<{ id: number; type: "first_price" | "target_reached" | "bought_ask"; price: number; target_price: number | null; chat_id: string; locale: "ru" | "kk"; title: string; external_id: string; current: number | null; offer_count: number; bought_code: string | null; image: string | null; low30: number | null; seller: string | null; watcher_id: string }[]>`
+    select n.id, n.type, n.price, t.target_price, w.id as watcher_id, w.telegram_chat_id::text as chat_id, w.locale, p.title, p.external_id,
            s.current_min_price as current, coalesce(s.offer_count, 0) as offer_count, t.bought_code,
            p.image_url as image, (select min(o.min_price)::int from price_observations o where o.product_id = p.id and o.min_price is not null
              and o.observed_at > now() - interval '30 days') as low30,
@@ -614,8 +624,8 @@ async function sendTelegramQueued() {
     const msg = q.type === "bought_ask" ? renderTelegramBoughtAsk({ locale: q.locale, title: q.title, code: q.bought_code ?? "" }) : renderTelegramAlert({
       type: q.type, locale: q.locale, title: q.title,
       price: q.type === "first_price" ? q.current : q.price, target: q.target_price, offerCount: q.offer_count,
-      productUrl: `${site}/${q.locale}/p/${q.external_id}?utm_source=tg_alert`, kaspiUrl: `${site}/go/${q.external_id}?n=${q.id}`,
-      myUrl: `${site}/${q.locale}/my?utm_source=tg_alert`, low30: q.low30, seller: q.seller, imageUrl: q.image,
+      productUrl: await enterUrl(q.watcher_id, q.locale, `/${q.locale}/p/${q.external_id}?utm_source=tg_alert`), kaspiUrl: `${site}/go/${q.external_id}?n=${q.id}`,
+      myUrl: await enterUrl(q.watcher_id, q.locale, `/${q.locale}/my?utm_source=tg_alert`), low30: q.low30, seller: q.seller, imageUrl: q.image,
     });
     try {
       await startSend(sql, q.id);
@@ -709,8 +719,8 @@ async function cleanUp() {
 async function sendEmailQueued() {
   const key = env.resendApiKey();
   if (!key) return;
-  const queued = await sql<{ id: number; key: string; type: "first_price" | "target_reached" | "bought_ask"; price: number; target_price: number | null; email: string; stop_code: string; locale: "ru" | "kk"; title: string; external_id: string; current: number | null; offer_count: number; bought_code: string | null; image: string | null; low30: number | null; seller: string | null }[]>`
-    select n.id, n.idempotency_key as key, n.type, n.price, t.target_price, w.email, w.email_stop_code as stop_code, w.locale, p.title, p.external_id,
+  const queued = await sql<{ id: number; key: string; type: "first_price" | "target_reached" | "bought_ask"; price: number; target_price: number | null; email: string; stop_code: string; locale: "ru" | "kk"; title: string; external_id: string; current: number | null; offer_count: number; bought_code: string | null; image: string | null; low30: number | null; seller: string | null; watcher_id: string }[]>`
+    select n.id, n.idempotency_key as key, n.type, n.price, t.target_price, w.id as watcher_id, w.email, w.email_stop_code as stop_code, w.locale, p.title, p.external_id,
            s.current_min_price as current, coalesce(s.offer_count, 0) as offer_count, t.bought_code,
            p.image_url as image, (select min(o.min_price)::int from price_observations o where o.product_id = p.id and o.min_price is not null
              and o.observed_at > now() - interval '30 days') as low30,
@@ -734,8 +744,8 @@ async function sendEmailQueued() {
       type: q.type, locale: q.locale, title: q.title,
       price: q.type === "first_price" ? q.current : q.price, target: q.target_price,
       seller: top?.name ?? null, offerCount: q.offer_count,
-      productUrl: `${site}/${q.locale}/p/${q.external_id}?utm_source=email_alert`, kaspiUrl: `${site}/go/${q.external_id}?n=${q.id}`,
-      stopUrl, myUrl: `${site}/${q.locale}/my?utm_source=email_alert`, low30: q.low30, imageUrl: q.image,
+      productUrl: await enterUrl(q.watcher_id, q.locale, `/${q.locale}/p/${q.external_id}?utm_source=email_alert`), kaspiUrl: `${site}/go/${q.external_id}?n=${q.id}`,
+      stopUrl, myUrl: await enterUrl(q.watcher_id, q.locale, `/${q.locale}/my?utm_source=email_alert`), low30: q.low30, imageUrl: q.image,
     });
     try {
       await startSend(sql, q.id);

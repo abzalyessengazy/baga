@@ -8,6 +8,7 @@ import { MyList } from "@/components/MyList";
 import { EmailConnect } from "@/components/EmailConnect";
 import { ConsentNote } from "@/components/ConsentNote";
 import { ForgetMe } from "@/components/ForgetMe";
+import { SignOutElsewhere } from "@/components/SignOutElsewhere";
 import { BoughtPrompt } from "@/components/BoughtPrompt";
 import { ProfileCard } from "@/components/ProfileCard";
 import { Suggestions } from "@/components/Suggestions";
@@ -102,6 +103,7 @@ export default async function MyPage({ params }: Props) {
             <p className="note">{t("shareNote")}</p>
             <p className="my-share">{shareUrl}</p>
             <hr className="rule" />
+            <SignOutElsewhere />
             <ForgetMe />
           </>
         )}

@@ -32,9 +32,43 @@ export async function createWatcher(sql: postgres.Sql, secretHash: string, local
   return w!;
 }
 
+/**
+ * The visitor behind a browser's secret: the one it was created with, or a key added by a sign-in link (migration
+ * 0032, DECISIONS.md 2026-11-16 "Sign-in links in alerts").
+ */
 export async function getWatcherBySecret(sql: postgres.Sql, secretHash: string): Promise<Watcher | null> {
   const [w] = await sql<Watcher[]>`update watchers set last_seen_at = now() where secret_hash = ${secretHash} returning ${watcherCols(sql)}`;
-  return w ?? null;
+  if (w) return w;
+  const [k] = await sql<{ watcherId: string }[]>`update watcher_keys set last_seen_at = now() where secret_hash = ${secretHash} returning watcher_id as "watcherId"`;
+  if (!k) return null;
+  const [kw] = await sql<Watcher[]>`update watchers set last_seen_at = now() where id = ${k.watcherId} returning ${watcherCols(sql)}`;
+  return kw ?? null;
+}
+
+/** The personal code sign-in links carry, set the first time one is needed (`fresh`: a new random code). */
+export async function accessCodeFor(sql: postgres.Sql, watcherId: string, fresh: string): Promise<string> {
+  const [r] = await sql<{ code: string }[]>`
+    update watchers set access_code = coalesce(access_code, ${fresh}) where id = ${watcherId} returning access_code as code`;
+  return r!.code;
+}
+
+/** A sign-in link's code → its visitor; then this browser gets its own key (the secret's hash). */
+export async function watcherIdByAccessCode(sql: postgres.Sql, code: string): Promise<string | null> {
+  const [r] = await sql<{ id: string }[]>`select id from watchers where access_code = ${code}`;
+  return r?.id ?? null;
+}
+export async function addWatcherKey(sql: postgres.Sql, watcherId: string, secretHash: string): Promise<void> {
+  await sql`insert into watcher_keys (secret_hash, watcher_id) values (${secretHash}, ${watcherId}) on conflict (secret_hash) do nothing`;
+}
+
+/**
+ * «Выйти на других устройствах»: every key added by a sign-in link goes, except this browser's own, and the links
+ * in earlier messages stop signing in (a new code is set with the next message).
+ */
+export async function signOutElsewhere(sql: postgres.Sql, watcherId: string, keepSecretHash: string): Promise<number> {
+  const r = await sql`delete from watcher_keys where watcher_id = ${watcherId} and secret_hash <> ${keepSecretHash}`;
+  await sql`update watchers set access_code = null where id = ${watcherId}`;
+  return r.count;
 }
 
 export async function setWatcherLocale(sql: postgres.Sql, watcherId: string, locale: "ru" | "kk") {

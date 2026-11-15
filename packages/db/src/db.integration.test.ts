@@ -10,7 +10,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { DELIVERY } from "@baga/core";
 import { claimNotifications, markFailed, markSent, startSend, tidyDeliveries } from "./delivery";
-import { requestWatcherEmail, EMAIL_REQUEST_LIMITS, deleteWatcherTracking, listWatched } from "./watchers";
+import { requestWatcherEmail, EMAIL_REQUEST_LIMITS, deleteWatcherTracking, listWatched, getWatcherBySecret, accessCodeFor, watcherIdByAccessCode, addWatcherKey, signOutElsewhere } from "./watchers";
 import { saveSnapshot, queueShortLink } from "./queries";
 import { dayMoves } from "./movers";
 import { requestManualCheck, finishManualCheck, queuedManualChecks, MANUAL_CHECKS } from "./manual";
@@ -286,7 +286,7 @@ describe.skipIf(!url)("database (disposable Postgres)", () => {
       expect(r.filter((x) => x === "queued").length).toBe(MANUAL_CHECKS.perDay);
       expect(r.filter((x) => x === "day_cap").length).toBe(5);
     });
-    it("pauses every request for 7 days after a 403/429", async () => {
+    it("pauses every request until the next afternoon after a 403/429", async () => {
       expect(await requestManualCheck(sql, { externalId: "300000001" }, who("a"))).toBe("queued");
       const [q] = await queuedManualChecks(sql);
       await finishManualCheck(sql, q!.id, "blocked", "blocked: 1 response(s) were 403/429");
@@ -446,6 +446,23 @@ describe.skipIf(!url)("database (disposable Postgres)", () => {
       const exact = await saveMatch(sql, { productId: p, marketplaceId: mid, sku: "23", slug: "item-23", title: "Item", method: "exact", status: "confirmed" });
       await saveStorePrice(sql, exact.id, { price: 31_000, oldPrice: null, inStock: true });
       expect((await storeOffers(sql, p)).map((o) => o.kind)).toEqual(["exact"]);
+    });
+  });
+
+  describe("sign-in links (migration 0032)", () => {
+    it("adds a browser key from the access code, and «sign out elsewhere» drops it and the code", async () => {
+      const [w] = await sql<{ id: string; secret_hash: string }[]>`insert into watchers (secret_hash) values (${hex64()}) returning id, secret_hash`;
+      const code = await accessCodeFor(sql, w!.id, "a".repeat(24));
+      expect(await accessCodeFor(sql, w!.id, "b".repeat(24))).toBe(code); // set once
+      expect(await watcherIdByAccessCode(sql, code)).toBe(w!.id);
+      const key = hex64();
+      await addWatcherKey(sql, w!.id, key);
+      expect((await getWatcherBySecret(sql, key))?.id).toBe(w!.id); // the new browser
+      expect((await getWatcherBySecret(sql, w!.secret_hash))?.id).toBe(w!.id); // the first browser still works
+      expect(await signOutElsewhere(sql, w!.id, w!.secret_hash)).toBe(1);
+      expect(await getWatcherBySecret(sql, key)).toBeNull();
+      expect(await watcherIdByAccessCode(sql, code)).toBeNull();
+      expect((await getWatcherBySecret(sql, w!.secret_hash))?.id).toBe(w!.id);
     });
   });
 
