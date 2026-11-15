@@ -21,7 +21,8 @@ const copy = {
     seller: "Продавец",
     sellers: "Продавцов",
     noOffers: "сейчас нет в продаже",
-    buy: "Открыть в BAĞA",
+    buy: "🛒 Открыть на Kaspi",
+    history: "📈 История цены в BAĞA",
     change: "Изменить цену",
     stop: "Не присылать письма",
     footer: "Вы получили это письмо, потому что следите за ценой в BAĞA и подтвердили этот адрес.",
@@ -48,7 +49,8 @@ const copy = {
     seller: "Сатушы",
     sellers: "Сатушылар",
     noOffers: "қазір сатылымда жоқ",
-    buy: "BAĞA-да ашу",
+    buy: "🛒 Kaspi-де ашу",
+    history: "📈 BAĞA-дағы баға тарихы",
     change: "Бағаны өзгерту",
     stop: "Хат жібермеу",
     footer: "Бұл хат BAĞA-да бағаны бақылап, осы адресті растағаныңыз үшін келді.",
@@ -70,7 +72,7 @@ export interface AlertEmail {
 /**
  * An alert as a receipt card, the 3-day note's look (16 Nov, the owner: «pretty, with icons, easy to read and come
  * back»): the photo, the name, today's price large, the person's target and how far apart they are, the 30-day low,
- * «Открыть в BAĞA» (no Kaspi button: the owner, 16 Nov) and «Мои товары». Observed prices only.
+ * two buttons of one size, Kaspi then BAĞA's history, and «Мои товары». Observed prices only.
  */
 export function renderAlertEmail(p: AlertEmail) {
   const c = copy[p.locale];
@@ -79,6 +81,9 @@ export function renderAlertEmail(p: AlertEmail) {
   const note = first ? (p.price !== null && p.target !== null && p.price <= p.target ? `✅ ${c.hitNote}` : `⏳ ${c.waitNote}`) : `⚡ ${c.checkNote}`;
   const sans = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif";
   const mono = "Menlo,Consolas,'Courier New',monospace";
+  // Two buttons of one size and shape (the owner, 16 Nov): Kaspi first in Kaspi red (its link counts the click), then
+  // BAĞA's history in the stamp violet.
+  const btn = `display:inline-block;box-sizing:border-box;width:260px;max-width:100%;color:#ffffff;font-family:${sans};font-size:15px;font-weight:700;padding:14px 18px;text-decoration:none;border-radius:999px;text-align:center;`;
   const gap = p.price !== null && p.target !== null && p.price !== p.target
     ? p.price > p.target
       ? { label: c.gap, value: `${f(p.price - p.target)} (−${Math.max(1, Math.round(((p.price - p.target) / p.price) * 100))}%)`, color: "#5d6168", bg: "#eef0f2" }
@@ -111,7 +116,8 @@ ${gap ? `<div style="margin-top:8px"><span style="display:inline-block;padding:4
 </td></tr>
 ${rows.length ? `<tr><td style="padding-top:16px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0">${rows.map(row).join("")}</table></td></tr>` : ""}
 <tr><td style="padding-top:14px;font-family:${sans};font-size:14px;line-height:20px;color:#3d4148;text-align:center">${note}</td></tr>
-<tr><td style="padding:22px 0 6px;text-align:center"><a href="${escapeHtml(p.productUrl)}" style="display:inline-block;background:#5b47e0;color:#ffffff;font-family:${sans};font-size:16px;font-weight:700;padding:14px 30px;text-decoration:none;border-radius:999px">${c.buy}</a></td></tr>
+<tr><td style="padding:22px 0 6px;text-align:center"><a href="${escapeHtml(p.kaspiUrl)}" style="${btn}background:#f14635">${c.buy}</a></td></tr>
+<tr><td style="padding:10px 0 0;text-align:center"><a href="${escapeHtml(p.productUrl)}" style="${btn}background:#5b47e0">${c.history}</a></td></tr>
 ${p.myUrl ? `<tr><td style="padding-top:10px;text-align:center;font-family:${sans};font-size:14px"><a href="${escapeHtml(p.myUrl)}" style="color:#5b47e0;text-decoration:none;font-weight:600">${c.my}</a></td></tr>` : ""}
 <tr><td style="padding-top:8px;text-align:center;font-family:${sans};font-size:13px"><a href="${escapeHtml(p.productUrl)}" style="color:#5d6168">${c.change}</a></td></tr>
 <tr><td style="padding-top:24px;border-top:1px dashed #d9dbe0;font-family:${sans};font-size:11px;line-height:16px;color:#8a8e95;text-align:center">${c.footer}<br><br><a href="${escapeHtml(p.stopUrl)}" style="color:#5d6168">${c.stop}</a></td></tr>
@@ -123,7 +129,7 @@ ${p.myUrl ? `<tr><td style="padding-top:10px;text-align:center;font-family:${san
     ...(gap ? [`${gap.label}: ${gap.value}`] : []),
     ...rows.map(([k, v]) => `${k.replace(/^\S+ /, "")}: ${plain(v)}`),
     "", note.replace(/^\S+ /, ""),
-    "", `${c.buy}: ${p.productUrl}`, ...(p.myUrl ? [`${c.my.replace(/^\S+ /, "")}: ${p.myUrl}`] : []),
+    "", `${c.buy.replace(/^\S+ /, "")}: ${p.kaspiUrl}`, `${c.history.replace(/^\S+ /, "")}: ${p.productUrl}`, ...(p.myUrl ? [`${c.my.replace(/^\S+ /, "")}: ${p.myUrl}`] : []),
     `${c.stop}: ${p.stopUrl}`, "", c.footer,
   ].join("\n");
   return { subject: first ? c.firstSubject(p.title) : c.targetSubject(p.title), html, text };

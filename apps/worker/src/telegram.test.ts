@@ -18,17 +18,20 @@ describe("renderTelegramAlert", () => {
     expect(m.html).toMatch(/Самая низкая за 30 дней: 580\s000\s₸/);
     expect(m.html).toMatch(/Ниже вашей на 10\s000\s₸/);
     expect(m.html).toContain("Дешевле всех: Технодом &lt;1&gt;");
-    expect(m.buttons.map((b) => b.text)).toEqual(["📈 Открыть в BAĞA", "🧾 Мои товары"]);
+    expect(m.buttons.map((b) => b.text)).toEqual(["🛒 Открыть на Kaspi", "📈 История цены в BAĞA", "🧾 Мои товары"]);
     expect(m.html.length).toBeLessThan(1000);
   });
   it("escapes the product title for Telegram HTML", () => {
     const m = renderTelegramAlert({ ...base, type: "target_reached", locale: "ru", price: 590_000 });
     expect(m.html).toContain("<b>Apple iPhone 18 Pro &lt;256Gb&gt;</b>");
   });
-  it("target reached, in Kazakh, with BAĞA as the only link (no Kaspi button)", () => {
+  it("target reached, in Kazakh, with Kaspi first and BAĞA second", () => {
     const m = renderTelegramAlert({ ...base, type: "target_reached", locale: "kk", price: 590_000 });
     expect(m.html).toContain("Баға сіздің бағаңызға жетті!");
-    expect(m.buttons).toEqual([{ text: "📈 BAĞA-да ашу", url: "https://bagaapp.com/ru/p/1" }]);
+    expect(m.buttons).toEqual([
+      { text: "🛒 Kaspi-де ашу", url: "https://bagaapp.com/go/1?n=5" },
+      { text: "📈 BAĞA-дағы баға тарихы", url: "https://bagaapp.com/ru/p/1" },
+    ]);
   });
   it("out of stock says so instead of a price", () => {
     const m = renderTelegramAlert({ ...base, type: "first_price", locale: "ru", price: null, offerCount: 0 });

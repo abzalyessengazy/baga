@@ -16,7 +16,8 @@ const copy = {
     waitNote: "Напишем, как только цена опустится до вашей.",
     hitNote: "Цена уже не выше вашей.",
     checkNote: "Цены на Kaspi меняются быстро: проверьте перед покупкой.",
-    open: "📈 Открыть в BAĞA",
+    open: "📈 История цены в BAĞA",
+    buy: "🛒 Открыть на Kaspi",
     my: "🧾 Мои товары",
     footer: "/list — мои товары · /stop — отключить",
     noOffers: "сейчас нет в продаже",
@@ -39,7 +40,8 @@ const copy = {
     waitNote: "Баға сіздің бағаңызға дейін түскен бойда жазамыз.",
     hitNote: "Баға сіздің бағаңыздан жоғары емес.",
     checkNote: "Kaspi-дегі баға тез өзгереді: сатып алар алдында тексеріңіз.",
-    open: "📈 BAĞA-да ашу",
+    open: "📈 BAĞA-дағы баға тарихы",
+    buy: "🛒 Kaspi-де ашу",
     my: "🧾 Менің тауарларым",
     footer: "/list — менің тауарларым · /stop — өшіру",
     noOffers: "қазір сатылымда жоқ",
@@ -58,7 +60,7 @@ const esc = (s: string) => s.replace(/[&<>]/g, (ch) => ({ "&": "&amp;", "<": "&l
 
 /**
  * An alert as a product card (16 Nov, the owner: «pretty, with icons, easy to read and come back»): Telegram HTML for
- * the caption of the product's photo, and buttons to BAĞA (the product page, «Мои товары»). Observed prices only:
+ * the caption of the product's photo, and buttons: Kaspi first, then BAĞA's history and «Мои товары». Observed prices only:
  * now, the person's own target, how far apart they are, and the lowest daily price of the last 30 days.
  */
 export function renderTelegramAlert(p: {
@@ -95,9 +97,9 @@ export function renderTelegramAlert(p: {
     "",
     `<i>${c.footer}</i>`,
   ].join("\n");
-  // BAĞA first, no Kaspi button (the owner, 16 Nov: «i dont want to promote kaspi»): the product page has the price
-  // history, the sellers and its own link to Kaspi.
-  const buttons: TelegramButton[] = [{ text: c.open, url: p.productUrl }, ...(p.myUrl ? [{ text: c.my, url: p.myUrl }] : [])];
+  // Kaspi first (its link counts the click: /go/<id>?n=<notification>), then BAĞA's history and «Мои товары», the
+  // same size (the owner, 16 Nov).
+  const buttons: TelegramButton[] = [{ text: c.buy, url: p.kaspiUrl }, { text: c.open, url: p.productUrl }, ...(p.myUrl ? [{ text: c.my, url: p.myUrl }] : [])];
   return { html, buttons, photo: p.imageUrl ?? null };
 }
 

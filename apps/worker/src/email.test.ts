@@ -31,6 +31,8 @@ describe("renderAlertEmail", () => {
     expect(m.text).toMatch(/До вашей цены: 50\s000\s₸ \(−8%\)/);
     expect(m.text).toMatch(/Самая низкая за 30 дней: 640\s000\s₸/);
     expect(m.text).toContain("Мои товары: https://bagaapp.com/ru/my");
+    expect(m.text).toContain("Открыть на Kaspi: https://bagaapp.com/go/1?n=5");
+    expect(m.html.indexOf("go/1?n=5")).toBeLessThan(m.html.indexOf("История цены в BAĞA"));
   });
   it("out of stock says so instead of a price", () => {
     const m = renderAlertEmail({ ...base, type: "first_price", locale: "ru", price: null, offerCount: 0 });
