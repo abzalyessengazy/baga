@@ -1199,8 +1199,10 @@ span.ticker-thumb { background: var(--paper-shade); box-shadow: none; }
 /* «Чёрная пятница: проверяем скидки» (15 Nov 2026): one receipt per product, the store chips beside Kaspi. */
 .bf-kicker { margin: 0 0 6px; font: 700 0.75rem/1 var(--font-receipt); letter-spacing: 0.12em; text-transform: uppercase; color: var(--stamp-on-counter, var(--stamp)); }
 .bf-sum dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 12px; margin: 0 0 10px; }
-.bf-sum dt { font-size: 0.75rem; color: var(--ink-soft); }
-.bf-sum dd { margin: 2px 0 0; font: 800 1.5rem/1.1 var(--font-ui); font-variant-numeric: tabular-nums; }
+/* The number first, the label under it: numbers stay on one line however the labels wrap (owner, 15 Nov). */
+.bf-sum dl > div { display: flex; flex-direction: column; }
+.bf-sum dt { order: 2; margin-top: 4px; font-size: 0.75rem; line-height: 1.35; color: var(--ink-soft); }
+.bf-sum dd { order: 1; margin: 0; font: 800 1.75rem/1 var(--font-ui); font-variant-numeric: tabular-nums; }
 .bf-sum dd.is-real { color: var(--stamp); }
 .bf-sum dd.is-pricier { color: var(--stamp-red); }
 .bf-list { list-style: none; margin: 18px 0 0; padding: 0; display: grid; gap: 12px; }
