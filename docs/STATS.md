@@ -109,7 +109,7 @@ follows (owner, 15 Nov 2026: the same products two days running). Home and drop 
   and how many had their first observation 7+ days before.
 
 ## Home lists added 13 Nov 2026 (`getPlatformStats`, `packages/db/src/stats.ts`)
-Each home list shows its first ten rows.
+Each home list shows its first seven rows (ten until 16 Nov 2026).
 - **Changes in tenge** (`tenge`): the same moves as rule D (the shift against the day before, a later check has not undone them), ordered by the difference in tenge instead of percent.
 - **The most stable price** (`stable`): the same daily low on every observed day back from the latest one, in stock, still at that price, checked today or yesterday; at least `STABLE_MIN_DAYS` (5) observed days. Most days first, then Kaspi reviews. Days we did not observe are not counted. The past, not a forecast.
 - **Shops by Kaspi rating** (`shops`): shops with an offer on an active product and at least `SHOP_BOARD_MIN_REVIEWS` (100) Kaspi reviews; highest rating first (then more reviews) and lowest first. Kaspi's numbers as we last saw them, no judgment of ours.

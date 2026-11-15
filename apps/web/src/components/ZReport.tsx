@@ -12,8 +12,8 @@ import { useReplay } from "./Motion";
 type L = "ru" | "kk";
 const dropTitle = (d: { title: string; titleKk: string | null }, locale: L) => shortTitle((locale === "kk" && d.titleKk) || d.title);
 
-/** Every list shows its first ten rows (the owner, 13 Nov); «Смотреть все →» opens the whole list. */
-const ROWS = 10;
+/** Every list shows its first seven rows (the owner, 16 Nov: ten long names were too much; 13 Nov: ten); «Смотреть все →» opens the whole list. */
+const ROWS = 7;
 
 /** A product's picture in a list row; an empty square keeps the rows aligned when there is none. */
 function Thumb({ src }: { src: string | null }) {
