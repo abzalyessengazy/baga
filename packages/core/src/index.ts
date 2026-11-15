@@ -1,4 +1,5 @@
 export * from "./money";
+export * from "./blackFriday";
 export * from "./periods";
 export * from "./verdict";
 export * from "./alerts";

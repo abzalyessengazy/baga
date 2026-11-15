@@ -19,3 +19,4 @@ export * from "./business";
 export * from "./alertStats";
 export * from "./digest";
 export * from "./profile";
+export * from "./blackFriday";

@@ -1195,3 +1195,39 @@ span.ticker-thumb { background: var(--paper-shade); box-shadow: none; }
 .board-nudge-icon { font-size: 1.125rem; }
 .board-nudge-text { flex: 1 1 160px; font: 600 0.875rem/1.35 var(--font-ui); color: var(--ink); }
 .board-nudge-btn { padding: 8px 14px; font-size: 0.8125rem; }
+
+/* «Чёрная пятница: проверяем скидки» (15 Nov 2026): one receipt per product, the store chips beside Kaspi. */
+.bf-kicker { margin: 0 0 6px; font: 700 0.75rem/1 var(--font-receipt); letter-spacing: 0.12em; text-transform: uppercase; color: var(--stamp-on-counter, var(--stamp)); }
+.bf-sum dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 12px; margin: 0 0 10px; }
+.bf-sum dt { font-size: 0.75rem; color: var(--ink-soft); }
+.bf-sum dd { margin: 2px 0 0; font: 800 1.5rem/1.1 var(--font-ui); font-variant-numeric: tabular-nums; }
+.bf-sum dd.is-real { color: var(--stamp); }
+.bf-sum dd.is-pricier { color: var(--stamp-red); }
+.bf-list { list-style: none; margin: 18px 0 0; padding: 0; display: grid; gap: 12px; }
+.bf-row { padding: 16px; }
+.bf-head { display: grid; grid-template-columns: 24px 56px minmax(0, 1fr); gap: 12px; align-items: center; }
+.bf-rank { font: 0.75rem var(--font-receipt); color: var(--ink-faint); text-align: center; }
+.bf-thumb { width: 56px; height: 56px; object-fit: contain; background: #fff; border: 1px solid var(--rule); border-radius: 8px; display: block; }
+.bf-name { color: var(--ink); font-size: 0.875rem; line-height: 1.4; text-decoration: none; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.bf-kaspi { margin: 4px 0 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+.bf-kaspi b { font: 700 1.0625rem var(--font-ui); font-variant-numeric: tabular-nums; }
+.bf-label { font: 700 0.6875rem var(--font-ui); color: var(--paper); background: var(--kaspi); border-radius: 999px; padding: 2px 7px; }
+.bf-tag { font-size: 0.75rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
+.bf-tag.is-kaspi { color: var(--stamp); background: color-mix(in srgb, var(--stamp) 10%, transparent); }
+.bf-stores { list-style: none; margin: 12px 0 0; padding: 10px 0 0 36px; border-top: 1px dashed var(--rule); display: grid; gap: 10px; }
+.bf-store { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 6px 8px; color: var(--ink); text-decoration: none; }
+.bf-store b { font: 700 1rem var(--font-ui); font-variant-numeric: tabular-nums; }
+.bf-old { color: var(--ink-faint); font-size: 0.8125rem; }
+.bf-out { color: var(--ink-faint); font-size: 0.8125rem; }
+.bf-v { display: block; margin-top: 3px; font-size: 0.8125rem; line-height: 1.4; color: var(--ink-soft); }
+.bf-v.is-real { color: var(--stamp); font-weight: 600; }
+.bf-v.is-same, .bf-v.is-pricier { color: var(--stamp-red); font-weight: 600; }
+.bf-foot { margin-top: 18px; color: var(--ink-on-counter, var(--ink-soft)); }
+@media (max-width: 520px) { .bf-stores { padding-left: 0; } }
+.bf-banner-wrap { margin-top: 4px; margin-bottom: 8px; }
+.bf-banner { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 10px; background: #15161a; color: #fff; text-decoration: none; }
+.bf-banner-tag { flex: none; font: 800 0.6875rem/1 var(--font-receipt); letter-spacing: 0.1em; text-transform: uppercase; background: #fff; color: #15161a; padding: 5px 8px; border-radius: 4px; }
+.bf-banner-text { font-size: 0.875rem; line-height: 1.4; }
+.bf-banner-go { margin-left: auto; flex: none; transition: transform 160ms cubic-bezier(0.23, 1, 0.32, 1); }
+@media (hover: hover) and (pointer: fine) { .bf-banner:hover .bf-banner-go { transform: translateX(4px); } .bf-name:hover { text-decoration: underline; } }
+.bf-tag.is-store { color: var(--stamp); background: color-mix(in srgb, var(--stamp) 10%, transparent); }

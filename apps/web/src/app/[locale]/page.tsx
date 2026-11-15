@@ -6,6 +6,7 @@ import { HowItWorks } from "@/components/HowItWorks";
 import { HonestReceipt } from "@/components/HonestReceipt";
 import { Ticker } from "@/components/Ticker";
 import { Leaderboard } from "@/components/Leaderboard";
+import { BlackFridayBanner } from "@/components/BlackFridayBanner";
 
 // Canonical on bagaapp.com (metadataBase), so the vercel.app copy is not indexed twice.
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
@@ -20,6 +21,7 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
     <main>
       <Ticker />
       <HomeHero />
+      <BlackFridayBanner />
       <HowItWorks />
       <ZReport />
       <Leaderboard />
