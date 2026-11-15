@@ -2,11 +2,11 @@
  * kaspi.kz/robots.txt (checked 1 Nov 2026): `Crawl-delay: 10`, `Visit-time: 0400-0845` (UTC).
  * The collector only runs inside it (with margins, COLLECT_WINDOW_UTC) and waits at least CRAWL_DELAY_MS between requests.
  *
- * 5 s since 14 Nov 2026, the owner's decision (DECISIONS.md 2026-11-13 "Stress test: 5 s between Kaspi requests"):
- * half of robots.txt's Crawl-delay of 10, knowingly. The window, one request at a time and the stop on 403/429 stay.
+ * Back to robots.txt's Crawl-delay of 10 s on 15 Nov 2026: the 5 s stress test (14–15 Nov, DECISIONS.md 2026-11-13) ended
+ * by its own rule after Kaspi's first 403/429 (a manual check at 08:51 UTC, right after a 2 520-request run).
  */
 export const KASPI_VISIT_WINDOW_UTC = { startMinute: 4 * 60, endMinute: 8 * 60 + 45 } as const;
-export const KASPI_CRAWL_DELAY_MS = 5_000;
+export const KASPI_CRAWL_DELAY_MS = 10_000;
 
 export const VISIT_WINDOW_MINUTES = KASPI_VISIT_WINDOW_UTC.endMinute - KASPI_VISIT_WINDOW_UTC.startMinute;
 

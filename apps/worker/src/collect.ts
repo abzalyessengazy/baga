@@ -1,5 +1,5 @@
 /**
- * One daily collection run inside Kaspi's robots.txt visit window (04:00–08:45 UTC; we use 04:01–08:42), one request per ≥5 s (10 s until 13 Nov 2026):
+ * One daily collection run inside Kaspi's robots.txt visit window (04:00–08:45 UTC; we use 04:01–08:42), one request per ≥10 s (5 s on 14–15 Nov 2026 only, ended by a 403/429):
  * fetch visitor requests first, then check due products (offers only; product page weekly), then queued seed
  * products; poll for new visitor requests until the window closes; evaluate alerts; send the first price and
  * target alerts to Telegram right after each check, queued emails at the end. Started by .github/workflows/collect.yml at 03:50 UTC; waits for 04:01.
@@ -33,7 +33,7 @@ const breaker = new CircuitBreaker();
 // Every request that passes the guard is sent: counted for collection_runs.requests (migration 0017).
 let requests = 0;
 const kaspi = createKaspiClient({
-  // The pacing (5 s since 14 Nov 2026, the owner's stress test; robots.txt says 10) plus 0.2 s, no random extra (DECISIONS.md 2026-11-10 "More checks from the same rules":
+  // The pacing (robots.txt's 10 s; the 5 s test of 14–15 Nov ended on a 403/429) plus 0.2 s, no random extra (DECISIONS.md 2026-11-10 "More checks from the same rules":
   // the 0-2 s jitter cost ~8% of the day's requests and protected nothing). Gaps are measured start to start.
   minIntervalMs: KASPI_CRAWL_DELAY_MS + 200, jitterMs: 0,
   // Manual checks say so in the User-Agent: a single page a visitor asked for, not the daily crawl.
