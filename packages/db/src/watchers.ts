@@ -115,7 +115,10 @@ export async function upsertWatcherTracking(sql: postgres.Sql, watcherId: string
   const [t] = await sql<{ id: string }[]>`
     insert into trackings (watcher_id, external_id, product_id, target_price, target_drop_pct, status, first_price_sent_at, city)
     values (${watcherId}, ${externalId}, ${prod.id}, ${targetCols(target).price}, ${targetCols(target).pct}, 'active',
-      ${prod.id && (city === null || "price" in target) ? new Date() : null}, ${city})
+      -- No first_price_sent_at: every new tracking gets a card after its next check, also when the product already has a
+      -- price (the owner, 16 Nov: everyone who starts tracking hears from us the next morning; before, 6 people with
+      -- Telegram or email had never received a message).
+      null, ${city})
     on conflict (watcher_id, external_id) where watcher_id is not null do update
       set target_price = excluded.target_price, target_drop_pct = excluded.target_drop_pct, status = 'active', alert_state = 'armed', above_since = null, removed_at = null,
           city = excluded.city,

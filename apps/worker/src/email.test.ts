@@ -9,7 +9,7 @@ const base = {
 describe("renderAlertEmail", () => {
   it("target reached names the cheapest seller and links to unsubscribe", () => {
     const m = renderAlertEmail({ ...base, type: "target_reached", locale: "ru", price: 590_000 });
-    expect(m.subject).toBe("Цена дошла до вашей: Apple iPhone 18 Pro <256Gb>");
+    expect(m.subject).toBe("🎯 Цена дошла до вашей: Apple iPhone 18 Pro <256Gb>");
     expect(m.html).toContain("Технодом");
     expect(m.html).toContain("https://bagaapp.com/ru/email?stop=abc");
     expect(m.text).toMatch(/Сейчас на Kaspi: 590\s000\s₸/);
@@ -21,9 +21,16 @@ describe("renderAlertEmail", () => {
   });
   it("first price above the target promises a later email, in Kazakh", () => {
     const m = renderAlertEmail({ ...base, type: "first_price", locale: "kk", price: 650_000 });
-    expect(m.subject).toContain("Баға алынды");
-    expect(m.text).toContain("Баға сіздің бағаңызға дейін түскенде жазамыз.");
+    expect(m.subject).toContain("Бағаны тексердік");
+    expect(m.text).toContain("Баға сіздің бағаңызға дейін түскен бойда жазамыз.");
     expect(m.text).toContain("Сатушылар: 12");
+  });
+  it("a card: photo, the gap to the target, the 30-day low and «Мои товары»", () => {
+    const m = renderAlertEmail({ ...base, type: "first_price", locale: "ru", price: 650_000, low30: 640_000, imageUrl: "https://img/x.jpg", myUrl: "https://bagaapp.com/ru/my" });
+    expect(m.html).toContain('src="https://img/x.jpg"');
+    expect(m.text).toMatch(/До вашей цены: 50\s000\s₸ \(−8%\)/);
+    expect(m.text).toMatch(/Самая низкая за 30 дней: 640\s000\s₸/);
+    expect(m.text).toContain("Мои товары: https://bagaapp.com/ru/my");
   });
   it("out of stock says so instead of a price", () => {
     const m = renderAlertEmail({ ...base, type: "first_price", locale: "ru", price: null, offerCount: 0 });

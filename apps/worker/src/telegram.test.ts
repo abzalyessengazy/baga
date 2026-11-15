@@ -6,10 +6,20 @@ const base = { title: "Apple iPhone 18 Pro <256Gb>", target: 600_000, offerCount
 describe("renderTelegramAlert", () => {
   it("first price above the target promises a later message", () => {
     const m = renderTelegramAlert({ ...base, type: "first_price", locale: "ru", price: 650_000 });
-    expect(m.html).toContain("🧾 <b>Цена получена</b>");
+    expect(m.html).toContain("🧾 <b>Проверили цену для вас</b>");
     expect(m.html).toMatch(/Сейчас на Kaspi: <b>650\s000\s₸<\/b> · продавцов: 12/);
     expect(m.html).toMatch(/Ваша цена: 600\s000\s₸/);
-    expect(m.html).toContain("Напишем, когда цена опустится до вашей.");
+    expect(m.html).toMatch(/До вашей цены: 50\s000\s₸ \(−8%\)/);
+    expect(m.html).toContain("Напишем, как только цена опустится до вашей.");
+  });
+  it("a card: the photo, the 30-day low below today's price, the cheapest seller on a hit, and «Мои товары»", () => {
+    const m = renderTelegramAlert({ ...base, type: "target_reached", locale: "ru", price: 590_000, low30: 580_000, seller: "Технодом <1>", myUrl: "https://bagaapp.com/ru/my", imageUrl: "https://img/x.jpg" });
+    expect(m.photo).toBe("https://img/x.jpg");
+    expect(m.html).toMatch(/Самая низкая за 30 дней: 580\s000\s₸/);
+    expect(m.html).toMatch(/Ниже вашей на 10\s000\s₸/);
+    expect(m.html).toContain("Дешевле всех: Технодом &lt;1&gt;");
+    expect(m.buttons.map((b) => b.text)).toEqual(["🛒 Открыть на Kaspi", "📈 История цены в BAĞA", "🧾 Мои товары"]);
+    expect(m.html.length).toBeLessThan(1000);
   });
   it("escapes the product title for Telegram HTML", () => {
     const m = renderTelegramAlert({ ...base, type: "target_reached", locale: "ru", price: 590_000 });
@@ -19,8 +29,8 @@ describe("renderTelegramAlert", () => {
     const m = renderTelegramAlert({ ...base, type: "target_reached", locale: "kk", price: 590_000 });
     expect(m.html).toContain("Баға сіздің бағаңызға жетті!");
     expect(m.buttons).toEqual([
-      { text: "Kaspi-де ашу", url: "https://bagaapp.com/go/1?n=5" },
-      { text: "BAĞA-да ашу", url: "https://bagaapp.com/ru/p/1" },
+      { text: "🛒 Kaspi-де ашу", url: "https://bagaapp.com/go/1?n=5" },
+      { text: "📈 BAĞA-дағы баға тарихы", url: "https://bagaapp.com/ru/p/1" },
     ]);
   });
   it("out of stock says so instead of a price", () => {
@@ -30,7 +40,7 @@ describe("renderTelegramAlert", () => {
   it("a percentage target still waiting for a price leaves out the target line", () => {
     const m = renderTelegramAlert({ ...base, type: "first_price", locale: "ru", price: null, target: null, offerCount: 0 });
     expect(m.html).not.toContain("Ваша цена");
-    expect(m.html).toContain("Напишем, когда цена опустится до вашей.");
+    expect(m.html).toContain("Напишем, как только цена опустится до вашей.");
   });
 });
 

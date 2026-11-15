@@ -15,7 +15,7 @@ import postgres from "postgres";
 import { env } from "./env";
 import { CircuitBreaker } from "./breaker";
 import { renderAlertEmail, renderBoughtEmail, sendViaResend } from "./email";
-import { renderTelegramAlert, renderTelegramBoughtAsk, sendTelegram, DeliveryError } from "./telegram";
+import { renderTelegramAlert, renderTelegramBoughtAsk, sendTelegram, sendTelegramCard, DeliveryError } from "./telegram";
 import { renderChannelPost } from "./channel";
 
 const sql = postgres(env.databaseUrl(), { max: 2, ...connectionOptions(env.databaseUrl()) });
@@ -597,9 +597,12 @@ async function evaluateTrackings(productId: number, externalId: string, price: n
 async function sendTelegramQueued() {
   const token = env.telegramBotToken();
   if (!token) return;
-  const queued = await sql<{ id: number; type: "first_price" | "target_reached" | "bought_ask"; price: number; target_price: number | null; chat_id: string; locale: "ru" | "kk"; title: string; external_id: string; current: number | null; offer_count: number; bought_code: string | null }[]>`
+  const queued = await sql<{ id: number; type: "first_price" | "target_reached" | "bought_ask"; price: number; target_price: number | null; chat_id: string; locale: "ru" | "kk"; title: string; external_id: string; current: number | null; offer_count: number; bought_code: string | null; image: string | null; low30: number | null; seller: string | null }[]>`
     select n.id, n.type, n.price, t.target_price, w.telegram_chat_id::text as chat_id, w.locale, p.title, p.external_id,
-           s.current_min_price as current, coalesce(s.offer_count, 0) as offer_count, t.bought_code
+           s.current_min_price as current, coalesce(s.offer_count, 0) as offer_count, t.bought_code,
+           p.image_url as image, (select min(o.min_price)::int from price_observations o where o.product_id = p.id and o.min_price is not null
+             and o.observed_at > now() - interval '30 days') as low30,
+           (select se.name from offers_current oc join sellers se on se.id = oc.seller_id where oc.product_id = p.id order by oc.price limit 1) as seller
     from notifications n
     join trackings t on t.id = n.tracking_id
     join watchers w on w.id = t.watcher_id
@@ -611,11 +614,12 @@ async function sendTelegramQueued() {
     const msg = q.type === "bought_ask" ? renderTelegramBoughtAsk({ locale: q.locale, title: q.title, code: q.bought_code ?? "" }) : renderTelegramAlert({
       type: q.type, locale: q.locale, title: q.title,
       price: q.type === "first_price" ? q.current : q.price, target: q.target_price, offerCount: q.offer_count,
-      productUrl: `${site}/${q.locale}/p/${q.external_id}`, kaspiUrl: `${site}/go/${q.external_id}?n=${q.id}`,
+      productUrl: `${site}/${q.locale}/p/${q.external_id}?utm_source=tg_alert`, kaspiUrl: `${site}/go/${q.external_id}?n=${q.id}`,
+      myUrl: `${site}/${q.locale}/my?utm_source=tg_alert`, low30: q.low30, seller: q.seller, imageUrl: q.image,
     });
     try {
       await startSend(sql, q.id);
-      const messageId = await sendTelegram(token, q.chat_id, msg);
+      const messageId = "photo" in msg ? await sendTelegramCard(token, q.chat_id, msg) : await sendTelegram(token, q.chat_id, msg);
       await markSent(sql, q.id, String(messageId));
     } catch (e) {
       await deliveryFailed(q.id, e);
@@ -704,9 +708,12 @@ async function cleanUp() {
 async function sendEmailQueued() {
   const key = env.resendApiKey();
   if (!key) return;
-  const queued = await sql<{ id: number; key: string; type: "first_price" | "target_reached" | "bought_ask"; price: number; target_price: number | null; email: string; stop_code: string; locale: "ru" | "kk"; title: string; external_id: string; current: number | null; offer_count: number; bought_code: string | null }[]>`
+  const queued = await sql<{ id: number; key: string; type: "first_price" | "target_reached" | "bought_ask"; price: number; target_price: number | null; email: string; stop_code: string; locale: "ru" | "kk"; title: string; external_id: string; current: number | null; offer_count: number; bought_code: string | null; image: string | null; low30: number | null; seller: string | null }[]>`
     select n.id, n.idempotency_key as key, n.type, n.price, t.target_price, w.email, w.email_stop_code as stop_code, w.locale, p.title, p.external_id,
-           s.current_min_price as current, coalesce(s.offer_count, 0) as offer_count, t.bought_code
+           s.current_min_price as current, coalesce(s.offer_count, 0) as offer_count, t.bought_code,
+           p.image_url as image, (select min(o.min_price)::int from price_observations o where o.product_id = p.id and o.min_price is not null
+             and o.observed_at > now() - interval '30 days') as low30,
+           (select se.name from offers_current oc join sellers se on se.id = oc.seller_id where oc.product_id = p.id order by oc.price limit 1) as seller
     from notifications n
     join trackings t on t.id = n.tracking_id
     join watchers w on w.id = t.watcher_id
@@ -726,8 +733,8 @@ async function sendEmailQueued() {
       type: q.type, locale: q.locale, title: q.title,
       price: q.type === "first_price" ? q.current : q.price, target: q.target_price,
       seller: top?.name ?? null, offerCount: q.offer_count,
-      productUrl: `${site}/${q.locale}/p/${q.external_id}`, kaspiUrl: `${site}/go/${q.external_id}?n=${q.id}`,
-      stopUrl,
+      productUrl: `${site}/${q.locale}/p/${q.external_id}?utm_source=email_alert`, kaspiUrl: `${site}/go/${q.external_id}?n=${q.id}`,
+      stopUrl, myUrl: `${site}/${q.locale}/my?utm_source=email_alert`, low30: q.low30, imageUrl: q.image,
     });
     try {
       await startSend(sql, q.id);
