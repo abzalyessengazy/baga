@@ -285,6 +285,17 @@ export default async function BusinessPage({ params, searchParams }: Props) {
           </table>
         </div>
         {!b.sources.some((s) => s.posts) && <p className="biz-note">{t("noPosts")}</p>}
+        <h3>{t("landingTitle")}</h3>
+        <div className="admin-scroll">
+          <table className="admin-table">
+            <thead><tr><th>{t("colSource")}</th><th>{t("colLanding")}</th><th>{t("colVisits")}</th><th>{t("fPasted")}</th></tr></thead>
+            <tbody>{b.landings.map((l) => (
+              <tr key={`${l.source}${l.landing}`}><td>{l.source === "direct" ? t("direct") : l.source}</td>
+                <td>{l.landing === "home" ? t("lHome") : l.landing === "product" ? t("lProduct") : l.landing === "none" ? t("lNone") : `/${l.landing.replace(/_/g, "-")}`}</td>
+                <td>{count(l.visits)}</td><td>{count(l.pasted)} · {pct(share(l.pasted, l.visits))}</td></tr>
+            ))}</tbody>
+          </table>
+        </div>
         <p className="biz-def">{t("sourcesNote")}</p>
       </section>
 

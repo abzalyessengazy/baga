@@ -51,6 +51,8 @@ export interface Business {
   before: BizTotals | null;
   daily: BizDay[];
   sources: BizSource[];
+  /** Where visits start, by source (the visit's detail since 15 Nov 2026: home, product, a section; older visits «none»). */
+  landings: { source: string; landing: string; visits: number; pasted: number }[];
   topProducts: BizTopProduct[];
   /** Visitors by how many visits they made in the period: 1, 2, 3–5, 6+. */
   frequency: { visits: "1" | "2" | "3-5" | "6+"; people: number }[];
@@ -151,6 +153,13 @@ export async function getBusiness(sql: postgres.Sql, which: PeriodKey | Period):
       count(*) filter (where s.opened)::int as opened, count(*) filter (where s.tracked)::int as tracked
     from v left join s on s.sid = v.sid group by v.source order by 3 desc limit 20`;
 
+  const landings = await sql<Business["landings"]>`
+    with v as (select distinct on (sid) sid, coalesce(source, 'direct') as source, coalesce(detail, 'none') as landing from events
+               where name = 'visit' and at >= ${start(from)} and at < ${end(to)} order by sid, at),
+    s as (select sid, bool_or(name = 'paste') as pasted from events where at >= ${start(from)} and at < ${end(to)} group by sid)
+    select v.source, v.landing, count(*)::int as visits, count(*) filter (where s.pasted)::int as pasted
+    from v left join s on s.sid = v.sid group by 1, 2 order by 3 desc limit 20`;
+
   // Products opened by the most distinct visitors; visitors by visit count; the most active visitors (visitor-based).
   const topProducts = await sql<BizTopProduct[]>`
     select coalesce(p.title, e.external_id) as title, e.external_id as "externalId",
@@ -230,7 +239,7 @@ export async function getBusiness(sql: postgres.Sql, which: PeriodKey | Period):
   const real = rows.filter((r) => r.start > r.alert);
   const confirmed = real.filter((r) => r.bought === "yes");
   return {
-    period, from, to, personFrom: PERSON_METRICS_FROM, peopleFrom, countedSince, now, before, daily, sources, topProducts, frequency, topVisitors, mapr,
+    period, from, to, personFrom: PERSON_METRICS_FROM, peopleFrom, countedSince, now, before, daily, sources, landings, topProducts, frequency, topVisitors, mapr,
     pastes, linkFailures: links?.n ?? 0, people: people!, digest, alerts: { ...stats, trackings7d: t7?.n ?? 0 }, bought: bought!, removed,
     savings: {
       confirmed: confirmed.reduce((s, r) => s + r.start - r.alert, 0), confirmedCount: confirmed.length,

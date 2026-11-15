@@ -65,7 +65,21 @@ export function track(name: FunnelStep, opts: { externalId?: string; detail?: st
   }
 }
 
-/** Once per tab: the first page of a visit. */
+/**
+ * The kind of page a visit starts on, as the visit's detail (the owner, 15 Nov 2026: «why are google visitors coming?
+ * which pages?»): "home", "product" (its number goes in externalId), or the section ("drops", "black_friday", …). Only
+ * the kind of page, never the address or its query.
+ */
+export function landing(path: string): { detail: string; externalId?: string } {
+  const parts = path.split("/").filter(Boolean);
+  if (parts[0] === "ru" || parts[0] === "kk") parts.shift();
+  if (!parts.length) return { detail: "home" };
+  if (parts[0] === "p" && parts[1] && /^\d{5,12}$/.test(parts[1])) return { detail: "product", externalId: parts[1] };
+  const kind = parts[0]!.toLowerCase().replace(/-/g, "_");
+  return { detail: /^[a-z_]{1,24}$/.test(kind) ? kind : "other" };
+}
+
+/** Once per tab: the first page of a visit, with the kind of page it started on. */
 export function trackVisit() {
   try {
     if (sessionStorage.getItem("baga.visit")) return;
@@ -73,5 +87,5 @@ export function trackVisit() {
   } catch {
     return;
   }
-  track("visit");
+  track("visit", landing(location.pathname));
 }
