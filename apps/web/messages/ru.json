@@ -712,7 +712,8 @@
     "valWatched": "Товаров под наблюдением",
     "valWant": "Хотят сэкономить",
     "mln": "млн ₸",
-    "catalogLine": "{products, plural, one {# товар} few {# товара} many {# товаров} other {# товара}} · {sellers, plural, one {# продавец} few {# продавца} many {# продавцов} other {# продавца}} · {days, plural, one {# день} few {# дня} many {# дней} other {# дня}} истории"
+    "catalogLine": "{products, plural, one {# товар} few {# товара} many {# товаров} other {# товара}} · {sellers, plural, one {# продавец} few {# продавца} many {# продавцов} other {# продавца}} · {days, plural, one {# день} few {# дня} many {# дней} other {# дня}} истории",
+    "compareWith": "Сверяем цены с"
   },
   "dates": {
     "day": "{d} {month}",

@@ -69,6 +69,8 @@ export function MarketReceipt() {
                   <div><dt><StatIcon name="down" />{t("valWant")}</dt><dd className="is-want">{millions(m!.watched?.want ?? 0, t("mln"))}</dd></div>
                 </dl>
                 <p className="mk-catalog">{t("catalogLine", { products: m!.catalog.products, sellers: m!.catalog.sellers, days: historyDays(m!.catalog.firstDay, m!.day ?? m!.catalog.firstDay ?? "") })}</p>
+                {/* The other stores we compare with (the owner, 15 Nov): their name chips, never their logos (CLAUDE.md design). */}
+                <p className="mk-stores">{t("compareWith")} <span className="store-chip is-technodom">Technodom</span> <span className="store-chip is-sulpak">Sulpak</span></p>
                 {/* Every product's latest check against the one before it (Rule L, docs/STATS.md; the owner, 15 Nov): not
                     one day's checks, so the arrows do not shrink on a day the collector checks fewer products. */}
                 {m!.latest?.compared ? (

@@ -712,7 +712,8 @@
     "valWatched": "Бақылаудағы тауар",
     "valWant": "Үнемдегісі келеді",
     "mln": "млн ₸",
-    "catalogLine": "{products} тауар · {sellers} сатушы · {days} күн тарих"
+    "catalogLine": "{products} тауар · {sellers} сатушы · {days} күн тарих",
+    "compareWith": "Бағаны салыстырамыз:"
   },
   "dates": {
     "day": "{d} {month}",
