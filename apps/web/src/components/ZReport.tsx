@@ -70,24 +70,41 @@ function Screen({ children, more, moreLabel, note }: { children: (go: boolean) =
   );
 }
 
-const TABS_KEY = "baga.moves";
-/** The moves tabs last chosen in this browser tab; Подешевели + День by default. */
-function savedTabs(): ["drops" | "rises", "day" | "week"] {
-  let v = "";
-  try { v = sessionStorage.getItem(TABS_KEY) ?? ""; } catch { /* no storage */ }
-  const [d, p] = v.split(":");
-  return [d === "rises" ? "rises" : "drops", p === "week" ? "week" : "day"];
+/**
+ * A tab chosen on the home lists stays chosen for this browser tab: back from a product, the same list is there (the
+ * owner, 12 and 15 Nov). Private mode without storage: the tabs reset, nothing else.
+ */
+function useSaved<K extends string>(key: string, allowed: readonly K[]): [K, (k: K) => void] {
+  const [v, setV] = useState<K>(() => {
+    let x = "";
+    try { x = sessionStorage.getItem(`baga.tab.${key}`) ?? ""; } catch { /* no storage */ }
+    return (allowed as readonly string[]).includes(x) ? (x as K) : allowed[0]!;
+  });
+  const set = (k: K) => { setV(k); try { sessionStorage.setItem(`baga.tab.${key}`, k); } catch { /* no storage */ } };
+  return [v, set];
 }
+
+/**
+ * Back to the home page puts the visitor where they left it (the owner, 15 Nov: «Back doesnt save anything»): the
+ * page's scroll and the slip swiped to on a phone are noted when a link on the page is followed, and put back when the
+ * home page comes back through the browser's Back (or Forward). Coming to it any other way starts at the top.
+ */
+const BACK_KEY = "baga.home.back";
+let poppedAt = 0;
+if (typeof window !== "undefined") window.addEventListener("popstate", () => { poppedAt = Date.now(); });
+const cameBack = () => {
+  if (Date.now() - poppedAt < 3000) return true;
+  try { return (performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined)?.type === "back_forward"; } catch { return false; }
+};
+/** y: the page's scroll measured from the top of the lists, so sections above that load later do not move it. */
+type Spot = { y: number; slip: number; at: number };
 
 /* Price moves in percent (docs/STATS.md rules D and W). */
 function MovesSlip({ moves, locale }: { moves: Stats["moves"]; locale: L }) {
   const t = useTranslations("home");
   // The tabs chosen stay chosen for this browser tab: back from a product, the same list is there (the owner, 12 Nov).
-  const [dir, setDir] = useState<keyof StatsMoves>(() => savedTabs()[0]);
-  const [period, setPeriod] = useState<"day" | "week">(() => savedTabs()[1]);
-  useEffect(() => {
-    try { sessionStorage.setItem(TABS_KEY, `${dir}:${period}`); } catch { /* private mode: the tabs reset, nothing else */ }
-  }, [dir, period]);
+  const [dir, setDir] = useSaved<keyof StatsMoves>("moves-dir", ["drops", "rises"]);
+  const [period, setPeriod] = useSaved<"day" | "week">("moves-period", ["day", "week"]);
   const rows = moves[period][dir].slice(0, ROWS);
   return (
     <Screen more={`/explore?list=${dir}`} moreLabel={t("explore")}>
@@ -112,7 +129,7 @@ function MovesSlip({ moves, locale }: { moves: Stats["moves"]; locale: L }) {
 /* The same day's moves by the difference in tenge (the owner, 13 Nov): a 300 000 ₸ drop on a laptop leads here. */
 function TengeSlip({ moves, locale }: { moves: StatsMoves; locale: L }) {
   const t = useTranslations("home");
-  const [dir, setDir] = useState<keyof StatsMoves>("drops");
+  const [dir, setDir] = useSaved<keyof StatsMoves>("tenge-dir", ["drops", "rises"]);
   const rows = moves[dir].slice(0, ROWS);
   return (
     <Screen more={`/explore?list=${dir}`} moreLabel={t("explore")}>
@@ -193,7 +210,7 @@ function CategorySlip({ rows, locale }: { rows: Market["categories"]; locale: L 
 /* Shops by Kaspi's own rating: the highest and the lowest among those with enough reviews. Facts, not verdicts. */
 function ShopsSlip({ shops }: { shops: NonNullable<Stats["shops"]> }) {
   const t = useTranslations("home");
-  const [side, setSide] = useState<"top" | "low">("top");
+  const [side, setSide] = useSaved<"top" | "low">("shops-side", ["top", "low"]);
   const count = (n: number) => formatCount(n);
   return (
     <Screen more="/shops?sort=rating" moreLabel={t("explore")} note={t("shopsNote")}>
@@ -223,6 +240,7 @@ export function ZReport() {
   const [s, setS] = useState<Stats | null>(() => cachedStats() ?? null);
   const [m, setM] = useState<Market | null>(() => cachedMarket() ?? null);
   const rail = useRef<HTMLDivElement>(null);
+  const section = useRef<HTMLElement>(null);
   const [at, setAt] = useState(0);
   useEffect(() => {
     let live = true;
@@ -264,6 +282,48 @@ export function ZReport() {
     const bar = chips.current, c = bar?.children[at] as HTMLElement | undefined;
     if (bar && c) bar.scrollTo({ left: c.offsetLeft - bar.offsetLeft - (bar.clientWidth - c.offsetWidth) / 2, behavior: "smooth" });
   }, [at]);
+  // Note where the visitor is when they follow any link on the home page; put it back on Back.
+  const atRef = useRef(at);
+  atRef.current = at;
+  useEffect(() => {
+    const note = (e: MouseEvent) => {
+      const a = (e.target as Element | null)?.closest?.("a[href]");
+      if (!a || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || (a as HTMLAnchorElement).target === "_blank") return;
+      const top = section.current ? section.current.getBoundingClientRect().top + window.scrollY : 0;
+      const spot: Spot = { y: window.scrollY - top, slip: rail.current?.scrollLeft ?? 0, at: atRef.current };
+      try { sessionStorage.setItem(BACK_KEY, JSON.stringify(spot)); } catch { /* no storage */ }
+    };
+    document.addEventListener("click", note, true);
+    return () => document.removeEventListener("click", note, true);
+  }, []);
+  useEffect(() => {
+    if (!ready) return;
+    let spot: Spot | null = null;
+    try { spot = JSON.parse(sessionStorage.getItem(BACK_KEY) ?? "null") as Spot | null; sessionStorage.removeItem(BACK_KEY); } catch { /* no storage */ }
+    if (!spot || !cameBack()) return;
+    const s = spot;
+    setAt(s.at);
+    // Setting scrollLeft in code may fire no scroll event: tell the chips which slip is in sight.
+    if (rail.current) { rail.current.scrollLeft = s.slip; rail.current.dispatchEvent(new Event("scroll")); }
+    // Sections above and below still load (the board, the banner): keep putting the page back until it holds, for
+    // three seconds at most, and stop at once if the visitor scrolls or taps.
+    let stop = false;
+    const quit = () => { stop = true; };
+    const opts = { passive: true, once: true } as const;
+    window.addEventListener("wheel", quit, opts);
+    window.addEventListener("touchstart", quit, opts);
+    window.addEventListener("keydown", quit, { once: true });
+    const until = Date.now() + 3000;
+    const put = () => {
+      if (stop) return;
+      const y = s.y + (section.current ? section.current.getBoundingClientRect().top + window.scrollY : 0);
+      if (Math.abs(window.scrollY - y) > 2) window.scrollTo({ top: y, behavior: "instant" as ScrollBehavior });
+      if (rail.current && Math.abs(rail.current.scrollLeft - s.slip) > 2) rail.current.scrollLeft = s.slip;
+      if (Date.now() < until) requestAnimationFrame(put);
+    };
+    put();
+    return () => { stop = true; window.removeEventListener("wheel", quit); window.removeEventListener("touchstart", quit); window.removeEventListener("keydown", quit); };
+  }, [ready]);
   if (!ready) return null;
   const jump = (i: number) => {
     const el = rail.current, c = el?.children[i] as HTMLElement | undefined;
@@ -276,7 +336,7 @@ export function ZReport() {
   // Three in a row; a last row of two (or the last four as two rows of two) is set wider so no row ends short.
   const wide = n % 3 === 2 ? 2 : n % 3 === 1 ? (n === 1 ? 1 : 4) : 0;
   return (
-    <section className="wrap section z-section">
+    <section className="wrap section z-section" ref={section}>
       <h2 className="section-title">{t("zTitle")}</h2>
       <nav className="z-chips" aria-label={t("zTitle")} ref={chips}>
         {slips.map((x, i) => (
