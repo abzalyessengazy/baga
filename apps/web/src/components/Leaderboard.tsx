@@ -15,6 +15,8 @@ import { CountUp, useReplay } from "./Motion";
  * only. Ranked by «хочет сэкономить» for now; «сэкономил» (confirmed purchases) is shown beside it and will rank
  * once there is enough of it. Real rows only: with nobody tracking, an invitation instead of sample names.
  */
+const BOARD_ROWS = 5;
+
 export function Leaderboard() {
   const locale = useLocale() as "ru" | "kk";
   const [b, setB] = useState<{ rows: BoardRow[]; total: number } | null>(null);
@@ -40,10 +42,13 @@ function Board({ b, me, locale }: { b: { rows: BoardRow[]; total: number }; me: 
   const ref = useRef<HTMLDivElement>(null);
   const go = useReplay(ref, 0.15);
   const f = (n: number) => formatTenge(n, locale);
-  const max = Math.max(1, ...b.rows.map((r) => r.potential));
+  const max = Math.max(1, ...b.rows.slice(0, BOARD_ROWS).map((r) => r.potential));
   const myTag = me?.stats?.tag ?? null;
   const hasProfile = !!me?.profile?.profileAt;
-  const mine = me?.stats && me.stats.rank !== null && me.stats.rank > b.rows.length
+  // The top five (16 Nov, design review: ten rows of five numbers were a wall); your own row under them if lower.
+  const top = b.rows.slice(0, BOARD_ROWS);
+  const anySaved = top.some((r) => r.saved > 0);
+  const mine = me?.stats && me.stats.rank !== null && me.stats.rank > top.length
     ? { tag: me.stats.tag!, rank: me.stats.rank, nickname: me.profile?.nickname ?? null, avatar: me.profile?.avatar ?? null, tracked: me.stats.tracked, total: me.stats.total, potential: me.stats.potential, saved: me.stats.saved }
     : null;
   const row = (r: BoardRow, i: number) => {
@@ -76,10 +81,10 @@ function Board({ b, me, locale }: { b: { rows: BoardRow[]; total: number }; me: 
       <p className="section-note">{t("lead")}</p>
       <div className="receipt lb" ref={ref}>
         {b.rows.length === 0 ? <p className="lb-empty">{t("empty")}</p> : (
-          <ol className="lb-list">
-            {b.rows.map(row)}
+          <ol className={`lb-list${anySaved ? "" : " no-saved"}`}>
+            {top.map(row)}
             {mine && <li className="lb-gap" aria-hidden>···</li>}
-            {mine && row(mine, b.rows.length)}
+            {mine && row(mine, top.length)}
           </ol>
         )}
         <hr className="rule" />

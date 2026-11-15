@@ -83,7 +83,8 @@
     "tickerTag": "Сегодня",
     "tickerLabel": "Самые большие изменения цен за день, в тенге",
     "catFrom": "от {from}",
-    "catWeek": "{pct} за неделю"
+    "catWeek": "{pct} за неделю",
+    "moreLists": "Показать ещё {count, plural, one {# список} few {# списка} many {# списков} other {# списка}}"
   },
   "receipt": {
     "storeLine": "чек цены",
@@ -806,7 +807,8 @@
     "noteCheck": "−{pct}% · проверьте",
     "noteFact": "−{pct}% к другим",
     "cheaperFact": "На {pct}% дешевле других продавцов этого товара. У продавца высокий рейтинг и больше 1 000 отзывов на Kaspi.",
-    "checkSeller": "проверьте продавца перед покупкой"
+    "checkSeller": "проверьте продавца перед покупкой",
+    "legendToggle": "Что значат значки"
   },
   "shop": {
     "metaTitle": "{name}: продавец на Kaspi",

@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useTranslations } from "next-intl";
-import { byRating, retailChain, type PriceNote } from "@baga/core";
+import { byRating, type PriceNote } from "@baga/core";
 import { Link } from "@/i18n/navigation";
 import { SellerChip, PriceNoteChip, SellerLegend, chipKind, type LegendKind } from "@/components/SellerChips";
 
@@ -24,10 +24,10 @@ export function SellerTable({ rows, shown, ratedAt }: { rows: SellerRow[]; shown
   const list = (order === "rated" ? byRating(rows) : rows).slice(0, shown);
   const cheapest = Math.min(...rows.map((r) => r.price));
   const kinds = new Set<LegendKind>();
-  for (const o of list) {
-    kinds.add(chipKind(o.sellerRating, o.sellerReviews));
-    if (o.note) kinds.add(o.note.kind);
-  }
+  // One chip per seller (16 Nov, design review: two or three per row were noise): «проверьте продавца» when the
+  // price is far below the others from a shop that is not established, else the Kaspi rating.
+  const caution = (o: SellerRow) => o.note?.kind === "check";
+  for (const o of list) kinds.add(caution(o) ? "check" : chipKind(o.sellerRating, o.sellerReviews));
 
   return (
     <>
@@ -45,10 +45,7 @@ export function SellerTable({ rows, shown, ratedAt }: { rows: SellerRow[]; shown
               <td>
                 <Link className="seller-link" href={`/s/${o.sellerId}`}>{o.sellerName}</Link>
                 <span className="chips">
-                  <SellerChip rating={o.sellerRating} reviews={o.sellerReviews} />
-                  {o.note && <PriceNoteChip note={o.note} />}
-                  {/* A retail chain's own shop on Kaspi (packages/core/src/chains.ts): a fact, not a rating. */}
-                  {retailChain(o.sellerId) && <span className="chip is-chain" title={ts("chainTitle", { chain: retailChain(o.sellerId)! })}>{ts("chain")}</span>}
+                  {caution(o) && o.note ? <PriceNoteChip note={o.note} /> : <SellerChip rating={o.sellerRating} reviews={o.sellerReviews} />}
                 </span>
               </td>
               <td className="col-delivery">{o.deliveryText}</td>
@@ -57,7 +54,11 @@ export function SellerTable({ rows, shown, ratedAt }: { rows: SellerRow[]; shown
           ))}
         </tbody>
       </table>
-      <SellerLegend kinds={kinds} date={ratedAt} />
+      {/* What the chips mean, on request instead of three lines under every table. */}
+      <details className="chip-legend-box">
+        <summary>{ts("legendToggle")}</summary>
+        <SellerLegend kinds={kinds} date={ratedAt} />
+      </details>
     </>
   );
 }

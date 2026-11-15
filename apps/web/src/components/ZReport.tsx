@@ -327,6 +327,9 @@ export function ZReport() {
   // Phones: show that the slips swipe (the owner, 15 Nov). Once per visit, when the rail first comes into view, the
   // slips lean left and back; the → button on the right edge goes to the next slip. Not with reduced motion.
   const [peek, setPeek] = useState(false);
+  // Desktop: the lists after the first three, once opened, stay open for this browser tab (Back keeps the spot).
+  const [lists, setLists] = useSaved<"three" | "all">("lists", ["three", "all"]);
+  const showAll = lists === "all";
   const [swipes, setSwipes] = useState(false);
   useEffect(() => {
     const el = rail.current;
@@ -368,15 +371,18 @@ export function ZReport() {
       {swipes && at < n - 1 && (
         <button type="button" className="z-next" aria-label={slips[at + 1]?.chip} onClick={() => jump(at + 1)}>→</button>
       )}
-      <div className={`z-slips${peek ? " is-peek" : ""}`} ref={rail} onAnimationEnd={() => setPeek(false)}>
+      <div className={`z-slips${peek ? " is-peek" : ""}${showAll ? " show-all" : ""}`} ref={rail} onAnimationEnd={() => setPeek(false)}>
         {slips.map((x, i) => (
-          <article key={x.id} className={`slip${i >= n - wide ? (n === 1 ? " is-full" : " is-wide") : ""}`}>
+          <article key={x.id} className={`slip${i >= n - wide && (showAll || n <= 3) ? (n === 1 ? " is-full" : " is-wide") : ""}${i >= 3 ? " is-more" : ""}`}>
             <div className="slip-caption"><h3>{x.title}</h3></div>
             {x.el}
           </article>
         ))}
       </div>
       </div>
+      {n > 3 && !showAll && (
+        <button type="button" className="btn z-more" onClick={() => setLists("all")}>{t("moreLists", { count: n - 3 })}</button>
+      )}
     </section>
   );
 }

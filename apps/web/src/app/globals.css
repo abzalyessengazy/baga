@@ -461,6 +461,12 @@ a { color: inherit; }
 
 /* ---------- product page ---------- */
 .product-grid { max-width: calc(720px + 2 * var(--gutter)); padding-block: 24px 200px; }
+/* Wide screens (16 Nov, design review: the coupon sat three screens down): the receipt on the left, the coupon and
+   what follows it in a column on the right, from the top. Phones and tablets keep the coupon torn off under the receipt. */
+@media (min-width: 1180px) {
+  .product-grid { max-width: calc(1140px + 2 * var(--gutter)); display: grid; grid-template-columns: minmax(0, 720px) minmax(0, 380px); gap: 32px; align-items: start; justify-content: center; }
+  .product-grid > .side-panel > .perforation { border-radius: 2px 2px 0 0; }
+}
 .product-receipt { max-width: 720px; }
 /* «В других магазинах»: one row per store; violet when it is cheaper than Kaspi's lowest (DECISIONS 2026-11-07). */
 .store-glance { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 10px 0 2px; padding: 8px 10px;
@@ -951,8 +957,9 @@ tr.is-post td { font-weight: 700; }
 .z-row .z-title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .z-row .z-sub { margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .z-row .p { font-family: var(--font-ui); font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.z-row.is-down .p { color: var(--stamp); }
-.z-row.is-up .p { color: var(--stamp-red); }
+/* The accent only on each list's first row (16 Nov, design review: 56 violet numbers on one screen); the rest in ink. */
+.z-row.is-first.is-down .p { color: var(--stamp); }
+.z-row.is-first.is-up .p { color: var(--stamp-red); }
 .z-row.is-first { background: color-mix(in srgb, var(--stamp) 9%, transparent); }
 .z-row.is-first.is-up { background: var(--paper-shade); }
 .z-row.is-first .z-rank { color: var(--stamp); font-weight: 800; }
@@ -971,6 +978,12 @@ tr.is-post td { font-weight: 700; }
 .z-slips > .slip.is-wide { grid-column: span 3; }
 .z-slips > .slip.is-full { grid-column: span 6; }
 .z-chips { display: none; }
+/* Desktop (16 Nov, design review): the first three lists, the rest behind «Показать все списки». */
+@media (min-width: 901px) {
+  .z-slips:not(.show-all) > .slip.is-more { display: none; }
+  .z-more { display: block; margin: 20px auto 0; }
+}
+@media (max-width: 900px) { .z-more { display: none; } }
 @media (max-width: 900px) {
   /* Phones: the slips stand side by side and are swiped; the chips above jump to a slip. */
   .z-chips { display: flex; gap: 6px; overflow-x: auto; margin: 12px calc(-1 * var(--gutter)) 14px; padding: 2px var(--gutter); scrollbar-width: none; }
@@ -1009,9 +1022,10 @@ tr.is-post td { font-weight: 700; }
 .ticker-run .is-up b { color: var(--stamp-red); }
 .ticker-thumb { flex: none; width: 22px; height: 22px; object-fit: contain; background: #fff; border-radius: 4px; box-shadow: 0 0 0 1px color-mix(in srgb, var(--rule) 45%, transparent); }
 span.ticker-thumb { background: var(--paper-shade); box-shadow: none; }
-.ticker-arrow { display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; font-size: 0.6875rem; line-height: 1; color: var(--paper); background: currentColor; vertical-align: 1px; }
-.ticker-run .is-down .ticker-arrow { background: var(--stamp); }
-.ticker-run .is-up .ticker-arrow { background: var(--stamp-red); }
+/* A plain coloured arrow, no filled disc (16 Nov, design review: a coloured badge on every item was noise up top). */
+.ticker-arrow { display: inline; font-size: 0.8125rem; font-weight: 800; }
+.ticker-run .is-down .ticker-arrow { color: var(--stamp); }
+.ticker-run .is-up .ticker-arrow { color: var(--stamp-red); }
 @keyframes ticker { to { transform: translateX(-50%); } }
 .ticker:active .ticker-track, .ticker:focus-within .ticker-track { animation-play-state: paused; }
 @media (hover: hover) and (pointer: fine) {
@@ -1066,6 +1080,9 @@ span.ticker-thumb { background: var(--paper-shade); box-shadow: none; }
   .lb-row { grid-template-columns: 28px 40px minmax(0, 1.5fr) 72px 140px 130px 170px; gap: 16px; }
   .lb-tracked, .lb-total, .lb-saved { display: flex; }
   .lb-sub { display: none; }
+  /* Until someone has saved, no «сэкономил» column of dashes (16 Nov, design review). */
+  .lb-list.no-saved .lb-row { grid-template-columns: 28px 40px minmax(0, 1.5fr) 72px 150px 170px; }
+  .lb-list.no-saved .lb-saved { display: none; }
 }
 
 /* The questionnaire: a receipt that slides up; a bottom sheet on phones. */
@@ -1203,8 +1220,9 @@ span.ticker-thumb { background: var(--paper-shade); box-shadow: none; }
 .z-row { padding: 12px 8px; row-gap: 3px; }
 /* Long Kaspi names in the UI type (16 Nov, the owner's go after the design review: monospace names wrapped and were cut);
    the price and details stay on the receipt type. */
-.z-row .z-title { font-family: var(--font-ui); font-weight: 500; font-size: 0.9375rem; line-height: 1.35; letter-spacing: 0; color: var(--ink); }
-.z-row > .p { font-weight: 700; font-size: 1.0625rem; letter-spacing: -0.005em; color: var(--ink); }
+.z-row .z-title { font-family: var(--font-ui); font-weight: 400; font-size: 0.9375rem; line-height: 1.35; letter-spacing: 0; color: var(--ink); }
+.z-row > .p { font-weight: 600; font-size: 1.0625rem; letter-spacing: -0.005em; color: var(--ink); }
+.z-row.is-first > .p { font-weight: 700; }
 .z-row .z-sub { font-size: 0.75rem; color: var(--ink-soft); }
 @media (hover: hover) and (pointer: fine) { .z-row:hover .z-title { color: var(--ink); } }
 
@@ -1266,3 +1284,10 @@ span.ticker-thumb { background: var(--paper-shade); box-shadow: none; }
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--stamp) 30%, transparent); }
 .bf-remind-text { flex: 1 1 220px; margin: 0; font-size: 0.875rem; line-height: 1.5; }
 .bf-remind-btn { flex: none; }
+
+/* The chips' legend on request under the seller table (16 Nov, design review). */
+.chip-legend-box { margin-top: 10px; }
+.chip-legend-box > summary { cursor: pointer; list-style: none; display: inline-flex; align-items: center; gap: 6px; font-size: 0.75rem; color: var(--ink-soft); }
+.chip-legend-box > summary::-webkit-details-marker { display: none; }
+.chip-legend-box > summary::before { content: "?"; display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; border: 1px solid currentColor; font-size: 0.625rem; font-weight: 700; }
+.chip-legend-box[open] > summary { margin-bottom: 6px; }
