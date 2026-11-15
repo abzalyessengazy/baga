@@ -1,5 +1,5 @@
 import type postgres from "postgres";
-import { lastCompleteShiftDay, liveShiftDay, LIVE_MIN_CHECKED, MOVE_MIN_PCT, moveDirection } from "@baga/core";
+import { CHEAP, lastCompleteShiftDay, liveShiftDay, LIVE_MIN_CHECKED, MOVE_MIN_PCT, moveDirection } from "@baga/core";
 
 /**
  * Price moves, by the rules in docs/STATS.md. Prices are compared as daily lows (the lowest price of an Almaty
@@ -20,7 +20,7 @@ export interface Mover {
 /**
  * Rule W (docs/STATS.md): the current lowest price against the price a week ago, i.e. the product's earliest daily
  * low 2–7 days before today that held two days in a row (owner, 11 Nov: against the week's highest or lowest day, a one-day blip that came back
- * showed as a move). Biggest percent first.
+ * showed as a move). Biggest percent first. Products under CHEAP.price are left out (15 Nov: a 500 ₸ mat in the lists).
  */
 export async function weekMovers(sql: postgres.Sql, dir: "down" | "up", limit = 30, minPct = MOVE_MIN_PCT): Promise<Mover[]> {
   const down = dir === "down";
@@ -48,7 +48,7 @@ export async function weekMovers(sql: postgres.Sql, dir: "down" | "up", limit = 
     from prior pr
     join product_state s on s.product_id = pr.product_id
     join products p on p.id = pr.product_id, today
-    where p.status = 'active' and s.in_stock and s.current_min_price is not null
+    where p.status = 'active' and s.in_stock and s.current_min_price is not null and s.current_min_price >= ${CHEAP.price}
       and (s.last_checked_at at time zone 'Asia/Almaty')::date >= today.day - 1
       and ${down
         ? sql`s.current_min_price <= pr.was * (1 - ${minPct}::numeric / 100)`

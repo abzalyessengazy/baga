@@ -290,10 +290,18 @@ export default async function ProductPage({ params, searchParams }: Props) {
         {offerCount > shownCount && <p className="note">{t("moreSellers", { count: offerCount - shownCount })}</p>}
         </>))}
         <p className="note">{local ? t("cityPrice") : t("nationalPrice")}</p>
-        {/* Other stores, exact matches only (DECISIONS.md, 2026-11-07): the store's own price, never adjusted. */}
-        {v.elsewhere.length > 0 && v.minPrice !== null && (
+        {/* Other stores, exact matches only (DECISIONS.md, 2026-11-07): the store's own price, never adjusted. Shown on
+            every product with a price (the owner, 15 Nov: «show on all products that we cross check with Sulpak»), saying
+            so plainly while no identical product has been found; not for city-dependent goods, which those stores do not sell. */}
+        {v.minPrice !== null && (v.elsewhere.length > 0 || !local) && (
           <section className="elsewhere" id="elsewhere" aria-label={t("elsewhereTitle")}>
             <h2 className="elsewhere-title">{t("elsewhereTitle")}</h2>
+            {v.elsewhere.length === 0 && (
+              <p className="elsewhere-none">
+                <span className="store-chip is-technodom">Technodom</span> <span className="store-chip is-sulpak">Sulpak</span>{" "}
+                {t("elsewhereNone")}
+              </p>
+            )}
             {v.elsewhere.filter((o) => o.kind === "exact").map((o) => {
               const d = o.price - v.minPrice!;
               return (

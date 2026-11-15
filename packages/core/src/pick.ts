@@ -3,7 +3,9 @@
  * the week's best drops (rule W), a different one each day: the best PICK.rotate eligible drops in turn. Never a
  * product the home page already shows: the week's biggest drop («Подешевел сильнее всех за неделю») and the day
  * list's visible rows (`shown`). Only drops of PICK.minPct or more on products from PICK.minPrice; the caller skips
- * a product whose cheapest offer needs a seller check.
+ * a product whose cheapest offer needs a seller check. Fresh first (the owner, 15 Nov: «we 2nd day reporting the
+ * same products»): a week's drop that also fell since yesterday (`fresh`, the day list) leads, biggest first; the
+ * rotation of the rest follows.
  */
 export const PICK = { minPct: 10, minPrice: 5_000, rotate: 5 } as const;
 
@@ -15,9 +17,12 @@ export function dayIndex(day: string): number {
 }
 
 /** Candidates in the order to try: the day's turn first, then the rest of the rotation. */
-export function pickOrder<T extends PickCandidate>(week: T[], day: string, shown: readonly string[] = []): T[] {
+export function pickOrder<T extends PickCandidate>(week: T[], day: string, shown: readonly string[] = [], fresh: readonly string[] = []): T[] {
   const skip = new Set([week[0]?.externalId, ...shown]);
-  const pool = week.filter((m) => !skip.has(m.externalId) && m.now >= PICK.minPrice && m.pct <= -PICK.minPct).slice(0, PICK.rotate);
+  const isFresh = new Set(fresh);
+  const eligible = week.filter((m) => !skip.has(m.externalId) && m.now >= PICK.minPrice && m.pct <= -PICK.minPct);
+  const first = eligible.filter((m) => isFresh.has(m.externalId));
+  const pool = eligible.filter((m) => !isFresh.has(m.externalId)).slice(0, PICK.rotate);
   const start = pool.length ? dayIndex(day) % pool.length : 0;
-  return [...pool.slice(start), ...pool.slice(0, start)];
+  return [...first, ...pool.slice(start), ...pool.slice(0, start)];
 }

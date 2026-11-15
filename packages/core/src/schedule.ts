@@ -72,13 +72,19 @@ export function isCalmPrice(lows: number[]): boolean {
  * The check interval for a product's tier, stretched for calm catalog products, untracked ones out of stock, and
  * later colour/memory variants of a device nobody tracks or opened lately (`variant`, 14 Nov 2026: every third day).
  */
-export function intervalFor(priority: Priority, p: { calm: boolean; inStock: boolean; variant?: boolean }): number {
+export function intervalFor(priority: Priority, p: { calm: boolean; inStock: boolean; variant?: boolean; price?: number | null }): number {
   const base = INTERVAL_MINUTES[priority];
   if (priority === "hot" || priority === "tracked") return base;
   if (!p.inStock) return Math.max(base, OUT_OF_STOCK_INTERVAL_MINUTES);
+  // A cheap product nobody tracks or opened (the owner, 15 Nov: a 500 ₸ dish mat from the category-coverage seeds):
+  // weekly. It proved its category reads fine; its price moves matter to nobody yet.
+  if (p.price != null && p.price < CHEAP.price) return Math.max(base, CHEAP.intervalMinutes);
   const calm = priority === "catalog" && p.calm ? Math.max(base, CALM.intervalMinutes) : base;
   return p.variant ? Math.max(calm, VARIANT_INTERVAL_MINUTES) : calm;
 }
+
+/** Below this price a product nobody watches is checked weekly and kept off the home lists (15 Nov 2026). */
+export const CHEAP = { price: 5_000, intervalMinutes: 7 * 24 * 60 } as const;
 
 /** Whether daily lows (the last STABLE.days days, observed days only) say the price is stable. */
 export function isStablePrice(lows: number[]): boolean {

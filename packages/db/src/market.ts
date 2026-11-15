@@ -178,7 +178,8 @@ async function picksOfDay(sql: postgres.Sql, moves: Awaited<ReturnType<typeof da
   // The day list's visible rows on the home page (ZReport, 4 rows): not repeated as a find.
   const shown = moves.down.filter(stillMoving).slice(0, DAY_ROWS_SHOWN).map((m) => m.externalId);
   const out: MarketPick[] = [];
-  for (const m of pickOrder(deals, moves.day, shown)) {
+  // Drops since yesterday (the whole day list): the freshest week's drops lead.
+  for (const m of pickOrder(deals, moves.day, shown, moves.down.filter(stillMoving).map((m) => m.externalId))) {
     const [o] = await sql<{ prices: number[]; rating: number | null; reviews: number | null }[]>`
       select array_agg(o.price order by o.price, se.id) as prices,
              (array_agg(se.rating order by o.price, se.id))[1] as rating, (array_agg(se.reviews order by o.price, se.id))[1] as reviews

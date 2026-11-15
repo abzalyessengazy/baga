@@ -73,7 +73,9 @@ keep every move.
 One of the week's best drops (rule W), a different one each day: the best 5 eligible drops in turn. Never a product
 the home page already shows (the week's biggest drop and the 4 visible rows of the day list), only drops of 10% or
 more on products from 5 000 ₸, not a product whose cheapest offer needs a seller check, and never a product whose own
-page says «Дороже обычного» (the page's verdict on the same daily lows and current price; owner, 12 Nov 2026).
+page says «Дороже обычного» (the page's verdict on the same daily lows and current price; owner, 12 Nov 2026). A week's drop that also fell since yesterday (it is in the day list) comes first, biggest first; the rotation
+follows (owner, 15 Nov 2026: the same products two days running). Home and drop lists leave out products under
+5 000 ₸ (`CHEAP.price`), which nobody watching are checked weekly; the day counts still include them.
 
 ## Other numbers
 

@@ -128,6 +128,9 @@ describe("longer gaps where nothing happens (10 Nov 2026)", () => {
   it("checks calm catalog products every 5 days and untracked ones out of stock every 3", () => {
     expect(intervalFor("catalog", { calm: true, inStock: true })).toBe(5 * 24 * 60);
     expect(intervalFor("catalog", { calm: false, inStock: true })).toBe(INTERVAL_MINUTES.catalog);
+    expect(intervalFor("catalog", { calm: false, inStock: true, price: 500 })).toBe(7 * 24 * 60);
+    expect(intervalFor("tracked", { calm: false, inStock: true, price: 500 })).toBe(INTERVAL_MINUTES.tracked);
+    expect(intervalFor("catalog", { calm: false, inStock: true, price: 5_000 })).toBe(INTERVAL_MINUTES.catalog);
     expect(intervalFor("seed", { calm: true, inStock: true })).toBe(INTERVAL_MINUTES.seed); // opened lately: daily
     expect(intervalFor("seed", { calm: false, inStock: false })).toBe(3 * 24 * 60);
     expect(intervalFor("catalog", { calm: true, inStock: false })).toBe(3 * 24 * 60);

@@ -20,6 +20,9 @@ describe("pickOrder", () => {
       expect(ids).not.toContain("e");
     }
   });
+  it("puts a drop since yesterday first, every day", () => {
+    for (const d of days) expect(pickOrder(week, d, [], ["g", "top"])[0]!.externalId).toBe("g");
+  });
   it("leaves out small drops and cheap products", () => {
     expect(pickOrder([c("top", -45), c("small", -5), c("cheap", -30, 3_000)], "2026-11-10")).toEqual([]);
   });

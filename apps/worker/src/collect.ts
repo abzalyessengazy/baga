@@ -493,7 +493,7 @@ async function reschedule(productId: number, minPrice: number | null) {
   });
   // A variant someone opened in the last 14 days keeps its tier: people paste the exact colour and size they want.
   const variant = variants.has(productId) && !(p?.viewed_days !== null && p?.viewed_days !== undefined && p.viewed_days <= 14);
-  const minutes = intervalFor(priority, { calm: isCalmPrice(lows14.map((r) => r.p)), inStock: minPrice !== null, variant });
+  const minutes = intervalFor(priority, { calm: isCalmPrice(lows14.map((r) => r.p)), inStock: minPrice !== null, variant, price: minPrice });
   await sql`update collection_schedule set priority = ${priority}, interval_minutes = ${minutes}, fail_count = 0,
     last_error = null, locked_until = null, next_check_at = now() + make_interval(mins => ${minutes})
     where product_id = ${productId}`;

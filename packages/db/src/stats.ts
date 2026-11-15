@@ -1,4 +1,5 @@
 import type postgres from "postgres";
+import { CHEAP } from "@baga/core";
 import { dayMoves, stillMoving, weekMovers, type Mover } from "./movers";
 
 /** One Almaty calendar day of collector work. */
@@ -124,7 +125,7 @@ export async function getPlatformStats(sql: postgres.Sql, dayCount = 14, listCou
   const newest = await sql<{ external_id: string; title: string; title_kk: string | null; image_url: string | null; price: number | null; at: Date }[]>`
     select p.external_id, p.title, p.title_kk, p.image_url, s.current_min_price as price, p.first_seen_at as at
     from products p join product_state s on s.product_id = p.id
-    where p.status = 'active' and s.current_min_price is not null
+    where p.status = 'active' and s.current_min_price is not null and s.current_min_price >= ${CHEAP.price}
     order by ${NEWEST_ORDER(sql)} limit ${listCount}`;
   // The same daily low on every observed day back from the latest one: the streak ends at the first different day.
   const stable = await sql<{ external_id: string; title: string; title_kk: string | null; image_url: string | null; price: number; at: Date; days: number; since: string }[]>`
@@ -137,7 +138,7 @@ export async function getPlatformStats(sql: postgres.Sql, dayCount = 14, listCou
     select p.external_id, p.title, p.title_kk, p.image_url, s.current_min_price as price, s.last_checked_at as at,
            k.days, to_char(k.since, 'YYYY-MM-DD') as since
     from k join products p on p.id = k.product_id join product_state s on s.product_id = p.id
-    where p.status = 'active' and s.in_stock and s.current_min_price = k.p and k.days >= ${STABLE_MIN_DAYS}
+    where p.status = 'active' and s.in_stock and s.current_min_price = k.p and k.days >= ${STABLE_MIN_DAYS} and k.p >= ${CHEAP.price}
       and k.till >= (now() at time zone 'Asia/Almaty')::date - 1
     order by k.days desc, coalesce(p.kaspi_reviews, 0) desc, p.id limit ${listCount}`;
   const shopRows = (best: boolean) => sql<StatsShop[]>`
@@ -146,7 +147,9 @@ export async function getPlatformStats(sql: postgres.Sql, dayCount = 14, listCou
     where se.rating is not null and se.rating > 0 and se.reviews >= ${SHOP_BOARD_MIN_REVIEWS}
     group by se.id
     order by se.rating ${best ? sql`desc` : sql`asc`}, se.reviews desc, se.id limit ${listCount}`;
-  const byTenge = (rows: Mover[]) => rows.filter(stillMoving).sort((a, b) => Math.abs(b.now - b.was) - Math.abs(a.now - a.was)).slice(0, listCount).map(move);
+  // The home lists leave out products under CHEAP.price (15 Nov 2026): the counts above still include them.
+  const listed = (m: Mover) => stillMoving(m) && m.now >= CHEAP.price;
+  const byTenge = (rows: Mover[]) => rows.filter(listed).sort((a, b) => Math.abs(b.now - b.was) - Math.abs(a.now - a.was)).slice(0, listCount).map(move);
   return {
     tenge: { drops: byTenge(day.down), rises: byTenge(day.up) },
     stable: stable.map((r) => ({ ...product(r), days: r.days, since: r.since })),
@@ -164,7 +167,7 @@ export async function getPlatformStats(sql: postgres.Sql, dayCount = 14, listCou
     shiftRun: shift?.started_at && shift.finished_at ? { startedAt: shift.started_at, finishedAt: shift.finished_at } : null,
     days: days.reverse(),
     moves: {
-      day: { drops: day.down.filter(stillMoving).slice(0, listCount).map(move), rises: day.up.filter(stillMoving).slice(0, listCount).map(move) },
+      day: { drops: day.down.filter(listed).slice(0, listCount).map(move), rises: day.up.filter(listed).slice(0, listCount).map(move) },
       week: { drops: weekDown.map(move), rises: weekUp.map(move) },
     },
     mostTracked: tracked.map(product),
