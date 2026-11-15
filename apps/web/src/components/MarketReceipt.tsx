@@ -42,7 +42,6 @@ export function MarketReceipt() {
   // The same outer element before and after loading, so useInView keeps watching it.
   if (m === undefined) return <div className="printer market-printer" ref={ref} aria-hidden><div className="printer-slot" /><div className="market-wait" /></div>;
   const has = !!m && m.catalog.products > 0;
-  const spread = m?.spread;
   return (
     <div className="printer market-printer" ref={ref}>
       <div className="printer-slot" aria-hidden />
@@ -64,12 +63,6 @@ export function MarketReceipt() {
                   <div><dt><StatIcon name="store" />{t("sellers")}</dt><dd><CountUp value={m!.catalog.sellers} format={count} duration={1.2} /></dd></div>
                   <div><dt><StatIcon name="calendar" />{t("days")}</dt><dd><CountUp value={historyDays(m!.catalog.firstDay, m!.day ?? m!.catalog.firstDay ?? "")} format={count} duration={1.2} /></dd></div>
                 </dl>
-                {m!.people > 0 && (
-                  <p className="mk-people">
-                    <span className="mk-big"><CountUp value={m!.people} format={count} duration={1.2} /></span>
-                    <span className="mk-big-k">{t("people")}</span>
-                  </p>
-                )}
                 {/* Every product's latest check against the one before it (Rule L, docs/STATS.md; the owner, 15 Nov): not
                     one day's checks, so the arrows do not shrink on a day the collector checks fewer products. */}
                 {m!.latest?.compared ? (
@@ -83,21 +76,25 @@ export function MarketReceipt() {
                 {m!.shops && m!.catalog.sellers > 0 && (
                   <Link href="/shops" className="mk-line mk-shops" aria-label={t("shopsAll")}>
                     <span className="mk-when">{t("shopsTitle")}</span>
-                    <span className="mk-pair"><CountChip kind="high" n={m!.shops.high} label={t("shopsHigh")} /> {t("shopsHigh")}</span>
-                    <span className="mk-pair"><CountChip kind="mixed" n={m!.shops.mixed + m!.shops.low} label={t("shopsMixed")} /> {t("shopsMixed")}</span>
-                    <span className="mk-pair"><CountChip kind="few" n={m!.shops.few + m!.shops.none} label={t("shopsUnknown")} /> {t("shopsUnknown")}</span>
+                    {/* One row of chips, each with its words under it (the owner, 15 Nov: «fit in 1 line»). */}
+                    <span className="mk-shop-row">
+                      <span className="mk-shop"><CountChip kind="high" n={m!.shops.high} label={t("shopsHigh")} /><small>{t("shopsHigh")}</small></span>
+                      <span className="mk-shop"><CountChip kind="mixed" n={m!.shops.mixed + m!.shops.low} label={t("shopsMixed")} /><small>{t("shopsMixed")}</small></span>
+                      <span className="mk-shop"><CountChip kind="few" n={m!.shops.few + m!.shops.none} label={t("shopsUnknown")} /><small>{t("shopsUnknown")}</small></span>
+                    </span>
                     <span className="mk-go" aria-hidden>→</span>
                   </Link>
                 )}
               </>
             )}
-            {has && spread && spread.products > 0 && spread.medianPct !== null && (
-              <Link href="/explore?list=spread" className="mk-spread">
-                <span className="mk-big">{spread.medianPct}%</span>
-                <span className="mk-big-k">{t("spreadMedian")}</span>
-              </Link>
-            )}
             {has && <PickSlider picks={m!.picks ?? (m!.pick ? [m!.pick] : [])} />}
+            {/* The receipt's total line (the owner, 15 Nov): everyone who has come so far. */}
+            {has && m!.people > 0 && (
+              <p className="mk-total">
+                <span>{t("people")}</span>
+                <b><CountUp value={m!.people} format={count} duration={1.2} /></b>
+              </p>
+            )}
           </section>
         </motion.div>
       </div>
