@@ -979,7 +979,17 @@ tr.is-post td { font-weight: 700; }
     overflow-x: auto; scroll-snap-type: x mandatory; scroll-padding-inline: var(--gutter); scrollbar-width: none; align-items: stretch; }
   .z-slips::-webkit-scrollbar { display: none; }
   .z-slips > .slip, .z-slips > .slip.is-wide, .z-slips > .slip.is-full { flex: 0 0 min(86%, 400px); scroll-snap-align: center; }
+  /* That the slips swipe (15 Nov): a round → on the right edge, pulsing a few times, and one lean to the left. */
+  .z-rail { position: relative; }
+  .z-next { position: absolute; z-index: 2; right: 4px; top: 150px; width: 44px; height: 44px; border-radius: 999px; border: 0; cursor: pointer;
+    background: var(--ink); color: var(--paper); font: 800 1.125rem/1 var(--font-ui); box-shadow: 0 6px 18px rgb(0 0 0 / 0.28);
+    -webkit-tap-highlight-color: transparent; animation: z-nudge 1.4s cubic-bezier(0.23, 1, 0.32, 1) 0.6s 4; }
+  .z-next:active { transform: scale(0.92); }
+  .z-slips.is-peek > .slip { animation: z-peek 1.1s cubic-bezier(0.23, 1, 0.32, 1) 0.2s 1; }
 }
+@keyframes z-nudge { 0%, 60%, 100% { transform: translateX(0); } 30% { transform: translateX(6px); } }
+@keyframes z-peek { 0%, 100% { transform: translateX(0); } 40% { transform: translateX(-56px); } }
+@media (prefers-reduced-motion: reduce) { .z-next, .z-slips.is-peek > .slip { animation: none; } }
 
 /* The tape under the hero. */
 .ticker { display: flex; align-items: stretch; overflow: hidden; background: var(--paper); color: var(--ink); font: 500 0.8125rem/1 var(--font-receipt);

@@ -324,6 +324,27 @@ export function ZReport() {
     put();
     return () => { stop = true; window.removeEventListener("wheel", quit); window.removeEventListener("touchstart", quit); window.removeEventListener("keydown", quit); };
   }, [ready]);
+  // Phones: show that the slips swipe (the owner, 15 Nov). Once per visit, when the rail first comes into view, the
+  // slips lean left and back; the → button on the right edge goes to the next slip. Not with reduced motion.
+  const [peek, setPeek] = useState(false);
+  const [swipes, setSwipes] = useState(false);
+  useEffect(() => {
+    const el = rail.current;
+    if (!el || !n) return;
+    const check = () => setSwipes(el.scrollWidth > el.clientWidth + 4);
+    check();
+    window.addEventListener("resize", check);
+    let done = false;
+    try { done = !!sessionStorage.getItem("baga.peeked") || window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch { /* no storage */ }
+    const io = done ? null : new IntersectionObserver(([e]) => {
+      if (!e?.isIntersecting || el.scrollWidth <= el.clientWidth + 4 || el.scrollLeft > 4) return;
+      try { sessionStorage.setItem("baga.peeked", "1"); } catch { /* no storage */ }
+      setPeek(true);
+      io?.disconnect();
+    }, { threshold: 0.35 });
+    io?.observe(el);
+    return () => { io?.disconnect(); window.removeEventListener("resize", check); };
+  }, [n]);
   if (!ready) return null;
   const jump = (i: number) => {
     const el = rail.current, c = el?.children[i] as HTMLElement | undefined;
@@ -343,13 +364,18 @@ export function ZReport() {
           <button key={x.id} type="button" className={`z-chip${i === at ? " is-on" : ""}`} onClick={() => jump(i)}>{x.chip}</button>
         ))}
       </nav>
-      <div className="z-slips" ref={rail}>
+      <div className="z-rail">
+      {swipes && at < n - 1 && (
+        <button type="button" className="z-next" aria-label={slips[at + 1]?.chip} onClick={() => jump(at + 1)}>→</button>
+      )}
+      <div className={`z-slips${peek ? " is-peek" : ""}`} ref={rail} onAnimationEnd={() => setPeek(false)}>
         {slips.map((x, i) => (
           <article key={x.id} className={`slip${i >= n - wide ? (n === 1 ? " is-full" : " is-wide") : ""}`}>
             <div className="slip-caption"><h3>{x.title}</h3></div>
             {x.el}
           </article>
         ))}
+      </div>
       </div>
     </section>
   );
