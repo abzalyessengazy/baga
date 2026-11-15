@@ -19,7 +19,9 @@ export async function blackFridayRows(sql: postgres.Sql, today: string, cfg = BL
   const products = await sql<{ id: number; externalId: string; title: string; titleKk: string | null; imageUrl: string | null; kaspiNow: number; kaspiBeforeLow: number | null }[]>`
     with cand as (
       select distinct p.id from store_matches m join products p on p.id = m.product_id join product_state s on s.product_id = p.id
-      where m.status = 'confirmed' and p.status = 'active' and s.in_stock and s.current_min_price >= ${cfg.minPrice}),
+      where m.status = 'confirmed' and p.status = 'active' and s.in_stock and s.current_min_price >= ${cfg.minPrice}
+        -- A Kaspi listing «+ подарок» is priced with its gift: no fair verdict against the store's plain item.
+        and p.title !~* 'подар|сыйлық'),
     views as (
       select external_id, count(distinct coalesce(vid, sid))::int as n from events
       where name = 'product_view' and at > now() - interval '30 days' and external_id is not null group by 1),

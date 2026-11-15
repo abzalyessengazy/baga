@@ -3,6 +3,7 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import { BLACK_FRIDAY, formatTenge, salePhase, shortTitle, type StoreSaleCheck } from "@baga/core";
 import { almatyToday, blackFridayRows, getSql, type BfRow } from "@baga/db";
 import { Link } from "@/i18n/navigation";
+import { botUsername } from "@/lib/watcher";
 
 type Props = { params: Promise<{ locale: string }> };
 // Store and Kaspi prices arrive once a day; an hour of caching keeps the database quiet.
@@ -41,6 +42,9 @@ export default async function BlackFridayPage({ params }: Props) {
   const checks = rows.flatMap((r) => r.stores.map((s) => s.check));
   const count = (k: StoreSaleCheck["kind"]) => checks.filter((c) => c.kind === k).length;
   const dates = { start: dm(BLACK_FRIDAY.start), end: dm(BLACK_FRIDAY.end) };
+  // «Напомнить»: opens the bot with /start bf_<locale>; it keeps this chat for one message on the first sale day.
+  const bot = botUsername();
+  const remind = bot && phase === "before" ? `https://t.me/${bot}?start=bf_${L}` : null;
 
   const verdict = (c: StoreSaleCheck) => {
     switch (c.kind) {
@@ -71,6 +75,13 @@ export default async function BlackFridayPage({ params }: Props) {
         </dl>
         <p className="note">{t("sumNote")}</p>
       </article>
+
+      {remind && (
+        <aside className="receipt bf-remind">
+          <p className="bf-remind-text"><b>{t("remindTitle", dates)}</b><br />{t("remindText")}</p>
+          <a className="btn btn-stamp bf-remind-btn" href={remind} target="_blank" rel="noopener">{t("remindButton")}</a>
+        </aside>
+      )}
 
       {rows.length === 0 ? <article className="receipt"><p className="untracked-status">{t("none")}</p></article> : (
         <ol className="bf-list">

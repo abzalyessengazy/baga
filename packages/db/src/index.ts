@@ -20,3 +20,4 @@ export * from "./alertStats";
 export * from "./digest";
 export * from "./profile";
 export * from "./blackFriday";
+export * from "./reminders";

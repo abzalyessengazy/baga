@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getTranslations } from "next-intl/server";
-import { getSql, linkTelegram, getWatcherByChat, unlinkTelegram, listWatched, answerBought, stopDigestByChat, type BoughtAnswer, type Watcher } from "@baga/db";
+import { getSql, linkTelegram, getWatcherByChat, unlinkTelegram, listWatched, answerBought, stopDigestByChat, addReminder, dropReminders, BF_TOPIC, type BoughtAnswer, type Watcher } from "@baga/db";
 import { formatTenge, slugName } from "@baga/core";
 import { sendTelegram, telegramCall, tgEscape } from "@/lib/telegram";
 import { siteUrl } from "@/lib/site";
@@ -8,7 +8,7 @@ import { siteUrl } from "@/lib/site";
 /**
  * Telegram bot webhook (DECISIONS.md, 2026-11-02). Telegram sends the secret header we registered with setWebhook;
  * anything else is refused. Commands: /start <code> links alerts, /list shows what is tracked, /stop unlinks, /id
- * answers the chat's number.
+ * answers the chat's number; /start bf_<locale> keeps the chat for the Black Friday results (migration 0031).
  * Alerts themselves are sent by the collector. Button taps on its "Вы купили?" message arrive as callback_query
  * `b:<bought_code>:<answer>` (migration 0011).
  */
@@ -60,7 +60,14 @@ export async function POST(req: Request) {
   const guess = u.message?.from?.language_code === "kk" ? "kk" : "ru";
 
   const [cmd, arg] = text.split(/\s+/, 2);
-  if (cmd === "/start" && arg && /^[A-Za-z0-9_-]{16,64}$/.test(arg)) {
+  // «Напомнить 27 ноября» on the Black Friday page (migration 0031): no account, just this chat for that day.
+  const bf = cmd === "/start" ? /^bf_(ru|kk)$/.exec(arg ?? "") : null;
+  if (bf) {
+    const locale = bf[1] as "ru" | "kk";
+    const t = await getTranslations({ locale, namespace: "bot" });
+    const ok = await addReminder(sql, BF_TOPIC, chat, locale).then(() => true, () => false);
+    await sendTelegram(chat, tgEscape(ok ? t("bfReminderSet") : t("bfReminderFailed")));
+  } else if (cmd === "/start" && arg && /^[A-Za-z0-9_-]{16,64}$/.test(arg)) {
     const w = await linkTelegram(sql, arg, chat);
     const t = await getTranslations({ locale: w?.locale ?? guess, namespace: "bot" });
     await sendTelegram(chat, w ? `${tgEscape(t("linked"))}\n\n${await listText(w)}` : tgEscape(t("badCode")));
@@ -76,6 +83,7 @@ export async function POST(req: Request) {
     const w = await getWatcherByChat(sql, chat);
     const t = await getTranslations({ locale: w?.locale ?? guess, namespace: "bot" });
     await unlinkTelegram(sql, chat);
+    await dropReminders(sql, chat).catch(() => {});
     await sendTelegram(chat, tgEscape(t("stopped")));
   } else {
     const w = await getWatcherByChat(sql, chat);
