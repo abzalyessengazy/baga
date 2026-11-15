@@ -1,5 +1,5 @@
 import type postgres from "postgres";
-import { computeVerdict, liveShiftDay, pickOrder, priceNote, sellerLabel, KASPI_VISIT_WINDOW_UTC, SELLER_RULES, type PriceNote, type SellerLabel } from "@baga/core";
+import { computeVerdict, liveShiftDay, MOVE_MIN_PCT, pickOrder, priceNote, sellerLabel, KASPI_VISIT_WINDOW_UTC, SELLER_RULES, type PriceNote, type SellerLabel } from "@baga/core";
 import { getDailyLows } from "./queries";
 import { dayMoves, stillMoving, weekMovers, type Mover } from "./movers";
 
@@ -36,6 +36,12 @@ export interface Market {
    * shown yet ("running", fewer than LIVE_MIN_CHECKED products so far). Null otherwise. */
   todayCheck: "later" | "running" | null;
   compared: number; down: number; up: number; same: number;
+  /**
+   * Rule L (docs/STATS.md): every product priced so far, its latest observed day against the observed day before it,
+   * whenever those were (daily or every few days), changed by MOVE_MIN_PCT. The home receipt shows these, so its
+   * arrows do not shrink on a day the collector checks fewer products (the owner, 15 Nov 2026).
+   */
+  latest: { compared: number; down: number; up: number };
   /** Products seen in stock on the latest shift and on MARKET_CONFIG.lowsMinDays or more days, whose latest daily low is below every earlier one. */
   newLows: number;
   spread: { products: number; over10: number; over25: number; medianPct: number | null; top: MarketSpread[] };
@@ -158,6 +164,17 @@ export async function getMarket(sql: postgres.Sql, now = new Date()): Promise<Ma
              then round(percentile_cont(0.5) within group (order by (now - was) * 100.0 / was) filter (where was is not null))::int end as "weekPct"
     from x group by name having count(*) >= ${c.categoryMin}
     order by count(*) desc limit ${c.categoryTop}`;
+  const [latest] = await sql<{ compared: number; down: number; up: number }[]>`
+    with d as (
+      select o.product_id, (o.observed_at at time zone 'Asia/Almaty')::date as day, min(o.min_price) as low
+      from price_observations o join products p on p.id = o.product_id
+      where p.status = 'active' and o.min_price is not null group by 1, 2),
+    r as (select product_id, low, row_number() over (partition by product_id order by day desc) as n from d),
+    x as (select a.low as now, b.low as was from r a join r b on b.product_id = a.product_id and b.n = 2 where a.n = 1)
+    select count(*)::int as compared,
+      count(*) filter (where abs(now - was) * 100 >= ${MOVE_MIN_PCT} * was and now < was)::int as down,
+      count(*) filter (where abs(now - was) * 100 >= ${MOVE_MIN_PCT} * was and now > was)::int as up
+    from x`;
   const deals = await weekMovers(sql, "down", c.deals);
   const picks = await picksOfDay(sql, moves, deals);
   const pick = picks[0] ?? null;
@@ -166,6 +183,7 @@ export async function getMarket(sql: postgres.Sql, now = new Date()): Promise<Ma
     catalog: catalog ?? { products: 0, sellers: 0, firstDay: null },
     day: moves.day, checked: moves.checked, live: moves.live, asOf: moves.asOf?.toISOString() ?? null, todayCheck,
     compared: moves.compared, down, up, same: moves.compared - down - up,
+    latest: latest ?? { compared: 0, down: 0, up: 0 },
     newLows: lows?.n ?? 0,
     spread: { products: spread?.products ?? 0, over10: spread?.over10 ?? 0, over25: spread?.over25 ?? 0, medianPct: spread?.median ?? null, top },
     categories, deals, pick, picks, shops,

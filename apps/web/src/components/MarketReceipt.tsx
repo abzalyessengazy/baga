@@ -10,17 +10,12 @@ import { cachedMarket, loadMarket } from "@/lib/market";
 import { Wordmark } from "./Wordmark";
 import { StatIcon } from "./StatIcon";
 import { PickSlider } from "./PickSlider";
-import { dayMonth, type DatesT } from "@/lib/dayMonth";
 import { CountUp } from "./Motion";
 
 const count = (n: number) => formatCount(n);
 /** Calendar days from the first observed day to the shown day (the live day included), both included. */
 const historyDays = (first: string | null, last: string) =>
   first ? Math.round((Date.parse(last) - Date.parse(first)) / 86_400_000) + 1 : 0;
-
-/** "12:35", Almaty time. */
-const almatyTime = (iso: string) =>
-  new Intl.DateTimeFormat("ru-RU", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "Asia/Almaty" }).format(new Date(iso));
 
 // Printer feed: the paper advances in small steps, like a thermal printer.
 const printerEase = (t: number) => Math.round(t * 28) / 28;
@@ -32,7 +27,6 @@ const printerEase = (t: number) => Math.round(t * 28) / 28;
  */
 export function MarketReceipt() {
   const t = useTranslations("market");
-  const td = useTranslations("dates") as unknown as DatesT;
   const reduce = useReducedMotion();
   // Back from a product page the numbers are already here: drawn at once, without printing again.
   const [m, setM] = useState<Market | null | undefined>(cachedMarket);
@@ -70,18 +64,15 @@ export function MarketReceipt() {
                   <div><dt><StatIcon name="store" />{t("sellers")}</dt><dd><CountUp value={m!.catalog.sellers} format={count} duration={1.2} /></dd></div>
                   <div><dt><StatIcon name="calendar" />{t("days")}</dt><dd><CountUp value={historyDays(m!.catalog.firstDay, m!.day ?? m!.catalog.firstDay ?? "")} format={count} duration={1.2} /></dd></div>
                 </dl>
-                {m!.day && (
+                {/* Every product's latest check against the one before it (Rule L, docs/STATS.md; the owner, 15 Nov): not
+                    one day's checks, so the arrows do not shrink on a day the collector checks fewer products. */}
+                {m!.latest?.compared ? (
                   <p className="mk-line">
-                    {/* The live day says it is still being checked; an earlier day says when today's check comes (12 Nov). */}
-                    <span className="mk-when">{
-                      m!.live && m!.asOf ? t("dayLive", { day: dayMonth(m!.day!, td), time: almatyTime(m!.asOf) })
-                      : m!.todayCheck === "later" ? t("dayEarlier", { day: dayMonth(m!.day!, td) })
-                      : m!.todayCheck === "running" ? t("dayRunning", { day: dayMonth(m!.day!, td) })
-                      : dayMonth(m!.day!, td)}</span>
-                    <span className="mk-pair"><span className="mk-n is-down">↓ {count(m!.down)}</span> {t("dayDown")}</span>
-                    <span className="mk-pair"><span className="mk-n is-up">↑ {count(m!.up)}</span> {t("dayUp")}</span>
+                    <span className="mk-when">{t("latestWhen")}</span>
+                    <span className="mk-pair"><span className="mk-n is-down">↓ {count(m!.latest.down)}</span> {t("dayDown")}</span>
+                    <span className="mk-pair"><span className="mk-n is-up">↑ {count(m!.latest.up)}</span> {t("dayUp")}</span>
                   </p>
-                )}
+                ) : null}
                 {/* Shops by Kaspi's rating, the seller table's chips and labels (packages/core/src/sellers.ts). */}
                 {m!.shops && m!.catalog.sellers > 0 && (
                   <Link href="/shops" className="mk-line mk-shops" aria-label={t("shopsAll")}>

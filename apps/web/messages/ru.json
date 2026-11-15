@@ -711,9 +711,7 @@
     "shopsUnknown": "мало отзывов",
     "shopsAll": "Все продавцы",
     "shopsTitle": "Продавцы",
-    "dayLive": "{day} · идёт проверка · на {time}",
-    "dayEarlier": "Итоги {day} · сегодня проверка с 09:00",
-    "dayRunning": "Итоги {day} · сегодняшняя проверка уже идёт"
+    "latestWhen": "По последней проверке"
   },
   "dates": {
     "day": "{d} {month}",

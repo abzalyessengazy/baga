@@ -49,6 +49,13 @@ change as today's drop; such a change cannot be dated, so it appears only in the
 Used by: "Kaspi сегодня" (checked, ↓, ↑, compared), the Z-report totals (checked in the shift, price changed,
 of them cheaper) and the Z-report "День" lists (biggest percent first).
 
+## Rule L: every product's latest move (`getMarket` `latest`, `packages/db/src/market.ts`)
+The home receipt «ЦЕНЫ KASPI» (owner, 15 Nov 2026): for every active product priced so far, its latest observed day's
+low against the observed day before it, whenever those were (daily products: yesterday; products checked every few
+days or only when opened: their previous check). ↓/↑ when it moved by `MOVE_MIN_PCT`. It does not depend on how many
+products one run checks, so a slower pace does not shrink it. The receipt says «По последней проверке». The «BAĞA в
+цифрах» lists and /explore keep Rules D and W.
+
 ## Rule W: now against the previous 7 days (`weekMovers`, `packages/db/src/movers.ts`)
 
 The product's current lowest price (`product_state.current_min_price`, in stock, checked on the shift or the day
