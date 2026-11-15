@@ -430,6 +430,7 @@ a { color: inherit; }
 .mk-spread { display: flex; align-items: center; gap: 14px; margin: 16px -10px 0; padding: 14px 16px; border-radius: 10px;
   background: color-mix(in srgb, var(--stamp) 8%, var(--paper)); color: inherit; text-decoration: none; font-family: var(--font-ui); }
 @media (hover: hover) and (pointer: fine) { .mk-spread:hover .mk-big-k { text-decoration: underline; } }
+.mk-people { display: flex; align-items: center; gap: 12px; margin: 14px 0 0; }
 .mk-big { font-size: 2.5rem; font-weight: 800; letter-spacing: -0.04em; line-height: 1; color: var(--stamp); }
 .mk-big-k { font-size: 0.875rem; line-height: 1.35; color: var(--ink); }
 .mk-label { margin: 0 0 10px; font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--stamp); }

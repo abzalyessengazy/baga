@@ -711,7 +711,8 @@
     "shopsUnknown": "пікірі аз",
     "shopsAll": "Барлық сатушылар",
     "shopsTitle": "Сатушылар",
-    "latestWhen": "Соңғы тексеру бойынша"
+    "latestWhen": "Соңғы тексеру бойынша",
+    "people": "адам BAĞA-мен үнемдеп жүр"
   },
   "dates": {
     "day": "{d} {month}",

@@ -711,7 +711,8 @@
     "shopsUnknown": "мало отзывов",
     "shopsAll": "Все продавцы",
     "shopsTitle": "Продавцы",
-    "latestWhen": "По последней проверке"
+    "latestWhen": "По последней проверке",
+    "people": "уже экономят с BAĞA"
   },
   "dates": {
     "day": "{d} {month}",

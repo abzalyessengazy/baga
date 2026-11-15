@@ -42,6 +42,8 @@ export interface Market {
    * arrows do not shrink on a day the collector checks fewer products (the owner, 15 Nov 2026).
    */
   latest: { compared: number; down: number; up: number };
+  /** «Уже экономят с BAĞA» (the owner, 15 Nov 2026): distinct browsers (events.vid) ever, the team's removed. Browser ids exist since 11 Nov 2026. */
+  people: number;
   /** Products seen in stock on the latest shift and on MARKET_CONFIG.lowsMinDays or more days, whose latest daily low is below every earlier one. */
   newLows: number;
   spread: { products: number; over10: number; over25: number; medianPct: number | null; top: MarketSpread[] };
@@ -175,6 +177,7 @@ export async function getMarket(sql: postgres.Sql, now = new Date()): Promise<Ma
       count(*) filter (where abs(now - was) * 100 >= ${MOVE_MIN_PCT} * was and now < was)::int as down,
       count(*) filter (where abs(now - was) * 100 >= ${MOVE_MIN_PCT} * was and now > was)::int as up
     from x`;
+  const [people] = await sql<{ n: number }[]>`select count(distinct vid)::int as n from events where vid is not null`;
   const deals = await weekMovers(sql, "down", c.deals);
   const picks = await picksOfDay(sql, moves, deals);
   const pick = picks[0] ?? null;
@@ -184,6 +187,7 @@ export async function getMarket(sql: postgres.Sql, now = new Date()): Promise<Ma
     day: moves.day, checked: moves.checked, live: moves.live, asOf: moves.asOf?.toISOString() ?? null, todayCheck,
     compared: moves.compared, down, up, same: moves.compared - down - up,
     latest: latest ?? { compared: 0, down: 0, up: 0 },
+    people: people?.n ?? 0,
     newLows: lows?.n ?? 0,
     spread: { products: spread?.products ?? 0, over10: spread?.over10 ?? 0, over25: spread?.over25 ?? 0, medianPct: spread?.median ?? null, top },
     categories, deals, pick, picks, shops,

@@ -64,6 +64,12 @@ export function MarketReceipt() {
                   <div><dt><StatIcon name="store" />{t("sellers")}</dt><dd><CountUp value={m!.catalog.sellers} format={count} duration={1.2} /></dd></div>
                   <div><dt><StatIcon name="calendar" />{t("days")}</dt><dd><CountUp value={historyDays(m!.catalog.firstDay, m!.day ?? m!.catalog.firstDay ?? "")} format={count} duration={1.2} /></dd></div>
                 </dl>
+                {m!.people > 0 && (
+                  <p className="mk-people">
+                    <span className="mk-big"><CountUp value={m!.people} format={count} duration={1.2} /></span>
+                    <span className="mk-big-k">{t("people")}</span>
+                  </p>
+                )}
                 {/* Every product's latest check against the one before it (Rule L, docs/STATS.md; the owner, 15 Nov): not
                     one day's checks, so the arrows do not shrink on a day the collector checks fewer products. */}
                 {m!.latest?.compared ? (
