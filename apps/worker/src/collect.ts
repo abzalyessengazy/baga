@@ -132,7 +132,9 @@ async function runManual() {
     failed = ${breaker.failed}, aborted_reason = ${aborted}, requests = ${requests} where id = ${runId}`;
   await sendQueued();
   console.log(JSON.stringify({ manual: true, runId, requests, done, failed, aborted }));
-  if (aborted) process.exitCode = 2;
+  // A block on a manual check is not a failed job (the owner, 15 Nov: no GitHub failure emails for it): the run did
+  // what rule 6 says, and the owner report lists it under «Needs you» (manual checks blocked by Kaspi).
+  if (aborted) console.log(`::warning::manual checks stopped: ${aborted}`);
 }
 
 async function main() {
