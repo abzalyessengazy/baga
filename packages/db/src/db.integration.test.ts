@@ -10,7 +10,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { DELIVERY } from "@baga/core";
 import { claimNotifications, markFailed, markSent, startSend, tidyDeliveries } from "./delivery";
-import { requestWatcherEmail, EMAIL_REQUEST_LIMITS, deleteWatcherTracking, listWatched, getWatcherBySecret, accessCodeFor, watcherIdByAccessCode, addWatcherKey, signOutElsewhere } from "./watchers";
+import { requestWatcherEmail, EMAIL_REQUEST_LIMITS, deleteWatcherTracking, listWatched, getWatcherBySecret, accessCodeFor, watcherIdByAccessCode, addWatcherKey, signOutElsewhere, dropUnusedKeys } from "./watchers";
 import { saveSnapshot, queueShortLink } from "./queries";
 import { dayMoves } from "./movers";
 import { requestManualCheck, finishManualCheck, queuedManualChecks, MANUAL_CHECKS } from "./manual";
@@ -463,6 +463,18 @@ describe.skipIf(!url)("database (disposable Postgres)", () => {
       expect(await getWatcherBySecret(sql, key)).toBeNull();
       expect(await watcherIdByAccessCode(sql, code)).toBeNull();
       expect((await getWatcherBySecret(sql, w!.secret_hash))?.id).toBe(w!.id);
+    });
+    it("drops keys never used again after two days, keeps used and fresh ones", async () => {
+      const [w] = await sql<{ id: string }[]>`insert into watchers (secret_hash) values (${hex64()}) returning id`;
+      const scanner = hex64(), reader = hex64(), fresh = hex64();
+      await sql`insert into watcher_keys (secret_hash, watcher_id, created_at, last_seen_at) values
+        (${scanner}, ${w!.id}, now() - interval '3 days', now() - interval '3 days'),
+        (${reader}, ${w!.id}, now() - interval '3 days', now() - interval '1 day'),
+        (${fresh}, ${w!.id}, now() - interval '1 hour', now() - interval '1 hour')`;
+      expect(await dropUnusedKeys(sql)).toBe(1);
+      expect(await getWatcherBySecret(sql, scanner)).toBeNull();
+      expect((await getWatcherBySecret(sql, reader))?.id).toBe(w!.id);
+      expect((await getWatcherBySecret(sql, fresh))?.id).toBe(w!.id);
     });
   });
 

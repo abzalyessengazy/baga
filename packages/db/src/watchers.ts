@@ -62,6 +62,16 @@ export async function addWatcherKey(sql: postgres.Sql, watcherId: string, secret
 }
 
 /**
+ * Browser keys nobody came back with (the owner, 16 Nov): a mail service that opens every link to check it gets a key
+ * and throws its cookie away. A key not seen again within 10 minutes of its creation, two days on, is deleted; a real
+ * reader who lost one gets a new one from the next link. Returns how many went.
+ */
+export async function dropUnusedKeys(sql: postgres.Sql): Promise<number> {
+  const r = await sql`delete from watcher_keys where created_at < now() - interval '2 days' and last_seen_at < created_at + interval '10 minutes'`;
+  return r.count;
+}
+
+/**
  * «Выйти на других устройствах»: every key added by a sign-in link goes, except this browser's own, and the links
  * in earlier messages stop signing in (a new code is set with the next message).
  */

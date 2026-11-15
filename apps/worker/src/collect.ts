@@ -6,7 +6,7 @@
  */
 import { createKaspiClient, buildSnapshot, KaspiHttpError, KaspiParseError, KaspiRequestRefused, canonicalProductUrl, parseKaspiUrl, queuedLinkUrl, variantLinkCode } from "@baga/kaspi";
 import { queuedManualChecks, finishManualCheck, manualPausedUntil, cityChecksDue, saveCityPrice } from "@baga/db";
-import { accessCodeFor, saveSnapshot, claimNotifications, startSend, markSent, markFailed, tidyDeliveries, connectionOptions, requestProduct, attachShortLinkTrackings, weekMovers } from "@baga/db";
+import { accessCodeFor, dropUnusedKeys, saveSnapshot, claimNotifications, startSend, markSent, markFailed, tidyDeliveries, connectionOptions, requestProduct, attachShortLinkTrackings, weekMovers } from "@baga/db";
 import {
   evaluateAlert, priorityFor, newProductTurn, isStablePrice, isCalmPrice, intervalFor, laterVariants, CALM, STABLE, INTERVAL_MINUTES, PRIORITY_ORDER, USER_INTEREST, CATALOG, SEED_MIN_PRICE, backoffMinutes, isSuspiciousJump, type TrackingAlertState,
   KASPI_CRAWL_DELAY_MS, CITIES, CITY_CHECKS, REFERENCE_CITY, type City, isCityDependent, isInVisitWindow, isManualCheckTime, needsPageRefresh, msUntilVisitWindow, targetForDrop, almatyDay, runningSale, type Priority,
@@ -710,6 +710,9 @@ async function queueBoughtAsks() {
 async function cleanUp() {
   await sql`delete from events where at < now() - interval '180 days'`;
   await sql`delete from email_requests where at < now() - interval '2 days'`;
+  // Sign-in keys made by mail scanners and never used again (migration 0032).
+  const keys = await dropUnusedKeys(sql).catch(() => 0);
+  if (keys) console.log(`cleanUp: ${keys} unused sign-in key(s) removed`);
 }
 
 /**
