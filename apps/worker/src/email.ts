@@ -11,7 +11,6 @@ const copy = {
     gap: "До вашей цены",
     below: "Ниже вашей на",
     low30: "Самая низкая за 30 дней",
-    history: "📈 История цены",
     my: "🧾 Мои товары",
     checkNote: "Цены на Kaspi меняются быстро: проверьте перед покупкой.",
     targetLead: "Цена опустилась до вашей.",
@@ -22,7 +21,7 @@ const copy = {
     seller: "Продавец",
     sellers: "Продавцов",
     noOffers: "сейчас нет в продаже",
-    buy: "🛒 Открыть на Kaspi",
+    buy: "Открыть в BAĞA",
     change: "Изменить цену",
     stop: "Не присылать письма",
     footer: "Вы получили это письмо, потому что следите за ценой в BAĞA и подтвердили этот адрес.",
@@ -39,7 +38,6 @@ const copy = {
     gap: "Сіздің бағаңызға дейін",
     below: "Сіздің бағаңыздан төмен",
     low30: "30 күндегі ең төмен баға",
-    history: "📈 Баға тарихы",
     my: "🧾 Менің тауарларым",
     checkNote: "Kaspi-дегі баға тез өзгереді: сатып алар алдында тексеріңіз.",
     targetLead: "Баға сіз белгілеген деңгейге түсті.",
@@ -50,7 +48,7 @@ const copy = {
     seller: "Сатушы",
     sellers: "Сатушылар",
     noOffers: "қазір сатылымда жоқ",
-    buy: "🛒 Kaspi-де ашу",
+    buy: "BAĞA-да ашу",
     change: "Бағаны өзгерту",
     stop: "Хат жібермеу",
     footer: "Бұл хат BAĞA-да бағаны бақылап, осы адресті растағаныңыз үшін келді.",
@@ -72,7 +70,7 @@ export interface AlertEmail {
 /**
  * An alert as a receipt card, the 3-day note's look (16 Nov, the owner: «pretty, with icons, easy to read and come
  * back»): the photo, the name, today's price large, the person's target and how far apart they are, the 30-day low,
- * the Kaspi button (Kaspi red, as on the site) and the way back to the history and «Мои товары». Observed prices only.
+ * «Открыть в BAĞA» (no Kaspi button: the owner, 16 Nov) and «Мои товары». Observed prices only.
  */
 export function renderAlertEmail(p: AlertEmail) {
   const c = copy[p.locale];
@@ -113,8 +111,8 @@ ${gap ? `<div style="margin-top:8px"><span style="display:inline-block;padding:4
 </td></tr>
 ${rows.length ? `<tr><td style="padding-top:16px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0">${rows.map(row).join("")}</table></td></tr>` : ""}
 <tr><td style="padding-top:14px;font-family:${sans};font-size:14px;line-height:20px;color:#3d4148;text-align:center">${note}</td></tr>
-<tr><td style="padding:22px 0 6px;text-align:center"><a href="${escapeHtml(p.kaspiUrl)}" style="display:inline-block;background:#f14635;color:#ffffff;font-family:${sans};font-size:16px;font-weight:700;padding:14px 30px;text-decoration:none;border-radius:999px">${c.buy}</a></td></tr>
-<tr><td style="padding-top:10px;text-align:center;font-family:${sans};font-size:14px"><a href="${escapeHtml(p.productUrl)}" style="color:#5b47e0;text-decoration:none;font-weight:600">${c.history}</a>${p.myUrl ? ` &nbsp;·&nbsp; <a href="${escapeHtml(p.myUrl)}" style="color:#5b47e0;text-decoration:none;font-weight:600">${c.my}</a>` : ""}</td></tr>
+<tr><td style="padding:22px 0 6px;text-align:center"><a href="${escapeHtml(p.productUrl)}" style="display:inline-block;background:#5b47e0;color:#ffffff;font-family:${sans};font-size:16px;font-weight:700;padding:14px 30px;text-decoration:none;border-radius:999px">${c.buy}</a></td></tr>
+${p.myUrl ? `<tr><td style="padding-top:10px;text-align:center;font-family:${sans};font-size:14px"><a href="${escapeHtml(p.myUrl)}" style="color:#5b47e0;text-decoration:none;font-weight:600">${c.my}</a></td></tr>` : ""}
 <tr><td style="padding-top:8px;text-align:center;font-family:${sans};font-size:13px"><a href="${escapeHtml(p.productUrl)}" style="color:#5d6168">${c.change}</a></td></tr>
 <tr><td style="padding-top:24px;border-top:1px dashed #d9dbe0;font-family:${sans};font-size:11px;line-height:16px;color:#8a8e95;text-align:center">${c.footer}<br><br><a href="${escapeHtml(p.stopUrl)}" style="color:#5d6168">${c.stop}</a></td></tr>
 </table></td></tr></table></body></html>`;
@@ -125,7 +123,7 @@ ${rows.length ? `<tr><td style="padding-top:16px"><table role="presentation" wid
     ...(gap ? [`${gap.label}: ${gap.value}`] : []),
     ...rows.map(([k, v]) => `${k.replace(/^\S+ /, "")}: ${plain(v)}`),
     "", note.replace(/^\S+ /, ""),
-    "", `${c.buy.replace(/^\S+ /, "")}: ${p.kaspiUrl}`, `${c.history.replace(/^\S+ /, "")}: ${p.productUrl}`, ...(p.myUrl ? [`${c.my.replace(/^\S+ /, "")}: ${p.myUrl}`] : []),
+    "", `${c.buy}: ${p.productUrl}`, ...(p.myUrl ? [`${c.my.replace(/^\S+ /, "")}: ${p.myUrl}`] : []),
     `${c.stop}: ${p.stopUrl}`, "", c.footer,
   ].join("\n");
   return { subject: first ? c.firstSubject(p.title) : c.targetSubject(p.title), html, text };
