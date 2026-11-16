@@ -59,9 +59,10 @@ export async function saveSnapshot(
   snap: ProductSnapshot,
   slug: string | null,
   runId: number | null,
-  opts: { pageFetched?: boolean } = {},
+  opts: { pageFetched?: boolean; source?: "kaspi" | "marketparser" } = {},
 ) {
   const pageFetched = opts.pageFetched ?? true;
+  const source = opts.source ?? "kaspi";
   return sql.begin(async (tx) => {
     const [p] = await tx<{ id: number; marketplace_id: number }[]>`
       insert into products (marketplace_id, external_id, slug, title, image_url, category_path, page_checked_at, kaspi_reviews, kaspi_rating)
@@ -97,8 +98,8 @@ export async function saveSnapshot(
       prev.in_stock !== snap.inStock;
     const heartbeatDue = !prev || prev.heartbeat_due;
     if (changed || heartbeatDue) {
-      await tx`insert into price_observations (product_id, min_price, median_price, offer_count, in_stock, run_id)
-               values (${productId}, ${snap.minPrice}, ${median}, ${snap.offerCount}, ${snap.inStock}, ${runId})`;
+      await tx`insert into price_observations (product_id, min_price, median_price, offer_count, in_stock, run_id, source)
+               values (${productId}, ${snap.minPrice}, ${median}, ${snap.offerCount}, ${snap.inStock}, ${runId}, ${source})`;
     }
     await tx`
       insert into product_state (product_id, current_min_price, offer_count, in_stock, last_checked_at, last_changed_at)

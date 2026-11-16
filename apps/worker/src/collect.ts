@@ -5,7 +5,8 @@
  * target alerts to Telegram right after each check, queued emails at the end. Started by .github/workflows/collect.yml at 03:50 UTC; waits for 04:01.
  */
 import { createKaspiClient, buildSnapshot, KaspiHttpError, KaspiParseError, KaspiRequestRefused, canonicalProductUrl, parseKaspiUrl, queuedLinkUrl, variantLinkCode } from "@baga/kaspi";
-import { queuedManualChecks, finishManualCheck, manualPausedUntil, cityChecksDue, saveCityPrice } from "@baga/db";
+import { queuedManualChecks, finishManualCheck, MANUAL_CHECKS, cityChecksDue, saveCityPrice } from "@baga/db";
+import { createMarketParser, snapshotOf, MarketParserError } from "./marketparser";
 import { accessCodeFor, dropUnusedKeys, saveSnapshot, claimNotifications, startSend, markSent, markFailed, tidyDeliveries, connectionOptions, requestProduct, attachShortLinkTrackings, weekMovers } from "@baga/db";
 import {
   evaluateAlert, priorityFor, newProductTurn, isStablePrice, isCalmPrice, isSteadyPrice, intervalFor, laterVariants, CALM, STABLE, STEADY, INTERVAL_MINUTES, PRIORITY_ORDER, USER_INTEREST, CATALOG, SEED_MIN_PRICE, backoffMinutes, isSuspiciousJump, type TrackingAlertState,
@@ -21,10 +22,9 @@ import { renderChannelPost } from "./channel";
 
 const sql = postgres(env.databaseUrl(), { max: 2, ...connectionOptions(env.databaseUrl()) });
 /**
- * `--manual` (DECISIONS.md 2026-11-09, CLAUDE.md rule 6): only the products visitors asked for outside the window
- * (manual_checks, at most 40 a day), started by .github/workflows/manual.yml when a visitor asks. Never in the
- * collector's minutes (isManualCheckTime: not 03:55–08:50 UTC), the same pacing, User-Agent and breaker; the
- * first 403/429 pauses manual checks until 14:00 Almaty the next day (MANUAL_CHECKS.resumeAtAlmaty).
+ * `--manual` (DECISIONS.md 2026-11-09, 2026-11-17; CLAUDE.md rule 6): the products visitors asked for outside the
+ * window (manual_checks, at most 40 a day), started by .github/workflows/manual.yml when a visitor asks. Since
+ * 17 Nov 2026 MarketParser checks them (runManual); this process sends no Kaspi request in manual mode.
  */
 const MANUAL = process.argv.includes("--manual");
 // Every request this run makes (page, offers, re-checks, alert confirmations) goes through this gate.
@@ -37,12 +37,11 @@ const kaspi = createKaspiClient({
   // The pacing (robots.txt's 10 s; the 5 s test of 14–15 Nov ended on a 403/429) plus 0.2 s, no random extra (DECISIONS.md 2026-11-10 "More checks from the same rules":
   // the 0-2 s jitter cost ~8% of the day's requests and protected nothing). Gaps are measured start to start.
   minIntervalMs: KASPI_CRAWL_DELAY_MS + 200, jitterMs: 0,
-  // Manual checks say so in the User-Agent: a single page a visitor asked for, not the daily crawl.
-  ...(MANUAL ? { userAgent: `${process.env.KASPI_USER_AGENT ?? "BAGA price history bot (+contact: hello@bagaapp.com)"}; user-requested check` } : {}),
   beforeRequest: () => {
     if (breaker.openReason) throw new KaspiRequestRefused(breaker.openReason);
-    if (MANUAL ? !isManualCheckTime(new Date()) : !isInVisitWindow(new Date(), 0))
-      throw new KaspiRequestRefused(MANUAL ? "inside the collector's minutes" : "outside the visit window");
+    // Manual mode never asks Kaspi itself (MarketParser does, DECISIONS.md 2026-11-17).
+    if (MANUAL) throw new KaspiRequestRefused("manual checks go through MarketParser");
+    if (!isInVisitWindow(new Date(), 0)) throw new KaspiRequestRefused("outside the visit window");
     requests++;
   },
 });
@@ -60,7 +59,11 @@ type DueRow = {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-/** Manual mode: the visitors' requests, then this run ends (a later request starts a new one). */
+/**
+ * Manual mode (DECISIONS.md 2026-11-17): the visitors' requests go to MarketParser, which checks the Kaspi cards by
+ * their product number; BAĞA itself sends no Kaspi request here. A link whose product number we do not know yet, a
+ * result for another card or no result at all waits for the collector's morning window ('collector').
+ */
 async function runManual() {
   const utcMin = () => { const d = new Date(); return d.getUTCHours() * 60 + d.getUTCMinutes(); };
   if (!isManualCheckTime(new Date(), WINDOW_MARGIN_MS)) {
@@ -75,41 +78,40 @@ async function runManual() {
       return;
     }
   }
-  const paused = await manualPausedUntil(sql);
-  if (paused) { console.log(JSON.stringify({ manual: `paused until ${paused.toISOString()} after a 403/429` })); return; }
   if (!(await queuedManualChecks(sql, 1)).length) { console.log(JSON.stringify({ manual: "nothing queued" })); return; }
+  const mpKey = process.env.MARKETPARSER_API_KEY?.trim();
+  const mpCampaign = process.env.MARKETPARSER_CAMPAIGN_ID?.trim();
+  if (!mpKey || !mpCampaign) {
+    for (const r of await queuedManualChecks(sql, 100)) await finishManualCheck(sql, r.id, "collector", "MarketParser is not set up");
+    console.log(JSON.stringify({ manual: "MarketParser is not set up: the collector checks them in its window" }));
+    return;
+  }
+  const mp = createMarketParser(mpKey, mpCampaign);
 
   const [run] = await sql<{ id: number }[]>`insert into collection_runs (runner) values ('manual') returning id`;
   const runId = run!.id;
-  // Technodom's run pauses while a manual run is open (CLAUDE.md rule 6a: never in parallel with a Kaspi request);
-  // give a Technodom request already under way time to finish.
-  await sleep(12_000);
-  let done = 0, failed = 0;
+  let done = 0, waiting = 0, failed = 0;
+  let aborted: string | null = null;
   let idleSince = Date.now();
   const deadline = Date.now() + 20 * 60_000;
-  while (!breaker.openReason && Date.now() < deadline && isManualCheckTime(new Date(), WINDOW_MARGIN_MS)) {
-    const rows = await queuedManualChecks(sql);
+  while (!aborted && Date.now() < deadline && isManualCheckTime(new Date(), WINDOW_MARGIN_MS)) {
+    const rows = await queuedManualChecks(sql, MANUAL_CHECKS.perDay);
     if (!rows.length) {
       if (Date.now() - idleSince > 90_000) break; // stay a little for requests made while this run started
       await sleep(15_000);
       continue;
     }
+    const batch: { id: number; q: Queued }[] = [];
     for (const r of rows) {
-      if (breaker.openReason || !isManualCheckTime(new Date(), WINDOW_MARGIN_MS)) break;
-      // A queued link (phone links to clothes and shoes, or a short link Kaspi did not answer from the website):
-      // find its product number first, 1-2 requests (migration 0022).
       let externalId = r.externalId;
       if (r.linkCode) {
-        const [link] = await sql<{ code: string; path: string; status: string; external_id: string | null }[]>`
-          select code, path, status, external_id from short_link_queue where code = ${r.linkCode}`;
+        const [link] = await sql<{ status: string; external_id: string | null }[]>`
+          select status, external_id from short_link_queue where code = ${r.linkCode}`;
         if (!link || link.status === "failed") { await finishManualCheck(sql, r.id, "failed", "link failed"); failed++; continue; }
-        const found = link.status === "resolved" ? link.external_id : await resolveLink(link);
-        if (found === "refused") break;
-        if (!found) {
-          await finishManualCheck(sql, r.id, breaker.blocked > 0 ? "blocked" : "failed", breaker.openReason ?? "link did not resolve");
-          failed++; continue;
+        if (link.status !== "resolved" || !link.external_id) {
+          await finishManualCheck(sql, r.id, "collector", "the link waits for the collector"); waiting++; continue;
         }
-        externalId = found;
+        externalId = link.external_id;
       }
       if (!externalId) { await finishManualCheck(sql, r.id, "failed", "no product number"); failed++; continue; }
       const [have] = await sql`select 1 from products where external_id = ${externalId}`;
@@ -117,25 +119,54 @@ async function runManual() {
       const [q] = await sql<Queued[]>`select external_id, slug, source, min_price from seed_queue
         where external_id = ${externalId} and status = 'pending'`;
       if (!q) { await finishManualCheck(sql, r.id, "failed", "not in the queue"); failed++; continue; }
-      if (await addQueued(q, runId)) {
-        // Pharmacy and baby care: the other cities' sellers too, so a visitor outside Almaty sees their city today.
-        const [p] = await sql<{ id: number; category_path: string[] }[]>`select id, category_path from products where external_id = ${externalId}`;
-        if (p && isCityDependent(p.category_path)) await checkCities(runId, 3, p.id);
-        await finishManualCheck(sql, r.id, "done"); done++;
+      if (!batch.some((b) => b.q.external_id === q.external_id)) batch.push({ id: r.id, q });
+      else await finishManualCheck(sql, r.id, "done", "same product in this batch");
+    }
+    if (batch.length) {
+      try {
+        const reportId = await mp.checkProducts(batch.map((b) => ({ externalId: b.q.external_id, name: b.q.slug || b.q.external_id })));
+        let finished = false;
+        for (const until = Date.now() + 10 * 60_000; Date.now() < until; ) {
+          await sleep(10_000);
+          const r = await mp.report(reportId);
+          if (r.isSuccessfullyFinished) { finished = true; break; }
+          if (r.status === "ERROR") throw new MarketParserError(`report ${reportId} failed`);
+        }
+        if (!finished) throw new MarketParserError(`report ${reportId} did not finish in 10 minutes`);
+        const results = new Map((await mp.results(reportId)).map((p) => [p.ourId ?? "", p]));
+        const names = [...new Set([...results.values()].flatMap((p) => p.offers.map((o) => o.shopName?.trim()).filter(Boolean)))];
+        const knownRows = names.length ? await sql<{ external_id: string; name: string; rating: number | null; reviews: number | null }[]>`
+          select distinct on (name) external_id, name, rating, reviews from sellers
+          where name = any(${names}) and external_id not like 'name:%' order by name, id desc` : [];
+        const known = new Map(knownRows.map((s) => [s.name, { externalId: s.external_id, name: s.name, rating: s.rating, reviews: s.reviews }]));
+        for (const b of batch) {
+          const res = results.get(b.q.external_id);
+          const got = res ? snapshotOf(res, b.q.external_id, known) : { skip: "no result" };
+          if ("skip" in got) {
+            // The seed_queue row stays: the collector checks the product itself in its window.
+            await finishManualCheck(sql, b.id, "collector", `MarketParser: ${got.skip}`); waiting++; continue;
+          }
+          const { productId } = await saveSnapshot(sql, got.snap, b.q.slug ?? got.slug, runId, { pageFetched: false, source: "marketparser" });
+          await sql`update products set last_viewed_at = now() where id = ${productId}`;
+          await afterSave(productId, b.q.external_id, got.snap.minPrice, got.snap.offers[0]?.sellerName ?? null);
+          await reschedule(productId, got.snap.minPrice);
+          await sql`delete from seed_queue where external_id = ${b.q.external_id}`;
+          await finishManualCheck(sql, b.id, "done"); done++;
+        }
+      } catch (e) {
+        aborted = `MarketParser: ${String(e).slice(0, 300)}`;
+        for (const b of batch) await finishManualCheck(sql, b.id, "collector", aborted);
+        waiting += batch.length;
       }
-      else if (breaker.blocked > 0) { await finishManualCheck(sql, r.id, "blocked", breaker.openReason); failed++; }
-      else { await finishManualCheck(sql, r.id, "failed", "fetch failed; the collector tries again in its window"); failed++; }
     }
     idleSince = Date.now();
   }
-  const aborted = breaker.openReason;
-  await sql`update collection_runs set finished_at = now(), checked = ${breaker.checked}, changed = 0,
-    failed = ${breaker.failed}, aborted_reason = ${aborted}, requests = ${requests} where id = ${runId}`;
+  await sql`update collection_runs set finished_at = now(), checked = ${done}, changed = 0,
+    failed = ${failed}, aborted_reason = ${aborted}, requests = 0 where id = ${runId}`;
   await sendQueued();
-  console.log(JSON.stringify({ manual: true, runId, requests, done, failed, aborted }));
-  // A block on a manual check is not a failed job (the owner, 15 Nov: no GitHub failure emails for it): the run did
-  // what rule 6 says, and the owner report lists it under «Needs you» (manual checks blocked by Kaspi).
-  if (aborted) console.log(`::warning::manual checks stopped: ${aborted}`);
+  const left = await mp.remainingUnits().catch(() => null);
+  console.log(JSON.stringify({ manual: true, source: "marketparser", runId, done, waiting, failed, aborted, marketParserChecksLeft: left }));
+  if (aborted) console.log(`::warning::manual checks via MarketParser stopped: ${aborted}`);
 }
 
 async function main() {
