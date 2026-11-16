@@ -423,3 +423,10 @@ Vercel's free plan was 75% through its CPU (4 h a month) on 16 Nov with about 10
 - An alert's product link (`/api/my/enter`) refreshes that product's cached page first, so the alert's price is what the page shows. A cached page is never served more than a day old (`expireTime`). A database error is not cached.
 - The sitemap lists only products opened in the last 60 days or tracked (about 1 450, was 3 071). robots.txt closes the site to SEO-tool crawlers (Ahrefs, Semrush, Majestic and the like) and closes filtered `/explore?` views and the waiting pages to all crawlers.
 - The firewall's Bot Protection runs in Log mode and AI bots are denied (the owner, in Vercel). Challenge mode waits for a bypass on `/api/telegram` and `/api/digest`.
+
+## 2026-11-16 Security check: first fixes
+A full check on 16 Nov found no exposed secrets or injection paths; these fixes followed (the owner's go).
+- next-intl 4.3.9 → 4.14.9 (an open-redirect advisory), and postcss forced to 8.5.32 under Next (build-time advisories). Left as they are: sharp under Next (Vercel resizes images on its own servers, so the vulnerable copy does not run in production) and zod 3 in the Kaspi parser (it checks Kaspi's responses, not visitor input; zod 4 is a rewrite).
+- Every response forbids framing by other sites (`frame-ancestors 'none'`, `X-Frame-Options: DENY`) and type guessing (`nosniff`), sends only the origin to other sites, and turns off camera, microphone and location. No full CSP yet: the inline scripts and Turnstile need nonces first.
+- Migration 0033: Supabase's public roles `anon` and `authenticated` lose all rights in `public`, and the four policies from 0001 written for Supabase Auth (never adopted) are dropped. The site and the collector connect to Postgres directly and are not affected.
+- Next: the site moves off the `postgres` account to a role with only the rights it needs (the owner sets its password).
