@@ -1294,3 +1294,18 @@ span.ticker-thumb { background: var(--paper-shade); box-shadow: none; }
 
 /* The coupon on the cached product page while this visitor's own tracking is read (TrackPanelLive). */
 .track-wait { min-height: 320px; }
+
+/* Tracking with no Telegram and no email (AlertsBar, 16 Nov): a bar under the header on every page but «Мои товары». */
+.alerts-bar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; justify-content: center;
+  margin: 0 auto; padding: 10px 16px; max-width: 1180px;
+  background: color-mix(in srgb, var(--stamp) 8%, var(--paper)); border: 2px solid var(--stamp); border-radius: 10px;
+  color: var(--ink); animation: pop-in 0.35s 0.6s both;
+}
+.alerts-bar-text { margin: 0; font: 600 0.9375rem/1.35 var(--font-ui); }
+.alerts-bar-actions { display: flex; align-items: center; gap: 12px; }
+.alerts-bar-tg { width: auto; margin: 0; padding: 9px 16px; animation: ch-pulse 1.8s ease-out 1.2s 3; }
+.alerts-bar-mail { font: 600 0.875rem/1.2 var(--font-ui); color: var(--stamp); white-space: nowrap; }
+.alerts-bar-close { border: 0; background: none; color: var(--ink-soft); font-size: 1.25rem; line-height: 1; padding: 4px 6px; cursor: pointer; }
+@media (max-width: 767px) { .alerts-bar { margin: 0 16px; justify-content: flex-start; } }
+@media (prefers-reduced-motion: reduce) { .alerts-bar, .alerts-bar-tg { animation: none; } }

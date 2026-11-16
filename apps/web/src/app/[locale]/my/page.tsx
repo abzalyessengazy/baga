@@ -62,7 +62,10 @@ export default async function MyPage({ params }: Props) {
         {found && items.length > 0 && !found.watcher.telegramChatId && !found.watcher.emailConfirmed && (
           <div className="channel-needed my-alert" role="alert">
             <p className="channel-title">{t("noChannelTitle")}</p>
-            <p className="channel-text" style={{ margin: 0 }}>{t("noChannelText")}</p>
+            <p className="channel-text">{t("noChannelText")}</p>
+            {/* The way out right in the warning (16 Nov): the buttons below sit under the whole list. */}
+            {tgUrl && <a className="btn btn-stamp is-pulse" href={tgUrl} target="_blank" rel="noopener">{t("telegramConnect")}</a>}
+            {emailReady() && <p className="note"><a href="#alerts">{t("noChannelEmail")}</a></p>}
           </div>
         )}
         {items.filter((i) => i.askBought).map((i) => (
@@ -83,7 +86,7 @@ export default async function MyPage({ params }: Props) {
         )}
         {found && (
           <>
-            <hr className="rule" />
+            <hr className="rule" id="alerts" />
             {found.watcher.telegramChatId ? (
               <p className="note">{t("telegramLinked")}</p>
             ) : tgUrl ? (

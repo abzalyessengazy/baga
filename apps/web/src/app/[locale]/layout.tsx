@@ -7,6 +7,7 @@ import { notFound } from "next/navigation";
 import type { Metadata, Viewport } from "next";
 import { routing } from "@/i18n/routing";
 import { SiteHeader } from "@/components/SiteHeader";
+import { AlertsBar } from "@/components/AlertsBar";
 import { SaleBanner } from "@/components/SaleBanner";
 import { SiteFooter } from "@/components/SiteFooter";
 import { Analytics } from "@/components/Analytics";
@@ -49,6 +50,7 @@ export default async function LocaleLayout({ children, params }: { children: Rea
         <NextIntlClientProvider messages={messages} locale={locale}>
           <SaleBanner />
           <SiteHeader />
+          <AlertsBar />
           {children}
           <SiteFooter />
           <Analytics />

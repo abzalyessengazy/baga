@@ -430,3 +430,6 @@ A full check on 16 Nov found no exposed secrets or injection paths; these fixes 
 - Every response forbids framing by other sites (`frame-ancestors 'none'`, `X-Frame-Options: DENY`) and type guessing (`nosniff`), sends only the origin to other sites, and turns off camera, microphone and location. No full CSP yet: the inline scripts and Turnstile need nonces first.
 - Migration 0033: Supabase's public roles `anon` and `authenticated` lose all rights in `public`, and the four policies from 0001 written for Supabase Auth (never adopted) are dropped. The site and the collector connect to Postgres directly and are not affected.
 - Next: the site moves off the `postgres` account to a role with only the rights it needs (the owner sets its password).
+
+## 2026-11-16 Alerts bar
+30 of the 45 people who started tracking on 15–16 Nov connected neither Telegram nor email, so no alert can reach them. A bar under the header on every page (not «Мои товары», which says it itself, nor /admin) tells them how many products they track and offers the bot in one tap, or email in «Мои товары»; «Скрыть» hides it until the next visit, and it disappears once a channel is connected. It reads `alerts` from `/api/my/profile`, which the page already asked for; the parts of a page now share that one request. «Мои товары» puts the Telegram button inside its own warning.

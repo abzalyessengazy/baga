@@ -3,7 +3,7 @@ import { cleanNickname, isAvatar, isInterest, isSaveGoal, isVisitReason, levelFo
 import { getSql, getProfile, getProfileStats, saveProfile, setProfileFlags } from "@baga/db";
 import { allow } from "@/lib/rateLimit";
 import { clientIp } from "@/lib/turnstile";
-import { currentWatcher, ensureWatcher } from "@/lib/watcher";
+import { currentWatcher, ensureWatcher, telegramConnectUrl } from "@/lib/watcher";
 
 const headers = { "Cache-Control": "private, no-store" };
 
@@ -19,7 +19,11 @@ export async function GET() {
   try {
     const profile = await getProfile(sql, found.watcher.id);
     const stats = await getProfileStats(sql, found.watcher.id);
-    return NextResponse.json({ watcher: true, profile, stats, level: levelFor(stats.tracked) }, { headers });
+    // Where alerts can go, for the reminder bar of people who track products with neither (AlertsBar, 16 Nov).
+    const w = found.watcher;
+    const alerts = { telegram: !!w.telegramChatId, email: !!w.emailConfirmed,
+      telegramUrl: !w.telegramChatId && !w.emailConfirmed && stats.tracked > 0 ? await telegramConnectUrl(w) : null };
+    return NextResponse.json({ watcher: true, profile, stats, level: levelFor(stats.tracked), alerts }, { headers });
   } catch (e) {
     console.error(`[profile] ${e}`);
     return NextResponse.json({ watcher: true, profile: null }, { headers });
