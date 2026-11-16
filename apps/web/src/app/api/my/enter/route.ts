@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 import { addWatcherKey, getSql, watcherIdByAccessCode } from "@baga/db";
 import { allow } from "@/lib/rateLimit";
@@ -18,7 +19,12 @@ const safeTo = (v: string | null, locale: "ru" | "kk") => (v && /^\/(ru|kk)(\/[^
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const locale = url.searchParams.get("l") === "kk" ? "kk" : "ru";
-  const res = NextResponse.redirect(new URL(safeTo(url.searchParams.get("to"), locale), url), 303);
+  const to = safeTo(url.searchParams.get("to"), locale);
+  // An alert's product link opens the price that alert is about, not the cached page of up to an hour ago
+  // (DECISIONS.md, 2026-11-16 "Cached product pages").
+  const product = /^\/(ru|kk)\/p\/(\d{5,12})(?:[?#]|$)/.exec(to);
+  if (product) revalidatePath(`/${product[1]}/p/${product[2]}`);
+  const res = NextResponse.redirect(new URL(to, url), 303);
   res.headers.set("Referrer-Policy", "no-referrer");
   res.headers.set("Cache-Control", "private, no-store");
   const code = url.searchParams.get("c");

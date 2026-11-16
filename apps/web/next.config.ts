@@ -10,6 +10,9 @@ const config: NextConfig = {
   poweredByHeader: false,
   // Local verification builds can use a separate folder so they never disturb a running `pnpm dev`.
   distDir: process.env.BAGA_DIST_DIR || ".next",
+  // A cached page (product pages: an hour) is never served more than a day old while it is refreshed (DECISIONS.md,
+  // 2026-11-16 "Cached product pages"); Next's default would allow a year.
+  expireTime: 86_400,
   // Inline the small stylesheet into the HTML: one less round trip before first paint on mobile.
   experimental: { inlineCss: true },
   // Link previews: Next streams page metadata to the end of the body for clients it does not know as bots, where

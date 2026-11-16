@@ -1,26 +1,32 @@
 import { notFound } from "next/navigation";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import type { Metadata } from "next";
-import { isCityDependent, REFERENCE_CITY, CITY_LIST, type City, priceNotes, computeVerdict, formatTenge, moveDirection, nextVisitWindowDay, isValidSlug, slugName, isInVisitWindow } from "@baga/core";
-import { getProductView, queuedSlug, collectorRunning } from "@/lib/product";
-import { manualRunning } from "@/lib/manual";
-import { QueuedWatcher } from "@/components/QueuedWatcher";
+import { isCityDependent, REFERENCE_CITY, CITY_LIST, type City, priceNotes, computeVerdict, formatTenge, moveDirection } from "@baga/core";
+import { getProductView } from "@/lib/product";
+import { ToWait } from "@/components/ProductReady";
 import { alreadyTracked } from "@/lib/catalog";
 import { Related } from "@/components/Related";
 import { PriceChart } from "@/components/PriceChart";
-import { TrackPanel } from "@/components/TrackPanel";
+import { TrackPanelLive } from "@/components/TrackPanelLive";
 import { SaleCheck } from "@/components/SaleCheck";
-import { ProductLookup } from "@/components/ProductLookup";
-import { trackInitial } from "@/lib/watcher";
-import { PrintIn, StampIn } from "@/components/PrintIn";
+import { botUsername, emailReady } from "@/lib/watcher";
 import { dayMonth, type DatesT } from "@/lib/dayMonth";
 import { jsonLdHtml } from "@/lib/jsonLd";
 import { SellerTable, type SellerRow } from "@/components/SellerTable";
 import { CityPicker } from "@/components/CityPicker";
 import { CityProvider, CityOnly } from "@/components/CityView";
-import { visitorCity, cityPrice, cityHistory, cityViewed } from "@/lib/city";
+import { cityPrice, cityHistory } from "@/lib/city";
 
-type Props = { params: Promise<{ locale: string; id: string }>; searchParams: Promise<{ s?: string | string[]; city?: string | string[] }> };
+type Props = { params: Promise<{ locale: string; id: string }> };
+
+/**
+ * Cached for an hour and shared by every visitor (DECISIONS.md, 2026-11-16 "Cached product pages"; the owner, 16 Nov:
+ * Vercel's free CPU was 75% used, mostly by crawlers rendering product pages). So nothing here depends on who asks: the
+ * visitor's own tracking and city are read in the browser (TrackPanelLive, CityProvider). Prices change once a day;
+ * an alert's link and a newly priced product refresh the copy at once (/api/my/enter, /api/product-fresh).
+ */
+export const revalidate = 3600;
+export function generateStaticParams() { return []; }
 const fmtDate = (iso: string, locale: string) =>
   new Intl.DateTimeFormat(locale === "kk" ? "kk-KZ" : "ru-KZ", { day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Almaty" }).format(new Date(iso));
 /** "5 қар, 12:19" / "5 ноя, 12:19" (Almaty time); month names from messages, browsers lack Kazakh ones. */
@@ -47,59 +53,24 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
-export default async function ProductPage({ params, searchParams }: Props) {
+export default async function ProductPage({ params }: Props) {
   const { locale, id } = await params;
   setRequestLocale(locale);
   if (!/^\d{5,12}$/.test(id)) notFound();
   const [t, tr, tv, tdates] = await Promise.all([getTranslations("product"), getTranslations("receipt"), getTranslations("verdict"), getTranslations("dates")]);
   const td = tdates as unknown as DatesT;
   const r = await getProductView(id);
+  // No price yet (DECISIONS.md, 2026-11-16 "Cached product pages"): this page is cached, so the lookup and the queue,
+  // which change by the minute, live on /p/<id>/wait (rendered per request); the browser goes there at once.
   if (!r.ok && (r.reason === "unknown" || r.reason === "queued")) {
-    // Not tracked yet. Everything here comes from our database or the visitor's own link; no Kaspi request.
-    const fromQuery = (await searchParams).s;
-    const s = typeof fromQuery === "string" && isValidSlug(fromQuery) ? fromQuery : await queuedSlug(id);
-    const name = s ? slugName(s) : null;
-    const tracked = await alreadyTracked(id, s);
-    // During the visit window with the collector running, visitor requests are fetched within minutes:
-    // say so and refresh until the product page exists. Otherwise "today"/"tomorrow".
-    const live = r.reason === "queued" && isInVisitWindow(new Date()) && (await collectorRunning());
-    // Outside the window: a manual check the visitor asked for (DECISIONS.md 2026-11-09) runs within about a minute.
-    const manual = r.reason === "queued" && !live && (await manualRunning({ externalId: id }));
-    return (
-      <main className="wrap untracked">
-        <PrintIn className="receipt">
-          {r.reason === "unknown"
-            ? <p className="receipt-sub" style={{ margin: 0 }}>{t("lookupNote")}</p>
-            : <StampIn>{t("queuedStamp")}</StampIn>}
-          {name && <p className="untracked-name">{t("fromLink", { name })}</p>}
-          <hr className="rule" />
-          {r.reason === "unknown"
-            ? <ProductLookup id={id} slug={s} />
-            : (
-              // "today"/"tomorrow" follows the collector's daily run (Kaspi's robots.txt window); times are not shown.
-              live || manual ? (
-                <>
-                  <p className="untracked-status" role="status">{live ? t("fetchingNow") : t("manualChecking")}</p>
-                  <QueuedWatcher />
-                </>
-              ) : (
-                <p className="untracked-status" role="status">{nextVisitWindowDay(new Date()) === "today" ? t("queuedToday") : t("queuedTomorrow")}</p>
-              )
-            )}
-          <a className="kaspi-link" href={`/go/${id}`} target="_blank" rel="noopener">{t("openOnKaspi")}</a>
-        </PrintIn>
-        {/* Queued: the visitor can set a price now; the first price goes to Telegram when the collector gets it. */}
-        {r.reason === "queued" && (
-          <TrackPanel productId={id} current={null} initial={await trackInitial(id)}
-            related={<Related lists={tracked} locale={locale as "ru" | "kk"} />} />
-        )}
-      </main>
-    );
+    return <main className="wrap untracked"><ToWait id={id} /></main>;
   }
+  // A database hiccup must not be cached for an hour: an error is not stored, the next visit tries again.
+  if (!r.ok && r.reason === "unavailable") throw new Error(`product ${id} unavailable`);
   if (!r.ok) {
     return (
       <main className="wrap error-page">
-        <p className="subline" role="alert">{r.reason === "not_found" ? t("notFound") : t("unavailable")}</p>
+        <p className="subline" role="alert">{t("notFound")}</p>
       </main>
     );
   }
@@ -109,13 +80,10 @@ export default async function ProductPage({ params, searchParams }: Props) {
   // visitor's city replaces Almaty's price, sellers and history, and a tracking set there is judged by that city's
   // prices; the verdict stays Almaty's (the reference city).
   const local = !v.delisted && isCityDependent(v.categoryPath);
-  const city = local ? await visitorCity((await searchParams).city) : REFERENCE_CITY;
   // Every city's prices are on the page (CityView): a tap on another city switches without a request (12 Nov 2026).
   const cities: City[] = local ? [...CITY_LIST] : [REFERENCE_CITY];
   const cityPrices = new Map(await Promise.all(cities.map(async (c) => [c, await cityPrice(v.externalId, c)] as const)));
   const cityHistories = new Map(await Promise.all(cities.map(async (c) => [c, await cityHistory(v.externalId, c)] as const)));
-  // Only cities people choose are asked for a product's sellers (the owner, 14 Nov).
-  if (local) cityViewed(v.externalId, city);
   /** What the chart says before it has two days to draw: never «starts today» for a product we have checked for days. */
   const emptyHistory = (h: { day: string }[], inCity: string, sold: boolean) => {
     const since = fmtDate(v.observedSince.slice(0, 10), locale);
@@ -201,7 +169,7 @@ export default async function ProductPage({ params, searchParams }: Props) {
   return (
     <main className="wrap product-grid">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdHtml(jsonLd) }} />
-      <CityScope local={local} city={city}>
+      <CityScope local={local} productId={v.externalId}>
       <article className="receipt product-receipt">
         {/* Top row: people watching (real active trackings, from the first one) and the way to Kaspi. */}
         <div className="product-top">
@@ -335,7 +303,7 @@ export default async function ProductPage({ params, searchParams }: Props) {
       </CityScope>
       {/* Nothing to track on a delisted product: no alert can ever fire. */}
       {!v.delisted && (
-        <TrackPanel productId={v.externalId} current={v.minPrice} initial={await trackInitial(v.externalId)}
+        <TrackPanelLive productId={v.externalId} current={v.minPrice} ready={{ botReady: !!botUsername(), emailReady: emailReady() }}
           related={<Related lists={await alreadyTracked(v.externalId, null, 6, v.title)} locale={L} />} />
       )}
     </main>
@@ -343,6 +311,6 @@ export default async function ProductPage({ params, searchParams }: Props) {
 }
 
 /** The city choice for the receipt, only on city-dependent goods. */
-function CityScope({ local, city, children }: { local: boolean; city: City; children: React.ReactNode }) {
-  return local ? <CityProvider initial={city}>{children}</CityProvider> : <>{children}</>;
+function CityScope({ local, productId, children }: { local: boolean; productId: string; children: React.ReactNode }) {
+  return local ? <CityProvider productId={productId}>{children}</CityProvider> : <>{children}</>;
 }

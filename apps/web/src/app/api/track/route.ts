@@ -3,7 +3,7 @@ import { DROP_PRESETS, REFERENCE_CITY, isCityDependent, targetForDrop } from "@b
 import { getSql, getProductByExternalId, type TrackTarget, upsertWatcherTracking, upsertWatcherShortLinkTracking, deleteWatcherTracking, REMOVED_REASONS, setWatcherLocale } from "@baga/db";
 import { allow } from "@/lib/rateLimit";
 import { clientIp } from "@/lib/turnstile";
-import { ensureWatcher, currentWatcher, telegramConnectUrl, WATCHER_LIMIT } from "@/lib/watcher";
+import { ensureWatcher, currentWatcher, telegramConnectUrl, trackInitial, WATCHER_LIMIT } from "@/lib/watcher";
 import { cityPrice, visitorCity } from "@/lib/city";
 
 /**
@@ -14,6 +14,16 @@ import { cityPrice, visitorCity } from "@/lib/city";
  * waiting in short_link_queue (migration 0009). No Kaspi request.
  * Returns the Telegram deep link while alerts are not connected yet.
  */
+/**
+ * This visitor's price, Telegram and email for one product, for the coupon on the cached product page (DECISIONS.md,
+ * 2026-11-16 "Cached product pages"). Never cached; sets no cookie.
+ */
+export async function GET(req: Request) {
+  const productId = new URL(req.url).searchParams.get("productId");
+  if (!productId || !/^\d{5,12}$/.test(productId)) return NextResponse.json({ code: "unknown_product" }, { status: 400 });
+  return NextResponse.json(await trackInitial(productId), { headers: { "Cache-Control": "private, no-store" } });
+}
+
 export async function POST(req: Request) {
   const ip = clientIp(req);
   if (!allow(`track:${ip}`, 30, 60 * 60 * 1000)) return NextResponse.json({ code: "rate_limited" }, { status: 429 });
