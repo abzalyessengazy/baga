@@ -23,6 +23,14 @@ describe("pickOrder", () => {
   it("puts a drop since yesterday first, every day", () => {
     for (const d of days) expect(pickOrder(week, d, [], ["g", "top"])[0]!.externalId).toBe("g");
   });
+  it("puts drops of the last two days before the week's older ones, newest first", () => {
+    const w = [c("top", -45), c("old1", -40), c("old2", -35), { ...c("new2", -12), since: "2026-11-15" }, { ...c("new1", -20), since: "2026-11-16" },
+      { ...c("stale", -30), since: "2026-11-10" }];
+    expect(pickOrder(w, "2026-11-16").slice(0, 2).map((m) => m.externalId)).toEqual(["new1", "new2"]);
+    // Four days later they are old drops again: back in the rotation, no longer ahead of it by date.
+    expect(pickOrder(w, "2026-11-19").slice(0, 2).map((m) => m.externalId)).not.toEqual(["new1", "new2"]);
+    expect(pickOrder(w, "2026-11-16", [], ["old2"])[0]!.externalId).toBe("old2");
+  });
   it("leaves out small drops and cheap products", () => {
     expect(pickOrder([c("top", -45), c("small", -5), c("cheap", -30, 3_000)], "2026-11-10")).toEqual([]);
   });

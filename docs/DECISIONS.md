@@ -436,3 +436,6 @@ A full check on 16 Nov found no exposed secrets or injection paths; these fixes 
 
 ## 2026-11-16 No target more than 80% below the price
 «Покупатель 9563» set 6 ₸ as the target on a 724 999 ₸ phone and topped the board with 724 993 ₸ «хочет сэкономить» (the owner: «people messing around»). `MAX_DROP_PCT` = 80 in core: the coupon and `/api/track` refuse a target below 20% of today's price (Almaty's, or the chosen city's) and say the lowest allowed one; the presets are never affected. Targets set earlier below that line (two on 16 Nov) stay, but count for nothing in the board's, the profile's and the home receipt's «хочет сэкономить».
+
+## 2026-11-16 Finds of the day: recent drops first
+People said «Находка дня» was stale. The finds were the week's five best drops in a daily rotation, and a drop stays a week's drop for 7 days, so the same five products only changed order. Week movers now carry `since`, the Almaty day the price came down to today's level (the day after its last daily low more than 1% above it). After the drops since yesterday, drops of the last two days (`PICK.recentDays`) lead, newest first; the older ones rotate as before. Still never the week's biggest drop or a row the home page already shows.

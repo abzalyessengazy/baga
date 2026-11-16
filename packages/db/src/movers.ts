@@ -15,6 +15,8 @@ export interface Mover {
   now: number; was: number; pct: number; offerCount: number; checkedAt: Date;
   /** The latest lowest price (product_state), which may be newer than `now` in a day list. */
   current: number | null;
+  /** Week movers only: the Almaty day the price came down to today's level (the day after its last higher daily low). */
+  since?: string | null;
 }
 
 /**
@@ -40,12 +42,18 @@ export async function weekMovers(sql: postgres.Sql, dir: "down" | "up", limit = 
       select distinct on (d2.product_id) d2.product_id, d2.p::int as was
       from d2, today where d2.day < today.day - 1 and d2.day >= today.day - 7
         and ((d2.prev is not null and abs(d2.p - d2.prev) <= d2.prev * 0.01) or (d2.next is not null and abs(d2.p - d2.next) <= d2.next * 0.01))
-      order by d2.product_id, d2.day)
+      order by d2.product_id, d2.day),
+    above as (
+      -- The last day the daily low was still above today's price (by more than 1%): the drop came the day after.
+      select d.product_id, max(d.day) as day from d join product_state s on s.product_id = d.product_id
+      where d.p > s.current_min_price * 1.01 group by 1)
     select p.external_id as "externalId", p.title, p.title_kk as "titleKk", p.image_url as "imageUrl",
            s.current_min_price as now, pr.was,
            round((s.current_min_price - pr.was) * 100.0 / pr.was)::int as pct,
-           coalesce(s.offer_count, 0) as "offerCount", s.last_checked_at as "checkedAt", s.current_min_price as current
+           coalesce(s.offer_count, 0) as "offerCount", s.last_checked_at as "checkedAt", s.current_min_price as current,
+           to_char(ab.day + 1, 'YYYY-MM-DD') as since
     from prior pr
+    left join above ab on ab.product_id = pr.product_id
     join product_state s on s.product_id = pr.product_id
     join products p on p.id = pr.product_id, today
     where p.status = 'active' and s.in_stock and s.current_min_price is not null and s.current_min_price >= ${CHEAP.price}
