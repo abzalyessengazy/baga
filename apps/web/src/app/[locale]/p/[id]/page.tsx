@@ -8,6 +8,7 @@ import { alreadyTracked } from "@/lib/catalog";
 import { Related } from "@/components/Related";
 import { PriceChart } from "@/components/PriceChart";
 import { TrackPanelLive } from "@/components/TrackPanelLive";
+import { TrackJump, TrackBar } from "@/components/TrackCta";
 import { SaleCheck } from "@/components/SaleCheck";
 import { botUsername, emailReady } from "@/lib/watcher";
 import { dayMonth, type DatesT } from "@/lib/dayMonth";
@@ -242,6 +243,8 @@ export default async function ProductPage({ params }: Props) {
           </>
         )}
         </>))}
+        {/* One tap to the coupon, right under what people read first (16 Nov: on a phone it sat ~2.5 screens down). */}
+        {!v.delisted && <TrackJump />}
         <SaleCheck history={v.history} locale={L} />
         <hr className="rule" />
         <h2 className="receipt-caption" style={{ fontSize: "inherit", fontWeight: 400, margin: "0 0 6px" }}>{t("historyTitle")}</h2>
@@ -306,6 +309,7 @@ export default async function ProductPage({ params }: Props) {
         <TrackPanelLive productId={v.externalId} current={v.minPrice} ready={{ botReady: !!botUsername(), emailReady: emailReady() }}
           related={<Related lists={await alreadyTracked(v.externalId, null, 6, v.title)} locale={L} />} />
       )}
+      {!v.delisted && <TrackBar />}
     </main>
   );
 }

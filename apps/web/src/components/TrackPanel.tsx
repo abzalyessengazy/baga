@@ -9,6 +9,7 @@ import { ConsentNote } from "./ConsentNote";
 import { EmailConnect, type EmailInitial } from "./EmailConnect";
 import { track as trackStep } from "@/lib/analytics";
 import { BoardNudge } from "./BoardNudge";
+import { OPEN_EVENT, STATE_EVENT } from "@/lib/trackCta";
 
 export interface TrackInitial {
   /** dropPct: a percentage target waiting for the product's first price (migration 0010). */
@@ -90,6 +91,19 @@ export function TrackPanel({ productId, shortLink, current, initial, related }: 
   const [target, setTarget] = useState(String(initial.target ?? ""));
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null); // the button being saved
+  const panel = useRef<HTMLDivElement>(null);
+  // TrackJump and TrackBar (lib/trackCta.ts): say whether this visitor tracks the product, and open the ranges on request.
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent(STATE_EVENT, { detail: { tracking: tracked !== null } }));
+  }, [tracked]);
+  useEffect(() => {
+    const on = () => {
+      panel.current?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+      setTimeout(() => setOpen(true), reduce ? 0 : 450);
+    };
+    window.addEventListener(OPEN_EVENT, on);
+    return () => window.removeEventListener(OPEN_EVENT, on);
+  }, [reduce]);
 
   async function track(want: { price: number } | { dropPct: number }, key: string) {
     if ("price" in want && (!want.price || (current !== null && want.price >= current))) return setMsg(t("invalidTarget"));
@@ -211,7 +225,7 @@ export function TrackPanel({ productId, shortLink, current, initial, related }: 
   ) : null;
 
   return (
-    <div className="side-panel">
+    <div className="side-panel" ref={panel}>
       <div className="perforation" aria-hidden />
       <AnimatePresence mode="wait" initial={false}>
         {done ?? (!open ? (

@@ -58,6 +58,8 @@ export function TearCoupon({
           if (dist > 110 || info.velocity.y > 900) tear(info.offset.x < 0 ? -1 : 1);
         }}
         whileDrag={{ scale: 1.01 }}
+        // A tap anywhere opens it too (the owner, 16 Nov): the pull is the flourish, never the only way.
+        onTap={() => tear(1)}
         aria-label={t("couponDrag")}
       >
         {children}
