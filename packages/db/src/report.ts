@@ -109,8 +109,10 @@ export async function ownerReport(sql: postgres.Sql): Promise<OwnerReport> {
       coalesce(sum(r.failed), 0)::int as failed,
       array_remove(array_agg(distinct r.aborted_reason), null) as aborted,
       coalesce((select l.finished_at is not null and l.aborted_reason is null from collection_runs l, today
-        where l.started_at >= today.t order by l.started_at desc limit 1), false) as "lastOk"
-    from today left join collection_runs r on r.started_at >= today.t`;
+        where l.started_at >= today.t and l.runner <> 'manual' order by l.started_at desc limit 1), false) as "lastOk"
+    -- The daily run only: manual checks are reported on their own (manual24h). On 16 Nov a manual check's 403 made the
+    -- report call the clean morning run «blocked».
+    from today left join collection_runs r on r.started_at >= today.t and r.runner <> 'manual'`;
 
   const [catalog] = await sql<OwnerReport["catalog"][]>`
     select count(*)::int as products,
@@ -122,12 +124,13 @@ export async function ownerReport(sql: postgres.Sql): Promise<OwnerReport> {
       (select count(*) from short_link_queue where status = 'pending')::int as "linksWaiting"
     from products p join product_state s on s.product_id = p.id where p.status = 'active'`;
 
-  // Store runs of the last 24 h together: the main run plus backup starts that find nothing due.
+  // Today's store runs together (Almaty day): the main run plus backup starts that find nothing due. Not the last 24 h:
+  // on 16 Nov the evening report repeated a stop from an extra run the evening before.
   const [lastStore] = await sql<{ startedAt: string | null; requests: number; priced: number; failed: number; aborted: string | null }[]>`
     select (select max(started_at) from store_runs)::text as "startedAt",
       coalesce(sum(requests), 0)::int as requests, coalesce(sum(priced), 0)::int as priced, coalesce(sum(failed), 0)::int as failed,
       string_agg(distinct aborted_reason, '; ') as aborted
-    from store_runs where started_at > now() - interval '24 hours'`;
+    from store_runs where started_at >= (now() at time zone ${DAY})::date::timestamp at time zone ${DAY}`;
   const [cmp] = await sql<{ pending: number; compared: number; cheaper: number }[]>`
     with lp as (select distinct on (match_id) match_id, price, in_stock, observed_at from store_prices order by match_id, observed_at desc)
     -- Only pairs /admin asks about: colour-only doubts are shown as «похожий» and need nobody (15 Nov: the report said
