@@ -554,4 +554,19 @@ describe.skipIf(!url)("database (disposable Postgres)", () => {
       expect(s.tenge).toEqual({ drops: [], rises: [] });
     });
   });
+  describe("the website's role (migrations 0033, 0034)", () => {
+    it("baga_web reads and writes rows but cannot change the schema; anon has no rights", async () => {
+      const id = await sql.begin(async (tx) => {
+        await tx`set local role baga_web`;
+        const [w] = await tx<{ id: string }[]>`insert into watchers (secret_hash) values (${hex64()}) returning id`;
+        await tx`update watchers set locale = 'kk' where id = ${w!.id}`;
+        const [r] = await tx<{ locale: string }[]>`select locale from watchers where id = ${w!.id}`;
+        expect(r!.locale).toBe("kk");
+        return w!.id;
+      });
+      expect(id).toBeTruthy();
+      await expect(sql.begin(async (tx) => { await tx`set local role baga_web`; await tx`create table web_cannot (x int)`; })).rejects.toThrow();
+      await expect(sql.begin(async (tx) => { await tx`set local role anon`; await tx`select 1 from watchers limit 1`; })).rejects.toThrow();
+    });
+  });
 });
