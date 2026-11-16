@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DROP_PRESETS, targetForDrop } from "./target";
+import { DROP_PRESETS, minTarget, targetForDrop, targetTooLow } from "./target";
 
 describe("target presets", () => {
   it("take the smaller percentage of each range", () => {
@@ -12,5 +12,18 @@ describe("target presets", () => {
   });
   it("gives nothing for prices too small to drop", () => {
     expect(targetForDrop(5, 5)).toBeNull();
+  });
+});
+
+describe("MAX_DROP_PCT", () => {
+  it("refuses a target more than 80% below the price", () => {
+    expect(minTarget(724_999)).toBe(145_000);
+    expect(targetTooLow(724_999, 6)).toBe(true);
+    expect(targetTooLow(724_999, 144_999)).toBe(true);
+    expect(targetTooLow(724_999, 145_000)).toBe(false);
+    expect(targetTooLow(100_000, 20_000)).toBe(false);
+  });
+  it("never refuses a preset", () => {
+    for (const p of DROP_PRESETS) expect(targetTooLow(724_999, targetForDrop(724_999, p.from)!)).toBe(false);
   });
 });

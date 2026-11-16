@@ -1,5 +1,5 @@
 import type postgres from "postgres";
-import { computeVerdict, liveShiftDay, MOVE_MIN_PCT, pickOrder, priceNote, sellerLabel, KASPI_VISIT_WINDOW_UTC, SELLER_RULES, type PriceNote, type SellerLabel } from "@baga/core";
+import { computeVerdict, liveShiftDay, MAX_DROP_PCT, MOVE_MIN_PCT, pickOrder, priceNote, sellerLabel, KASPI_VISIT_WINDOW_UTC, SELLER_RULES, type PriceNote, type SellerLabel } from "@baga/core";
 import { getDailyLows } from "./queries";
 import { dayMoves, stillMoving, weekMovers, type Mover } from "./movers";
 
@@ -185,7 +185,7 @@ export async function getMarket(sql: postgres.Sql, now = new Date()): Promise<Ma
     from x`;
   const [people] = await sql<{ n: number }[]>`select count(distinct vid)::int as n from events where vid is not null`;
   const [watched] = await sql<{ products: number; want: number }[]>`
-    select count(distinct t.product_id)::int as products, coalesce(sum(greatest(s.current_min_price - t.target_price, 0)), 0)::int as want
+    select count(distinct t.product_id)::int as products, coalesce(sum(case when t.target_price * 100 >= s.current_min_price * (100 - ${MAX_DROP_PCT}) then greatest(s.current_min_price - t.target_price, 0) else 0 end), 0)::int as want
     from trackings t left join product_state s on s.product_id = t.product_id
     where t.status = 'active' and t.watcher_id is not null
       and not exists (select 1 from watchers w where w.id = t.watcher_id and w.internal)`;

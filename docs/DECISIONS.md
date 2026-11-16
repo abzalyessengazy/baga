@@ -433,3 +433,6 @@ A full check on 16 Nov found no exposed secrets or injection paths; these fixes 
 
 ## 2026-11-16 Alerts bar
 30 of the 45 people who started tracking on 15–16 Nov connected neither Telegram nor email, so no alert can reach them. A bar under the header on every page (not «Мои товары», which says it itself, nor /admin) tells them how many products they track and offers the bot in one tap, or email in «Мои товары»; «Скрыть» hides it until the next visit, and it disappears once a channel is connected. It reads `alerts` from `/api/my/profile`, which the page already asked for; the parts of a page now share that one request. «Мои товары» puts the Telegram button inside its own warning.
+
+## 2026-11-16 No target more than 80% below the price
+«Покупатель 9563» set 6 ₸ as the target on a 724 999 ₸ phone and topped the board with 724 993 ₸ «хочет сэкономить» (the owner: «people messing around»). `MAX_DROP_PCT` = 80 in core: the coupon and `/api/track` refuse a target below 20% of today's price (Almaty's, or the chosen city's) and say the lowest allowed one; the presets are never affected. Targets set earlier below that line (two on 16 Nov) stay, but count for nothing in the board's, the profile's and the home receipt's «хочет сэкономить».

@@ -1,5 +1,5 @@
 import type postgres from "postgres";
-import { DIGEST, INTERESTS, moveDirection, type Interest } from "@baga/core";
+import { DIGEST, INTERESTS, MAX_DROP_PCT, moveDirection, type Interest } from "@baga/core";
 
 /**
  * Profiles, the leaderboard and the 3-day note (DECISIONS.md, 2026-11-13; migration 0027). Every number is a sum of
@@ -70,7 +70,7 @@ async function boardRows(sql: postgres.Sql): Promise<(BoardRow & { id: string })
       where t.watcher_id is not null and t.status = 'active'),
     agg as (
       select watcher_id, count(*)::int as tracked, coalesce(sum(now), 0)::int as total,
-             coalesce(sum(greatest(now - target, 0)), 0)::int as potential
+             coalesce(sum(case when target * 100 >= now * (100 - ${MAX_DROP_PCT}) then greatest(now - target, 0) else 0 end), 0)::int as potential
       from t group by 1),
     hit as (
       select n.tracking_id, min(n.price) as alert from notifications n
@@ -119,7 +119,7 @@ export async function getProfileStats(sql: postgres.Sql, watcherId: string): Pro
   // Hidden from the board, or nothing active: the same sums for this watcher alone.
   const [own] = await sql<{ tracked: number; total: number; potential: number }[]>`
     select count(*)::int as tracked, coalesce(sum(s.current_min_price), 0)::int as total,
-           coalesce(sum(greatest(s.current_min_price - t.target_price, 0)), 0)::int as potential
+           coalesce(sum(case when t.target_price * 100 >= s.current_min_price * (100 - ${MAX_DROP_PCT}) then greatest(s.current_min_price - t.target_price, 0) else 0 end), 0)::int as potential
     from trackings t left join product_state s on s.product_id = t.product_id
     where t.watcher_id = ${watcherId} and t.status = 'active'`;
   return { tracked: own?.tracked ?? 0, total: own?.total ?? 0, potential: own?.potential ?? 0, saved: 0, rank: null, boardSize: all.length, tag: null, ahead: null };

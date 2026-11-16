@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { DROP_PRESETS, REFERENCE_CITY, isCityDependent, targetForDrop } from "@baga/core";
+import { DROP_PRESETS, REFERENCE_CITY, isCityDependent, minTarget, targetForDrop, targetTooLow } from "@baga/core";
 import { getSql, getProductByExternalId, type TrackTarget, upsertWatcherTracking, upsertWatcherShortLinkTracking, deleteWatcherTracking, REMOVED_REASONS, setWatcherLocale } from "@baga/db";
 import { allow } from "@/lib/rateLimit";
 import { clientIp } from "@/lib/turnstile";
@@ -44,10 +44,14 @@ export async function POST(req: Request) {
   const product = productId ? await getProductByExternalId(sql, productId) : null;
   const chosen = product && isCityDependent(product.categoryPath ?? []) ? await visitorCity() : REFERENCE_CITY;
   const city = chosen === REFERENCE_CITY ? null : chosen;
-  const current = !target && productId
+  const current = productId
     ? (city ? (await cityPrice(productId, city))?.minPrice ?? null : product?.currentMinPrice ?? null)
     : null;
-  if (current !== null) {
+  // No target more than MAX_DROP_PCT below today's price (the owner, 16 Nov: a 6 ₸ target on a 724 999 ₸ phone).
+  if (target && current !== null && targetTooLow(current, target)) {
+    return NextResponse.json({ code: "target_too_low", min: minTarget(current) }, { status: 400 });
+  }
+  if (!target && current !== null) {
     const price = targetForDrop(current, dropPct!);
     if (!price) return NextResponse.json({ code: "invalid_target" }, { status: 400 });
     t = { price };

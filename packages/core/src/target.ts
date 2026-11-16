@@ -16,3 +16,13 @@ export function targetForDrop(current: number, pct: number): number | null {
   const t = Math.floor(raw / step) * step;
   return t > 0 && t < current ? t : null;
 }
+
+/**
+ * The deepest drop a target may ask for (the owner, 16 Nov 2026: «Покупатель 9563» set 6 ₸ on a 724 999 ₸ phone and
+ * topped the board with 724 993 ₸ «хочет сэкономить»). A target below this share of today's price is refused, and
+ * such targets set earlier do not count in any «хочет сэкономить» sum.
+ */
+export const MAX_DROP_PCT = 80;
+/** The lowest target allowed for this price, rounded up to whole tenge. */
+export const minTarget = (current: number): number => Math.ceil((current * (100 - MAX_DROP_PCT)) / 100);
+export const targetTooLow = (current: number, target: number): boolean => target < minTarget(current);

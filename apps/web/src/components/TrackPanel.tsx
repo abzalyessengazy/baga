@@ -2,7 +2,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useLocale, useTranslations } from "next-intl";
-import { DROP_PRESETS, formatTenge, targetForDrop } from "@baga/core";
+import { DROP_PRESETS, formatTenge, minTarget, targetForDrop, targetTooLow } from "@baga/core";
 import { Link } from "@/i18n/navigation";
 import { TearCoupon } from "./TearCoupon";
 import { ConsentNote } from "./ConsentNote";
@@ -93,6 +93,7 @@ export function TrackPanel({ productId, shortLink, current, initial, related }: 
 
   async function track(want: { price: number } | { dropPct: number }, key: string) {
     if ("price" in want && (!want.price || (current !== null && want.price >= current))) return setMsg(t("invalidTarget"));
+    if ("price" in want && current !== null && targetTooLow(current, want.price)) return setMsg(t("tooLowTarget", { min: f(minTarget(current)) }));
     setBusy(key);
     setMsg(null);
     const body = { ...(shortLink ? { shortLink } : { productId }), ...("price" in want ? { target: want.price } : { dropPct: want.dropPct }), locale };
@@ -105,7 +106,8 @@ export function TrackPanel({ productId, shortLink, current, initial, related }: 
       setJust(true);
       setOpen(false);
       setTg({ linked: !!data.linked, url: data.telegramUrl ?? null });
-    } else setMsg(data?.code === "limit" ? t("limit") : data?.code === "rate_limited" ? t("tooMany") : t("notReady"));
+    } else setMsg(data?.code === "target_too_low" && current !== null ? t("tooLowTarget", { min: f(minTarget(current)) })
+      : data?.code === "limit" ? t("limit") : data?.code === "rate_limited" ? t("tooMany") : t("notReady"));
   }
 
   const swap = reduce
