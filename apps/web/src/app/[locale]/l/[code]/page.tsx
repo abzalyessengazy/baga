@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getTranslations, setRequestLocale } from "next-intl/server";
-import { isInVisitWindow, nextVisitWindowDay } from "@baga/core";
+import { isInVisitWindow } from "@baga/core";
 import { queuedLinkUrl } from "@baga/kaspi";
 import { redirect } from "@/i18n/navigation";
 import { shortLinkStatus, collectorRunning } from "@/lib/product";
@@ -11,7 +11,8 @@ import { TrackPanel } from "@/components/TrackPanel";
 import { trackInitial } from "@/lib/watcher";
 import { alreadyTracked } from "@/lib/catalog";
 import { Related } from "@/components/Related";
-import { PrintIn, StampIn } from "@/components/PrintIn";
+import { PrintIn } from "@/components/PrintIn";
+import { AddedToBaga } from "@/components/AddedToBaga";
 
 type Props = { params: Promise<{ locale: string; code: string }> };
 
@@ -44,18 +45,21 @@ export default async function ShortLinkPage({ params }: Props) {
   return (
     <main className="wrap untracked">
       <PrintIn className="receipt">
-        <StampIn>{t("queuedStamp")}</StampIn>
+        <AddedToBaga />
         <p className="untracked-name">{row.path.startsWith("/shop/p/") ? t("variantLinkNote") : t("shortLinkNote")}</p>
         <hr className="rule" />
         <p className="untracked-status" role="status">
-          {live ? t("fetchingNow") : manual ? t("manualChecking") : nextVisitWindowDay(new Date()) === "today" ? t("queuedToday") : t("queuedTomorrow")}
+          {live ? t("fetchingNow") : manual ? t("manualChecking") : t("addedNext")}
         </p>
         {(live || manual) && <QueuedWatcher />}
         <a className="kaspi-link" href={queuedLinkUrl(row.path)} target="_blank" rel="noopener noreferrer">{t("openOnKaspi")}</a>
       </PrintIn>
       {/* The visitor can set a price now; it moves onto the product when the collector resolves the link. */}
-      <TrackPanel productId={code} shortLink={code} current={null} initial={await trackInitial({ shortLink: code })}
-        related={<Related lists={await alreadyTracked("", null)} locale={locale as "ru" | "kk"} />} />
+      <TrackPanel productId={code} shortLink={code} current={null} initial={await trackInitial({ shortLink: code })} />
+      <section className="meanwhile">
+        <p className="meanwhile-lead">{t("meanwhile")}</p>
+        <Related lists={await alreadyTracked("", null)} locale={locale as "ru" | "kk"} />
+      </section>
     </main>
   );
 }

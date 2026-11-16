@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import type { Metadata } from "next";
-import { nextVisitWindowDay, isValidSlug, slugName, isInVisitWindow } from "@baga/core";
+import { isValidSlug, slugName, isInVisitWindow } from "@baga/core";
 import { getProductView, queuedSlug, collectorRunning } from "@/lib/product";
 import { manualRunning } from "@/lib/manual";
 import { QueuedWatcher } from "@/components/QueuedWatcher";
@@ -11,7 +11,8 @@ import { Related } from "@/components/Related";
 import { TrackPanel } from "@/components/TrackPanel";
 import { ProductLookup } from "@/components/ProductLookup";
 import { trackInitial } from "@/lib/watcher";
-import { PrintIn, StampIn } from "@/components/PrintIn";
+import { PrintIn } from "@/components/PrintIn";
+import { AddedToBaga } from "@/components/AddedToBaga";
 
 /**
  * A product we do not have a price for yet (DECISIONS.md, 2026-11-16 "Cached product pages"): the cached product page
@@ -50,28 +51,33 @@ export default async function WaitPage({ params, searchParams }: Props) {
         <PrintIn className="receipt">
           {r.reason === "unknown"
             ? <p className="receipt-sub" style={{ margin: 0 }}>{t("lookupNote")}</p>
-            : <StampIn>{t("queuedStamp")}</StampIn>}
+            : <AddedToBaga />}
           {name && <p className="untracked-name">{t("fromLink", { name })}</p>}
           <hr className="rule" />
           {r.reason === "unknown"
             ? <ProductLookup id={id} slug={s} />
             : (
-              // "today"/"tomorrow" follows the collector's daily run (Kaspi's robots.txt window); times are not shown.
+              // Fetching right now: say so and refresh. Otherwise nothing about when (the owner, 16 Nov: «we can't check
+              // today» reads as a failure); the welcome above says the history is being kept, the coupon does the rest.
               live || manual ? (
                 <>
                   <p className="untracked-status" role="status">{live ? t("fetchingNow") : t("manualChecking")}</p>
                   <QueuedWatcher />
                 </>
               ) : (
-                <p className="untracked-status" role="status">{nextVisitWindowDay(new Date()) === "today" ? t("queuedToday") : t("queuedTomorrow")}</p>
+                <p className="untracked-status" role="status">{t("addedNext")}</p>
               )
             )}
           <a className="kaspi-link" href={`/go/${id}`} target="_blank" rel="noopener">{t("openOnKaspi")}</a>
         </PrintIn>
         {/* Queued: the visitor can set a price now; the first price goes to Telegram when the collector gets it. */}
-        {r.reason === "queued" && (
-          <TrackPanel productId={id} current={null} initial={await trackInitial(id)}
-            related={<Related lists={tracked} locale={locale as "ru" | "kk"} />} />
+        {r.reason === "queued" && <TrackPanel productId={id} current={null} initial={await trackInitial(id)} />}
+        {/* In the meantime: similar products that already have a history (shown at once, not only after a price is set). */}
+        {r.reason === "queued" && (tracked.similar.length > 0 || tracked.popular.length > 0) && (
+          <section className="meanwhile">
+            <p className="meanwhile-lead">{t("meanwhile")}</p>
+            <Related lists={tracked} locale={locale as "ru" | "kk"} />
+          </section>
         )}
       </main>
     );

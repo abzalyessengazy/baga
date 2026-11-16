@@ -1309,3 +1309,17 @@ span.ticker-thumb { background: var(--paper-shade); box-shadow: none; }
 .alerts-bar-close { border: 0; background: none; color: var(--ink-soft); font-size: 1.25rem; line-height: 1; padding: 4px 6px; cursor: pointer; }
 @media (max-width: 767px) { .alerts-bar { margin: 0 16px; justify-content: flex-start; } }
 @media (prefers-reduced-motion: reduce) { .alerts-bar, .alerts-bar-tg { animation: none; } }
+
+/* «Товар добавлен в BAĞA» (AddedToBaga, 16 Nov): the welcome on a product with no price yet. */
+.added { display: grid; justify-items: center; text-align: center; gap: 6px; padding: 6px 0 2px; }
+.added-check { color: var(--stamp); }
+.added-title { margin: 6px 0 0; font: 800 var(--step-1)/1.2 var(--font-ui); color: var(--ink); }
+.added-text { margin: 0; max-width: 34ch; font-size: 0.9375rem; color: var(--ink); }
+.added-live { display: inline-flex; align-items: center; gap: 8px; margin: 6px 0 0; padding: 5px 12px; border-radius: 999px;
+  font: 600 0.75rem/1 var(--font-receipt); text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--stamp); background: color-mix(in srgb, var(--stamp) 10%, var(--paper)); }
+.added-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--stamp); animation: added-ping 1.6s ease-out infinite; }
+@keyframes added-ping { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--stamp) 60%, transparent); } 100% { box-shadow: 0 0 0 9px transparent; } }
+@media (prefers-reduced-motion: reduce) { .added-dot { animation: none; } }
+.meanwhile { margin-top: 28px; }
+.meanwhile-lead { margin: 0 0 4px; font: 600 var(--step-0)/1.35 var(--font-ui); color: var(--ink-on-counter, var(--ink)); }
