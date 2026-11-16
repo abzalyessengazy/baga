@@ -71,7 +71,7 @@ export interface TechnodomClientOptions {
 /** One request at a time, starts ≥ minIntervalMs (+ jitter) apart; non-2xx throws TechnodomHttpError. */
 export function createTechnodomClient(o: TechnodomClientOptions = {}) {
   const f = o.fetch ?? fetch;
-  const ua = o.userAgent ?? process.env.KASPI_USER_AGENT ?? "BAGA price history bot (+contact: hello@baga.app)";
+  const ua = o.userAgent ?? process.env.KASPI_USER_AGENT ?? "BAGA price history bot (+contact: hello@bagaapp.com)";
   const minIntervalMs = o.minIntervalMs ?? 10_000, jitterMs = o.jitterMs ?? 0, timeoutMs = o.timeoutMs ?? 30_000;
   let nextAt = 0;
   let queue: Promise<void> = Promise.resolve();

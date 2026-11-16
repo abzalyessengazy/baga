@@ -26,7 +26,7 @@ const CITY = "750000000";
 const A = "177318181"; // Apple iPhone 18 Pro, already collected daily
 const B = "121772187"; // DREAME H13 Pro Plus Mix, from the user's category page
 const CATEGORY = "https://kaspi.kz/shop/c/home%20equipment/";
-const ua = process.env.KASPI_USER_AGENT ?? "BAGA price history bot (+contact: hello@baga.app)";
+const ua = process.env.KASPI_USER_AGENT ?? "BAGA price history bot (+contact: hello@bagaapp.com)";
 
 type Found = { prices: Map<string, number>; note: string };
 type Experiment = {

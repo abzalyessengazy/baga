@@ -58,7 +58,7 @@ export function createKaspiClient(opts: KaspiClientOptions = {}) {
   const cityId = opts.cityId ?? REFERENCE_CITY_ID;
   // Exactly the headers verified to work from a KZ connection on 1 Nov 2026 (scripts/probe-kaspi.mjs).
   // A User-Agent containing a URL was stalled by Kaspi without any response.
-  const ua = opts.userAgent ?? process.env.KASPI_USER_AGENT ?? "BAGA price history bot (+contact: hello@baga.app)";
+  const ua = opts.userAgent ?? process.env.KASPI_USER_AGENT ?? "BAGA price history bot (+contact: hello@bagaapp.com)";
   const timeoutMs = opts.timeoutMs ?? 15_000;
   const minIntervalMs = opts.minIntervalMs ?? 0;
   const jitterMs = opts.jitterMs ?? 0;

@@ -38,7 +38,7 @@ const kaspi = createKaspiClient({
   // the 0-2 s jitter cost ~8% of the day's requests and protected nothing). Gaps are measured start to start.
   minIntervalMs: KASPI_CRAWL_DELAY_MS + 200, jitterMs: 0,
   // Manual checks say so in the User-Agent: a single page a visitor asked for, not the daily crawl.
-  ...(MANUAL ? { userAgent: `${process.env.KASPI_USER_AGENT ?? "BAGA price history bot (+contact: hello@baga.app)"}; user-requested check` } : {}),
+  ...(MANUAL ? { userAgent: `${process.env.KASPI_USER_AGENT ?? "BAGA price history bot (+contact: hello@bagaapp.com)"}; user-requested check` } : {}),
   beforeRequest: () => {
     if (breaker.openReason) throw new KaspiRequestRefused(breaker.openReason);
     if (MANUAL ? !isManualCheckTime(new Date()) : !isInVisitWindow(new Date(), 0))

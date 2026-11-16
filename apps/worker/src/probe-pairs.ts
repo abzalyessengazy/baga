@@ -25,7 +25,7 @@ import { parseOffers } from "@baga/kaspi";
 
 const CITY = "750000000";
 const SPACING_MS = 11_000;
-const ua = process.env.KASPI_USER_AGENT ?? "BAGA price history bot (+contact: hello@baga.app)";
+const ua = process.env.KASPI_USER_AGENT ?? "BAGA price history bot (+contact: hello@bagaapp.com)";
 const LAST_START_MINUTE = KASPI_VISIT_WINDOW_UTC.endMinute - 1.5; // 08:43:30 UTC
 const OUT = join(tmpdir(), "kaspi-P.jsonl");
 
