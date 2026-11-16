@@ -15,7 +15,8 @@ import { CountUp, useReplay } from "./Motion";
  * only. Ranked by «хочет сэкономить» for now; «сэкономил» (confirmed purchases) is shown beside it and will rank
  * once there is enough of it. Real rows only: with nobody tracking, an invitation instead of sample names.
  */
-const BOARD_ROWS = 5;
+// Ten rows again (the owner, 16 Nov; it was five for a calmer desktop earlier the same day).
+const BOARD_ROWS = 10;
 
 export function Leaderboard() {
   const locale = useLocale() as "ru" | "kk";
