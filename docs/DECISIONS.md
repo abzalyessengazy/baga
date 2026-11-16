@@ -442,3 +442,10 @@ People said «Находка дня» was stale. The finds were the week's five 
 
 ## 2026-11-16 A welcome instead of «tomorrow»
 A product with no price yet said «Первую цену получим завтра утром», which read as a failure, all the more with manual checks paused after Kaspi's 403s (the owner, 16 Nov). The waiting pages (`/p/<id>/wait`, `/l/<code>`) now open with a check mark drawing itself, «Товар добавлен в BAĞA», «С этой минуты мы ведём историю его цены для вас» and a live «Отслеживаем цену» badge; then the coupon to set a price (the first price and the drop come by Telegram or email); then, at once, similar products that already have a history. No time is promised. Fetching now and checking on request keep their own lines. Out-of-hours manual checks: one more try at 14:00 on 17 Nov; another 403 retires them (the owner).
+
+## 2026-11-16 Stretching the daily requests
+Kaspi's window at 10 s a request allows ~1 650 requests a day, and 16 Nov used 1 645: products opened in the last 14 days took 841, tracked ones 124, catalog filler the rest (280 filler products did not fit). At that day's pace people's products alone would fill the window around 23–27 Nov, the week of Black Friday. Three changes (the owner's go):
+1. An opened product is checked daily for 3 days (`VIEWED.dailyDays`), then every third day until day 14; opening it again brings it to the next run and restarts the daily days. A top catalog product keeps its own daily rank.
+2. A daily product nobody tracks whose lowest price stayed within 2% for 5 days (4 observed) is checked every second day (`STEADY`, 36 h). Tracked products are never stretched by it.
+3. Tracked products are checked daily (18 h, was 3 h); only those within 10% of a target (`hot`) keep hourly re-checks in the window.
+The product page's «Каждый день здесь будет новая точка» became «Следите за ценой — и новая точка будет появляться каждый день». Existing schedules change at each product's next check.

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { priorityFor, backoffMinutes, isSuspiciousJump, needsPageRefresh, queueLane, newProductTurn, isStablePrice, isCalmPrice, intervalFor, INTERVAL_MINUTES, CATALOG, PARKED_MINUTES } from "./schedule";
+import { priorityFor, backoffMinutes, isSuspiciousJump, needsPageRefresh, queueLane, newProductTurn, isStablePrice, isCalmPrice, intervalFor, INTERVAL_MINUTES, CATALOG, PARKED_MINUTES, VIEWED, STEADY, isSteadyPrice } from "./schedule";
 import { VISIT_WINDOW_MINUTES } from "./window";
 import { formatTenge, toTenge } from "./money";
 
@@ -149,5 +149,31 @@ describe("longer gaps where nothing happens (10 Nov 2026)", () => {
   it("re-reads untracked product pages monthly, watched ones weekly", () => {
     expect(CATALOG.pageRefreshDays.seed).toBe(30);
     expect(CATALOG.pageRefreshDays.tracked).toBe(7);
+  });
+});
+
+describe("stretching the daily requests (16 Nov 2026)", () => {
+  const base = { activeTrackings: 0, minDistanceToTargetPct: null, isSeed: false };
+  it("checks an opened product daily for three days, then every third day until day 14", () => {
+    expect(priorityFor({ ...base, lastViewedDaysAgo: 0 })).toBe("seed");
+    expect(priorityFor({ ...base, lastViewedDaysAgo: VIEWED.dailyDays })).toBe("seed");
+    expect(priorityFor({ ...base, lastViewedDaysAgo: VIEWED.dailyDays + 1 })).toBe("catalog");
+    expect(priorityFor({ ...base, lastViewedDaysAgo: VIEWED.maxDays })).toBe("catalog");
+    expect(priorityFor({ ...base, lastViewedDaysAgo: VIEWED.maxDays + 1 })).toBe("cold");
+    // A top catalog product opened a week ago stays daily by its catalog rank.
+    expect(priorityFor({ ...base, isSeed: true, seedRank: 10, lastViewedDaysAgo: 7 })).toBe("seed");
+  });
+  it("checks a tracked product daily, and hourly only near its target", () => {
+    expect(intervalFor(priorityFor({ ...base, activeTrackings: 1, minDistanceToTargetPct: 30, lastViewedDaysAgo: null }), { calm: false, inStock: true })).toBe(18 * 60);
+    expect(intervalFor(priorityFor({ ...base, activeTrackings: 1, minDistanceToTargetPct: 5, lastViewedDaysAgo: null }), { calm: false, inStock: true })).toBe(60);
+  });
+  it("checks a steady daily product every second day, never a tracked one", () => {
+    expect(isSteadyPrice([100_000, 100_500, 101_000, 100_000])).toBe(true);
+    expect(isSteadyPrice([100_000, 100_500, 101_000])).toBe(false);
+    expect(isSteadyPrice([100_000, 104_000, 100_000, 100_000])).toBe(false);
+    expect(intervalFor("seed", { calm: false, inStock: true, steady: true, price: 100_000 })).toBe(STEADY.intervalMinutes);
+    expect(intervalFor("seed", { calm: false, inStock: true, steady: false, price: 100_000 })).toBe(18 * 60);
+    expect(intervalFor("tracked", { calm: false, inStock: true, steady: true })).toBe(18 * 60);
+    expect(intervalFor("hot", { calm: false, inStock: true, steady: true })).toBe(60);
   });
 });

@@ -8,7 +8,7 @@ import { createKaspiClient, buildSnapshot, KaspiHttpError, KaspiParseError, Kasp
 import { queuedManualChecks, finishManualCheck, manualPausedUntil, cityChecksDue, saveCityPrice } from "@baga/db";
 import { accessCodeFor, dropUnusedKeys, saveSnapshot, claimNotifications, startSend, markSent, markFailed, tidyDeliveries, connectionOptions, requestProduct, attachShortLinkTrackings, weekMovers } from "@baga/db";
 import {
-  evaluateAlert, priorityFor, newProductTurn, isStablePrice, isCalmPrice, intervalFor, laterVariants, CALM, STABLE, INTERVAL_MINUTES, PRIORITY_ORDER, USER_INTEREST, CATALOG, SEED_MIN_PRICE, backoffMinutes, isSuspiciousJump, type TrackingAlertState,
+  evaluateAlert, priorityFor, newProductTurn, isStablePrice, isCalmPrice, isSteadyPrice, intervalFor, laterVariants, CALM, STABLE, STEADY, INTERVAL_MINUTES, PRIORITY_ORDER, USER_INTEREST, CATALOG, SEED_MIN_PRICE, backoffMinutes, isSuspiciousJump, type TrackingAlertState,
   KASPI_CRAWL_DELAY_MS, CITIES, CITY_CHECKS, REFERENCE_CITY, type City, isCityDependent, isInVisitWindow, isManualCheckTime, needsPageRefresh, msUntilVisitWindow, targetForDrop, almatyDay, runningSale, type Priority,
 } from "@baga/core";
 import postgres from "postgres";
@@ -483,8 +483,9 @@ async function reschedule(productId: number, minPrice: number | null) {
   // is checked every third day (8 Nov 2026), freeing ~300 requests a day for daily checks of everything else.
   // The last CALM.days days of daily lows, each with its day: STABLE reads the last STABLE.days of them, CALM all
   // (10 Nov 2026: calm for 2 weeks = every 5 days; no offers = every 3 days, unless someone tracks it).
-  const lows14 = await sql<{ p: number; old: boolean }[]>`
-    select min(min_price)::int as p, (observed_at at time zone 'Asia/Almaty')::date < (now() at time zone 'Asia/Almaty')::date - ${STABLE.days - 1}::int as old
+  const lows14 = await sql<{ p: number; old: boolean; ago: number }[]>`
+    select min(min_price)::int as p, (observed_at at time zone 'Asia/Almaty')::date < (now() at time zone 'Asia/Almaty')::date - ${STABLE.days - 1}::int as old,
+           ((now() at time zone 'Asia/Almaty')::date - (observed_at at time zone 'Asia/Almaty')::date)::int as ago
     from price_observations
     where product_id = ${productId} and min_price is not null and observed_at > now() - make_interval(days => ${CALM.days})
     group by (observed_at at time zone 'Asia/Almaty')::date`;
@@ -496,7 +497,9 @@ async function reschedule(productId: number, minPrice: number | null) {
   });
   // A variant someone opened in the last 14 days keeps its tier: people paste the exact colour and size they want.
   const variant = variants.has(productId) && !(p?.viewed_days !== null && p?.viewed_days !== undefined && p.viewed_days <= 14);
-  const minutes = intervalFor(priority, { calm: isCalmPrice(lows14.map((r) => r.p)), inStock: minPrice !== null, variant, price: minPrice });
+  // Steady for STEADY.days (16 Nov 2026): a daily product nobody tracks is then checked every second day.
+  const steady = isSteadyPrice(lows14.filter((r) => r.ago < STEADY.days).map((r) => r.p));
+  const minutes = intervalFor(priority, { calm: isCalmPrice(lows14.map((r) => r.p)), inStock: minPrice !== null, variant, price: minPrice, steady });
   await sql`update collection_schedule set priority = ${priority}, interval_minutes = ${minutes}, fail_count = 0,
     last_error = null, locked_until = null, next_check_at = now() + make_interval(mins => ${minutes})
     where product_id = ${productId}`;

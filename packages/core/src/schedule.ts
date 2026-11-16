@@ -7,10 +7,12 @@ export type Priority = "hot" | "tracked" | "seed" | "catalog" | "cold";
 // seed (18 h) is longer than the window, so a product is not checked twice in one day, and shorter than
 // 24 h minus the window, so a product checked at the very end of today's window is due before tomorrow's opens.
 // catalog (60 h) is due again on the third day, wherever in the window it was checked.
-// hot and tracked are shorter than the window: such products are re-checked within the same window.
+// hot is shorter than the window: a product near someone's target is re-checked within the same window. tracked is
+// daily like seed since 16 Nov 2026 (the owner's go, DECISIONS "Stretching the daily requests"): prices move about
+// once a day, and the 3-hourly re-checks of products far from any target cost ~40 requests a day.
 export const INTERVAL_MINUTES: Record<Priority, number> = {
   hot: 60,
-  tracked: 180,
+  tracked: 18 * 60,
   seed: 18 * 60,
   catalog: 60 * 60,
   cold: 7 * 24 * 60,
@@ -53,6 +55,28 @@ export const CATALOG = {
 export const STABLE = { days: 7, minDays: 3, pct: 2 } as const;
 
 /**
+ * Opened products (DECISIONS.md, 2026-11-16 "Stretching the daily requests"; the owner's go): checked daily for
+ * VIEWED.dailyDays days after someone opens them, then every third day (the catalog tier) until VIEWED.maxDays.
+ * Opening it again brings it to the next run (queueLane lane 1) and restarts the daily days. On 16 Nov products
+ * opened in the last 14 days took 841 of the day's ~1 650 requests.
+ */
+export const VIEWED = { dailyDays: 3, maxDays: 14 } as const;
+
+/**
+ * Steady prices (same decision): a daily product nobody tracks (opened lately, or among the top catalog) whose
+ * lowest price stayed within STEADY.pct for STEADY.days (STEADY.minDays observed days) is checked every second day.
+ * Tracked products are never stretched by this.
+ */
+export const STEADY = { days: 5, minDays: 4, pct: 2, intervalMinutes: 36 * 60 } as const;
+
+/** Whether daily lows (the last STEADY.days days, observed days only) say the price has been steady that long. */
+export function isSteadyPrice(lows: number[]): boolean {
+  if (lows.length < STEADY.minDays) return false;
+  const lo = Math.min(...lows), hi = Math.max(...lows);
+  return lo > 0 && hi <= lo * (1 + STEADY.pct / 100);
+}
+
+/**
  * Longer gaps where nothing happens (DECISIONS.md 2026-11-10 "More checks from the same rules"; 52% of products kept one
  * lowest price all week): a catalog product calm for CALM.days (CALM.minDays observed days, all within CALM.pct) is
  * checked every 5 days; an untracked product nobody can buy (no offers) every 3 days. Opening a product or tracking it
@@ -72,14 +96,15 @@ export function isCalmPrice(lows: number[]): boolean {
  * The check interval for a product's tier, stretched for calm catalog products, untracked ones out of stock, and
  * later colour/memory variants of a device nobody tracks or opened lately (`variant`, 14 Nov 2026: every third day).
  */
-export function intervalFor(priority: Priority, p: { calm: boolean; inStock: boolean; variant?: boolean; price?: number | null }): number {
+export function intervalFor(priority: Priority, p: { calm: boolean; inStock: boolean; variant?: boolean; price?: number | null; steady?: boolean }): number {
   const base = INTERVAL_MINUTES[priority];
   if (priority === "hot" || priority === "tracked") return base;
   if (!p.inStock) return Math.max(base, OUT_OF_STOCK_INTERVAL_MINUTES);
   // Under AUTO_MIN_PRICE and nobody tracks it: no automatic checks (the owner, 15 Nov). A person opening it again
   // still brings it to the next run (queueLane lane 1); tracking it puts it back on its tier.
   if (p.price != null && p.price < AUTO_MIN_PRICE) return PARKED_MINUTES;
-  const calm = priority === "catalog" && p.calm ? Math.max(base, CALM.intervalMinutes) : base;
+  const calm = priority === "catalog" && p.calm ? Math.max(base, CALM.intervalMinutes)
+    : priority === "seed" && p.steady ? Math.max(base, STEADY.intervalMinutes) : base;
   return p.variant ? Math.max(calm, VARIANT_INTERVAL_MINUTES) : calm;
 }
 
@@ -134,8 +159,10 @@ export function priorityFor(p: {
 }): Priority {
   if (p.activeTrackings > 0 && p.minDistanceToTargetPct !== null && p.minDistanceToTargetPct <= 10) return "hot";
   if (p.activeTrackings > 0) return "tracked";
-  if (p.lastViewedDaysAgo !== null && p.lastViewedDaysAgo <= 14) return "seed";
+  const viewed = p.lastViewedDaysAgo;
+  if (viewed !== null && viewed <= VIEWED.dailyDays) return "seed";
   if (p.isSeed) return (p.seedRank ?? 0) < CATALOG.dailyTop && !p.stable ? "seed" : "catalog";
+  if (viewed !== null && viewed <= VIEWED.maxDays) return "catalog";
   return "cold";
 }
 
