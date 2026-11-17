@@ -113,7 +113,9 @@ export function variantPickers(data: Record<string, unknown>): Record<string, Ha
 
 /** A variant link (/p/<cat>/<model>/<variant>) as the page address Halyk serves (/category/<cat>/<model>?sku=<variant>). */
 export function pagePath(url: string): string {
-  const v = url.match(/^\/p\/([^/]+)\/([^/?]+)\/([^/?]+)$/);
+  // /p/<cat>/<model>/<variant> and /category/<cat>/<model>/<variant>?sku=… (the "similar products" form) both answer
+  // 301; the page lives at /category/<cat>/<model>?sku=<variant> (17 Nov: the first run failed on them).
+  const v = url.match(/^\/(?:p|category)\/([^/?]+)\/([^/?]+)\/([^/?]+)(?:\?.*)?$/);
   if (v) return `/category/${v[1]}/${v[2]}?sku=${v[3]}`;
   return url.startsWith("/category/") ? url : `/category${url.startsWith("/") ? "" : "/"}${url}`;
 }

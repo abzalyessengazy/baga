@@ -24,6 +24,9 @@ describe("Halyk product page", () => {
   });
   it("turns variant links into the address Halyk serves", () => {
     expect(pagePath("/p/smartfony/smartfon-apple-iphone-17-pro-max-0e6f/256gb_deepblue")).toBe("/category/smartfony/smartfon-apple-iphone-17-pro-max-0e6f?sku=256gb_deepblue");
+    expect(pagePath("/category/smartfony/smartfon-apple-iphone-air-3b57/256gb_cloudwhite?sku=256gb_cloudwhite")).toBe("/category/smartfony/smartfon-apple-iphone-air-3b57?sku=256gb_cloudwhite");
+    expect(pagePath("/category/smartfony/smartfon-apple-iphone-17-pro-max-0e6f?sku=256gb_silver")).toBe("/category/smartfony/smartfon-apple-iphone-17-pro-max-0e6f?sku=256gb_silver");
+    expect(pagePath("/category/smartfony?sort=popular-desc&f=brands:Apple")).toBe("/category/smartfony?sort=popular-desc&f=brands:Apple");
   });
 });
 
