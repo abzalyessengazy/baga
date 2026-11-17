@@ -12,7 +12,10 @@ import { OG_CHART, OG_SIZE, ogFonts, ogMessages, ogT, productCard, shortTitle, h
  */
 export const size = OG_SIZE;
 export const contentType = "image/png";
-export const revalidate = 86400; // link previews: once a day is enough (the owner, 17 Nov)
+export const revalidate = 86400;
+// The image is drawn on each request (the route is dynamic): Vercel's CDN keeps it for a day, so a crawler or a chat app
+// asking again costs nothing (17 Nov: link previews were 56% of the site's CPU, almost all bots).
+const CDN_DAY = { "Cache-Control": "public, max-age=3600, s-maxage=86400, stale-while-revalidate=86400" }; // link previews: once a day is enough (the owner, 17 Nov)
 
 type Props = { params: Promise<{ locale: string; id: string }> };
 
@@ -30,7 +33,7 @@ export default async function Image({ params }: Props) {
   const fonts = await ogFonts();
   const r = /^\d{5,12}$/.test(id) ? await getProductView(id) : null;
   if (!r?.ok) {
-    return new ImageResponse(homeCard({ tag: t("tag"), site: t("site"), headline: t("homeHeadline"), sub: t("homeSub") }), { ...OG_SIZE, fonts });
+    return new ImageResponse(homeCard({ tag: t("tag"), site: t("site"), headline: t("homeHeadline"), sub: t("homeSub") }), { ...OG_SIZE, fonts, headers: CDN_DAY });
   }
   const v = r.view;
   const f = (n: number) => formatTenge(n, L);
@@ -48,5 +51,5 @@ export default async function Image({ params }: Props) {
     spark: sparkline(v.history, OG_CHART.w, OG_CHART.h), chartLabel: t("chart"),
     footer,
   });
-  return new ImageResponse(card, { ...OG_SIZE, fonts });
+  return new ImageResponse(card, { ...OG_SIZE, fonts, headers: CDN_DAY });
 }
