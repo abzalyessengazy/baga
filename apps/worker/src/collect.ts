@@ -7,6 +7,7 @@
 import { createKaspiClient, buildSnapshot, KaspiHttpError, KaspiParseError, KaspiRequestRefused, canonicalProductUrl, parseKaspiUrl, queuedLinkUrl, variantLinkCode } from "@baga/kaspi";
 import { queuedManualChecks, finishManualCheck, MANUAL_CHECKS, cityChecksDue, saveCityPrice } from "@baga/db";
 import { createMarketParser, snapshotOf, MarketParserError } from "./marketparser";
+import { refreshPages, checkedSince } from "./siteRefresh";
 import { accessCodeFor, dropUnusedKeys, saveSnapshot, claimNotifications, startSend, markSent, markFailed, tidyDeliveries, connectionOptions, requestProduct, attachShortLinkTrackings, weekMovers } from "@baga/db";
 import {
   evaluateAlert, priorityFor, newProductTurn, isStablePrice, isCalmPrice, isSteadyPrice, intervalFor, laterVariants, CALM, STABLE, STEADY, INTERVAL_MINUTES, PRIORITY_ORDER, USER_INTEREST, CATALOG, SEED_MIN_PRICE, backoffMinutes, isSuspiciousJump, type TrackingAlertState,
@@ -58,6 +59,18 @@ type DueRow = {
 };
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+// Product pages are cached for a day (DECISIONS.md 2026-11-17 "Fewer cache writes"): every few minutes, and at the
+// end of a run, the site hears which products were checked, so their pages show the new check on the next visit.
+let refreshedUpTo = new Date();
+async function refreshSite(force = false) {
+  if (!force && Date.now() - refreshedUpTo.getTime() < 5 * 60_000) return;
+  const from = refreshedUpTo;
+  refreshedUpTo = new Date();
+  const ids = await checkedSince(sql, new Date(from.getTime() - 60_000)).catch(() => []);
+  const n = await refreshPages(env.siteUrl(), env.telegramBotToken(), ids);
+  if (ids.length) console.log(`site refresh: ${n} of ${ids.length} product pages`);
+}
 
 /**
  * Manual mode (DECISIONS.md 2026-11-17): the visitors' requests go to MarketParser, which checks the Kaspi cards by
@@ -164,6 +177,7 @@ async function runManual() {
   await sql`update collection_runs set finished_at = now(), checked = ${done}, changed = 0,
     failed = ${failed}, aborted_reason = ${aborted}, requests = 0 where id = ${runId}`;
   await sendQueued();
+  await refreshSite(true);
   const left = await mp.remainingUnits().catch(() => null);
   console.log(JSON.stringify({ manual: true, source: "marketparser", runId, done, waiting, failed, aborted, marketParserChecksLeft: left }));
   if (aborted) console.log(`::warning::manual checks via MarketParser stopped: ${aborted}`);
@@ -202,6 +216,7 @@ async function main() {
   // in between (growCatalog, DECISIONS.md 2026-11-06). When there is nothing to do, poll for new visitor requests.
   // Called before every product, so a visitor waits for at most one product in progress, not a whole chunk.
   async function serveVisitors(): Promise<boolean> {
+    await refreshSite();
     const links = await resolveShortLinks();
     let visitors = await nextQueued("visitor", tried, true);
     if (!visitors.length && !(await watchedDue())) visitors = await nextQueued("visitor", tried, false);
@@ -264,6 +279,7 @@ async function main() {
   }
 
   await sendQueued();
+  await refreshSite(true);
   const aborted = breaker.openReason;
   await sql`update collection_runs set finished_at = now(), checked = ${breaker.checked}, changed = ${changed},
     failed = ${breaker.failed}, aborted_reason = ${aborted}, requests = ${requests} where id = ${runId}`;

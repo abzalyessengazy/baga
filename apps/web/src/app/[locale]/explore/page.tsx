@@ -42,9 +42,11 @@ export default async function ExplorePage({ params, searchParams }: Props) {
 
   const sql = getSql();
   let r: ExploreResult | null = null;
-  // Cached per list, search, category, sort and page (cachedDaily): the numbers change only during the morning run.
+  // Lists without a search are cached once a day (cachedDaily); a search reads the database directly, so the endless
+  // variety of typed words does not fill the cache (DECISIONS.md 2026-11-17 "Fewer cache writes").
   const args = { list, q, category: cat, sort: sortIn, page };
-  if (sql) r = await cachedDaily(["explore", JSON.stringify(args)], () => exploreCatalog(sql, args)).catch((e) => { console.error(`[explore] ${e}`); return null; });
+  if (sql) r = await (q ? exploreCatalog(sql, args) : cachedDaily(["explore", JSON.stringify(args)], () => exploreCatalog(sql, args)))
+    .catch((e) => { console.error(`[explore] ${e}`); return null; });
 
   const href = (x: Partial<Search>) => {
     const s = new URLSearchParams();

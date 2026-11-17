@@ -23,6 +23,7 @@ import {
 } from "@baga/stores";
 import { env } from "./env";
 import { CircuitBreaker } from "./breaker";
+import { refreshPages } from "./siteRefresh";
 
 export const STORE_RUN = {
   spacingMs: 11_000,
@@ -53,8 +54,17 @@ async function main() {
     console.log(JSON.stringify({ skipped: "outside the store window (08:46-03:50 UTC)" }));
     return;
   }
-  await runTechnodom();
-  if (inWindow()) await runSulpak();
+  const started = new Date();
+  try {
+    await runTechnodom();
+    if (inWindow()) await runSulpak();
+  } finally {
+    // Product pages are cached for a day: the ones with a new store price are rebuilt on their next visit.
+    const ids = await sql<{ external_id: string }[]>`select distinct p.external_id from store_prices sp
+      join store_matches m on m.id = sp.match_id join products p on p.id = m.product_id where sp.observed_at >= ${started}`.catch(() => []);
+    const n = await refreshPages(env.siteUrl(), env.telegramBotToken(), ids.map((r) => r.external_id));
+    if (ids.length) console.log(`site refresh: ${n} of ${ids.length} product pages`);
+  }
 }
 
 /** Waits while a manual Kaspi check runs (rule 6a: never in parallel with a Kaspi request), then the store's own checks. */

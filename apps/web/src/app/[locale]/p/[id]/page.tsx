@@ -26,7 +26,7 @@ type Props = { params: Promise<{ locale: string; id: string }> };
  * visitor's own tracking and city are read in the browser (TrackPanelLive, CityProvider). Prices change once a day;
  * an alert's link and a newly priced product refresh the copy at once (/api/my/enter, /api/product-fresh).
  */
-export const revalidate = 3600;
+export const revalidate = 86400; // a day; rebuilt sooner when a worker checks the product (api/revalidate-products)
 export function generateStaticParams() { return []; }
 const fmtDate = (iso: string, locale: string) =>
   new Intl.DateTimeFormat(locale === "kk" ? "kk-KZ" : "ru-KZ", { day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Almaty" }).format(new Date(iso));

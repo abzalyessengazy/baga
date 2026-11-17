@@ -1,5 +1,5 @@
 import { unstable_cache } from "next/cache";
-import { dailyCacheSeconds } from "@baga/core";
+import { dailyCacheSeconds, secondsUntilShiftEnds } from "@baga/core";
 
 /**
  * Cache-Control for numbers that change once a day: the CDN keeps a copy for up to an hour, but never past the moment
@@ -12,11 +12,11 @@ export function dailyCacheControl(now = new Date()): string {
 }
 
 /**
- * Server-side cache for pages that read many rows (/shops, /explore): the same result for up to 15 minutes, never
- * past the end of the day's collection (as dailyCacheControl), so numbers stay in step with the home page. The
- * value must be plain JSON (no Dates).
+ * Server-side cache for pages that read many rows (/shops, /explore): one copy a day, refreshed when the day's
+ * collection completes (08:45 UTC), so each list is written to the cache once a day (DECISIONS.md 2026-11-17 "Fewer
+ * cache writes"; it was every 15 minutes). The value must be plain JSON (no Dates).
  */
 export function cachedDaily<T>(key: string[], load: () => Promise<T>, now = new Date()): Promise<T> {
-  const revalidate = Math.max(60, Math.min(900, dailyCacheSeconds(now)));
+  const revalidate = Math.max(60, secondsUntilShiftEnds(now));
   return unstable_cache(load, ["daily", ...key], { revalidate })();
 }

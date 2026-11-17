@@ -12,7 +12,7 @@ import { OG_CHART, OG_SIZE, ogFonts, ogMessages, ogT, productCard, shortTitle, h
  */
 export const size = OG_SIZE;
 export const contentType = "image/png";
-export const revalidate = 3600;
+export const revalidate = 86400; // link previews: once a day is enough (the owner, 17 Nov)
 
 type Props = { params: Promise<{ locale: string; id: string }> };
 

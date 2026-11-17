@@ -459,3 +459,9 @@ Our own out-of-hours manual checks drew a 403 on 15 and 16 Nov, and one bot at r
 - Prices saved this way are marked `price_observations.source = 'marketparser'` (migration 0035). Shops are matched to the ones we know by their exact name, so their Kaspi rating stays; an unknown shop gets a `name:` key until the collector sees its id. The page data (photo, category, Kaspi reviews) comes with the collector's next window, which reads the page of any product never read.
 - Limits stay: 40 a day, 3 per visitor, outside 03:55–08:50 UTC. The waiting message says 3–5 minutes (was 1–2).
 - The trial (until 1 Dec 2026) has 2 000 checks: a manual check costs one. The key is a GitHub secret (`MARKETPARSER_API_KEY`); without it or the campaign id, requests wait for the collector.
+
+## 2026-11-17 Fewer cache writes
+Vercel warned that the free team used 75% of its 200 000 ISR writes (cached copies of pages and data). Product pages were rebuilt hourly whenever visited (3 260 products × 2 languages, mostly by search bots), link previews too, and /explore cached every list, search, category, sort and page for 15 minutes. Now (the owner: «make sure user experience is not hurt», previews and /explore once a day):
+- Product pages are cached for a day. The collector (every 5 minutes and at the end of a run, manual checks included) and the store run tell the site which products they checked, through `POST /api/revalidate-products`, signed with a key derived from `TELEGRAM_BOT_TOKEN` (both already have it); those pages are rebuilt on their next visit, so a new price shows within minutes as before. The personal parts (tracking, city) were already loaded separately.
+- Link previews (`opengraph-image`) once a day.
+- /explore and /shops lists: one cached copy a day, refreshed when the day's collection completes (`cachedDaily`); a search on /explore reads the database directly and is not cached.
