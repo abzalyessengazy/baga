@@ -212,26 +212,6 @@ export default async function ProductPage({ params }: Props) {
           {offerCount > 0 && <span className="total-sub">{tr("from", { count: offerCount })}</span>}
           {!showCity && earlierLow !== null && <span className="total-sub total-earlier">{t("earlierToday", { price: f(earlierLow) })}</span>}
         </div>
-        {/* Other stores at a glance, under the price (DECISIONS 2026-11-07): a plain name chip, never the store's logo;
-            the exact item first, else the similar one; a click opens the store's page, the details stay in the block below. */}
-        {!showCity && v.minPrice !== null && v.elsewhere.length > 0 && (() => {
-          const o = v.elsewhere.find((x) => x.kind === "exact") ?? v.elsewhere[0]!;
-          const d = o.price - v.minPrice;
-          const cls = o.kind === "similar" ? "is-similar" : d < 0 ? "is-cheaper" : "";
-          return (
-            <a href={o.url} target="_blank" rel="nofollow noopener noreferrer" className={`store-glance ${cls}`}>
-              <span className={`store-chip is-${o.store}`}>
-                <svg viewBox="0 0 20 20" width="13" height="13" aria-hidden fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M3.5 9 10 3.5 16.5 9M5 7.8v8.7h10V7.8" />
-                </svg>
-                {o.name}
-              </span>
-              <span className="store-glance-price">{o.kind === "similar" ? t("glanceSimilar", { price: f(o.price) }) : f(o.price)}</span>
-              {o.kind === "exact" && <span className="store-glance-diff">{d < 0 ? t("elsewhereCheaper", { amount: f(-d) }) : d > 0 ? t("elsewhereDearer", { amount: f(d) }) : t("elsewhereSame")}</span>}
-              <span aria-hidden className="store-glance-go">↗</span>
-            </a>
-          );
-        })()}
         {showCity && <p className="note city-note">{t("cityHistoryNote")}</p>}
         {verdict && !showCity && (
           <>
@@ -242,37 +222,12 @@ export default async function ProductPage({ params }: Props) {
             <p className="verdict-text">{verdictText}{verdictWas && <> <strong>{verdictWas}</strong></>}</p>
           </>
         )}
-        </>))}
-        {/* One tap to the coupon, right under what people read first (16 Nov: on a phone it sat ~2.5 screens down). */}
-        {!v.delisted && <TrackJump />}
-        <SaleCheck history={v.history} locale={L} />
-        <hr className="rule" />
-        <h2 className="receipt-caption" style={{ fontSize: "inherit", fontWeight: 400, margin: "0 0 6px" }}>{t("historyTitle")}</h2>
-        {perCity(({ city, showCity, cityName, totalPrice }) => {
-          const h = showCity ? cityHistories.get(city) ?? [] : v.history;
-          return <PriceChart key={city} history={h} empty={emptyHistory(h, showCity ? cityName : t("cityIn.almaty"), totalPrice !== null || h.length > 0)} />;
-        })}
-        <hr className="rule" />
-        <h2 className="receipt-caption" style={{ fontSize: "inherit", fontWeight: 400, margin: "0 0 6px" }}>{t("sellersTitle")}</h2>
-        {perCity(({ city, sellerRows, shownCount, checkedAt, shownIn, offerCount }) => (<>
-        {sellerRows.length > 0
-          ? <SellerTable key={city} rows={sellerRows} shown={shownCount} ratedAt={dayMonth(checkedAt, td)} />
-          : <p className="verdict-text">{v.delisted ? t("delisted") : local ? t("cityNotSold", { city: shownIn }) : t("outOfStockCity")}</p>}
-        {offerCount > shownCount && <p className="note">{t("moreSellers", { count: offerCount - shownCount })}</p>}
-        </>))}
-        <p className="note">{local ? t("cityPrice") : t("nationalPrice")}</p>
-        {/* Other stores, exact matches only (DECISIONS.md, 2026-11-07): the store's own price, never adjusted. Shown on
-            every product with a price (the owner, 15 Nov: «show on all products that we cross check with Sulpak»), saying
-            so plainly while no identical product has been found; not for city-dependent goods, which those stores do not sell. */}
-        {v.minPrice !== null && (v.elsewhere.length > 0 || !local) && (
-          <section className="elsewhere" id="elsewhere" aria-label={t("elsewhereTitle")}>
+        {/* Other stores, all in one place right under the verdict and above Kaspi's sellers (the owner, 17 Nov: one at the
+            top and the rest at the bottom read as two lists): the store's own price, never adjusted, exact items first;
+            a colour-only doubt apart as «похожий». A plain name chip, never the store's logo (DECISIONS 2026-11-07). */}
+        {!showCity && v.minPrice !== null && v.elsewhere.length > 0 && (
+          <section className="elsewhere is-top" id="elsewhere" aria-label={t("elsewhereTitle")}>
             <h2 className="elsewhere-title">{t("elsewhereTitle")}</h2>
-            {v.elsewhere.length === 0 && (
-              <p className="elsewhere-none">
-                <span className="store-chip is-technodom">Technodom</span> <span className="store-chip is-sulpak">Sulpak</span>{" "}
-                {t("elsewhereNone")}
-              </p>
-            )}
             {v.elsewhere.filter((o) => o.kind === "exact").map((o) => {
               const d = o.price - v.minPrice!;
               return (
@@ -301,6 +256,42 @@ export default async function ProductPage({ params }: Props) {
             {v.elsewhere.some((o) => o.kind === "exact") && <p className="note">{t("elsewhereNote")}</p>}
           </section>
         )}
+        </>))}
+        {/* One tap to the coupon, right under what people read first (16 Nov: on a phone it sat ~2.5 screens down). */}
+        {!v.delisted && <TrackJump />}
+        <SaleCheck history={v.history} locale={L} />
+        <hr className="rule" />
+        <h2 className="receipt-caption" style={{ fontSize: "inherit", fontWeight: 400, margin: "0 0 6px" }}>{t("historyTitle")}</h2>
+        {perCity(({ city, showCity, cityName, totalPrice }) => {
+          const h = showCity ? cityHistories.get(city) ?? [] : v.history;
+          return <PriceChart key={city} history={h} empty={emptyHistory(h, showCity ? cityName : t("cityIn.almaty"), totalPrice !== null || h.length > 0)} />;
+        })}
+        <hr className="rule" />
+        <h2 className="receipt-caption" style={{ fontSize: "inherit", fontWeight: 400, margin: "0 0 6px" }}>{t("sellersTitle")}</h2>
+        {perCity(({ city, sellerRows, shownCount, checkedAt, shownIn, offerCount }) => (<>
+        {sellerRows.length > 0
+          ? <SellerTable key={city} rows={sellerRows} shown={shownCount} ratedAt={dayMonth(checkedAt, td)} />
+          : <p className="verdict-text">{v.delisted ? t("delisted") : local ? t("cityNotSold", { city: shownIn }) : t("outOfStockCity")}</p>}
+        {offerCount > shownCount && <p className="note">{t("moreSellers", { count: offerCount - shownCount })}</p>}
+        </>))}
+        <p className="note">{local ? t("cityPrice") : t("nationalPrice")}</p>
+        {/* The stores where no identical item has been found yet: said once, at the very bottom (the owner, 17 Nov).
+            Halyk Market is checked for phones only (DECISIONS 2026-11-17). Not for city-dependent goods, which those
+            stores do not sell. */}
+        {(() => {
+          const checked = [["technodom", "Technodom"], ["sulpak", "Sulpak"], ...(v.categoryPath.at(-1) === "Смартфоны" ? [["halyk", "Halyk Market"]] : [])];
+          const missing = checked.filter(([code]) => !v.elsewhere.some((o) => o.store === code));
+          if (v.minPrice === null || local || missing.length === 0) return null;
+          return (
+            <section className="elsewhere" aria-label={t("elsewhereTitle")}>
+              {v.elsewhere.length === 0 && <h2 className="elsewhere-title">{t("elsewhereTitle")}</h2>}
+              <p className="elsewhere-none">
+                {missing.map(([code, name]) => <span key={code}><span className={`store-chip is-${code}`}>{name}</span>{" "}</span>)}
+                {t("elsewhereNone")}
+              </p>
+            </section>
+          );
+        })()}
         <div className="barcode" aria-hidden />
       </article>
       </CityScope>

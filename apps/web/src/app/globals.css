@@ -486,6 +486,8 @@ a { color: inherit; }
 .store-glance.is-similar .store-glance-price { font-weight: 600; color: var(--ink-soft); }
 .elsewhere { scroll-margin-top: 80px; }
 .elsewhere { margin: 18px 0 0; padding-top: 14px; border-top: 1px dashed var(--rule); }
+/* All other stores' prices in one block under the verdict, above Kaspi's sellers (17 Nov). */
+.elsewhere.is-top { margin: 14px 0 6px; padding-top: 12px; }
 .elsewhere-title { margin: 0 0 8px; font-family: var(--font-receipt); font-size: 0.75rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); }
 .elsewhere-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; padding: 10px 8px; margin: 0 -8px; border-radius: 6px;
   color: inherit; text-decoration: none; font-family: var(--font-ui); }
