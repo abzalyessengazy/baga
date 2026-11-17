@@ -280,7 +280,7 @@ export default async function ProductPage({ params }: Props) {
                   <span className="elsewhere-name"><span className={`store-chip is-${o.store}`}>{o.name}</span> ↗</span>
                   <span className="elsewhere-price">{f(o.price)}</span>
                   <span className="elsewhere-diff">{d < 0 ? t("elsewhereCheaper", { amount: f(-d) }) : d > 0 ? t("elsewhereDearer", { amount: f(d) }) : t("elsewhereSame")}</span>
-                  <span className="elsewhere-meta">{t("elsewhereChecked", { time: fmtTime(new Date(o.observedAt).toISOString(), td) })}</span>
+                  <span className="elsewhere-meta">{o.offers ? `${t("elsewhereSellers", { count: o.offers })} · ` : ""}{t("elsewhereChecked", { time: fmtTime(new Date(o.observedAt).toISOString(), td) })}</span>
                 </a>
               );
             })}

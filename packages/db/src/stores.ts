@@ -37,6 +37,24 @@ export async function productsToMatch(sql: postgres.Sql, marketplaceId: number) 
     order by 4 desc, p.last_viewed_at desc nulls last, 5 desc`;
 }
 
+/**
+ * Phones never checked against this store (Halyk Market, phones first): people's products first, then opened ones.
+ * A phone looked up and not found is recorded (status 'rejected', reason 'not found') and tried again after 14 days.
+ */
+export async function phonesToMatch(sql: postgres.Sql, marketplaceId: number, limit: number) {
+  await sql`delete from store_matches where marketplace_id = ${marketplaceId} and status = 'rejected' and reason = 'not found'
+    and created_at < now() - interval '14 days'`;
+  return sql<{ productId: number; externalId: string; title: string; price: number }[]>`
+    select p.id as "productId", p.external_id as "externalId", p.title, s.current_min_price as price
+    from products p join product_state s on s.product_id = p.id
+    where p.status = 'active' and s.in_stock and s.current_min_price is not null
+      and p.category_path[array_length(p.category_path, 1)] = 'Смартфоны'
+      and (exists (select 1 from trackings t where t.product_id = p.id and t.status = 'active') or p.last_viewed_at > now() - interval '14 days')
+      and not exists (select 1 from store_matches m where m.product_id = p.id and m.marketplace_id = ${marketplaceId})
+    order by (select count(*) from trackings t where t.product_id = p.id and t.status = 'active') desc, p.last_viewed_at desc nulls last
+    limit ${limit}`;
+}
+
 /** The Kaspi title of the product a store item is exactly matched to (by the store's own Kaspi link), or null. */
 export async function exactTitleForSku(sql: postgres.Sql, marketplaceId: number, sku: string): Promise<string | null> {
   const [r] = await sql<{ title: string }[]>`
@@ -108,8 +126,8 @@ export async function matchesToPrice(sql: postgres.Sql, marketplaceId: number, l
     limit ${limit}`;
 }
 
-export async function saveStorePrice(sql: postgres.Sql, matchId: number, p: { price: number | null; oldPrice: number | null; inStock: boolean }) {
-  await sql`insert into store_prices (match_id, price, old_price, in_stock) values (${matchId}, ${p.price}, ${p.oldPrice}, ${p.inStock})`;
+export async function saveStorePrice(sql: postgres.Sql, matchId: number, p: { price: number | null; oldPrice: number | null; inStock: boolean; offers?: number | null }) {
+  await sql`insert into store_prices (match_id, price, old_price, in_stock, offers) values (${matchId}, ${p.price}, ${p.oldPrice}, ${p.inStock}, ${p.offers ?? null})`;
 }
 
 /** Takes a match out of use (the page is gone, or the item no longer passes the rules); the owner can look again. */
@@ -147,14 +165,14 @@ export async function pendingMatches(sql: postgres.Sql, limit = 50): Promise<Pen
  * What a product page shows: each store's latest price, fresh and in stock only. `exact`: the confirmed item, the same
  * product. `similar`: a colour-only doubt, shown apart with the store's own name; only when that store has no exact one.
  */
-export interface StoreOffer { store: string; name: string; url: string; title: string | null; price: number; oldPrice: number | null; observedAt: Date; kind: "exact" | "similar" }
+export interface StoreOffer { store: string; name: string; url: string; title: string | null; price: number; oldPrice: number | null; observedAt: Date; kind: "exact" | "similar"; offers: number | null }
 export async function storeOffers(sql: postgres.Sql, productId: number): Promise<StoreOffer[]> {
   const rows = await sql<StoreOffer[]>`
     select mk.code as store, mk.name, mk.base_url || mk.product_path || m.store_slug as url, m.store_title as title,
-           sp.price, sp.old_price as "oldPrice", sp.observed_at as "observedAt",
+           sp.price, sp.old_price as "oldPrice", sp.observed_at as "observedAt", sp.offers,
            case when m.status = 'confirmed' then 'exact' else 'similar' end as kind
     from store_matches m join marketplaces mk on mk.id = m.marketplace_id
-    join lateral (select price, old_price, in_stock, observed_at from store_prices where match_id = m.id order by observed_at desc limit 1) sp on true
+    join lateral (select price, old_price, in_stock, observed_at, offers from store_prices where match_id = m.id order by observed_at desc limit 1) sp on true
     where m.product_id = ${productId} and sp.in_stock and sp.price is not null
       and (m.status = 'confirmed' or (m.status = 'pending' and m.reason = any(${SIMILAR_REASONS as unknown as string[]})))
       and sp.observed_at > now() - make_interval(hours => ${STORE_PRICES.showMaxAgeHours})

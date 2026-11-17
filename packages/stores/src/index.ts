@@ -1,2 +1,3 @@
 export * from "./technodom";
 export { SULPAK, SulpakHttpError, SulpakParseError, parseCategorySitemap, parseListing, parseSulpakProduct, createSulpakClient, sulpakTranslit, sulpakCategoriesFor, type SulpakItem, type SulpakProduct, type SulpakClient } from "./sulpak";
+export { HALYK, HalykHttpError, HalykParseError, createHalykClient, nuxtData as halykData, listItems as halykListItems, parseHalykProduct, variantPickers as halykPickers, pagePath as halykPagePath, phoneKey, sameModel as samePhoneModel, pickMemory, pickColour, type HalykProduct, type HalykClient, type HalykListItem, type PhoneKey } from "./halyk";

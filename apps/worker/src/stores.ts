@@ -15,11 +15,13 @@ import postgres from "postgres";
 import { KASPI_VISIT_WINDOW_UTC, isInStoreWindow, bestCandidate, looseCandidates, mismatch, storeIndex, storeTokens, kaspiColour } from "@baga/core";
 import {
   connectionOptions, isSimilarReason, storeMarketplaceId, productsToMatch, productsSoldOnKaspiBy, productIdByExternal, exactTitleForSku, saveMatch, matchesToPrice, saveStorePrice,
-  setMatchStatus, startStoreRun, finishStoreRun, saveStoreCategories, storeCategories, ourLeafCategories, saveListingPage, storeItems, STORE_INDEX,
+  setMatchStatus, startStoreRun, finishStoreRun, phonesToMatch, saveStoreCategories, storeCategories, ourLeafCategories, saveListingPage, storeItems, STORE_INDEX,
 } from "@baga/db";
 import {
   createTechnodomClient, TECHNODOM, TechnodomHttpError, TechnodomParseError, StoreRequestRefused, skuOf, type TechnodomProduct,
   createSulpakClient, SULPAK, SulpakHttpError, SulpakParseError, sulpakCategoriesFor, type SulpakProduct,
+  createHalykClient, HALYK, HalykHttpError, HalykParseError, halykListItems, halykPickers, halykPagePath, parseHalykProduct, phoneKey, samePhoneModel,
+  pickMemory, pickColour, type HalykListItem,
 } from "@baga/stores";
 import { env } from "./env";
 import { CircuitBreaker } from "./breaker";
@@ -36,6 +38,9 @@ export const STORE_RUN = {
   sulpakPrices: 400,
   /** A listing price this fresh may price a new pair at once; older ones wait for the product page. */
   listingFreshHours: 12,
+  /** Halyk Market: matched phones priced per run, and new phones looked up per run (≤ ~6 pages each). */
+  halykPrices: 300,
+  halykNewPhones: 25,
 } as const;
 
 const minute = (d = new Date()) => d.getUTCHours() * 60 + d.getUTCMinutes() + d.getUTCSeconds() / 60;
@@ -58,6 +63,7 @@ async function main() {
   try {
     await runTechnodom();
     if (inWindow()) await runSulpak();
+    if (inWindow()) await runHalyk();
   } finally {
     // Product pages are cached for a day: the ones with a new store price are rebuilt on their next visit.
     const ids = await sql<{ external_id: string }[]>`select distinct p.external_id from store_prices sp
@@ -288,6 +294,115 @@ async function runSulpak() {
     const aborted = breaker.openReason;
     await finishStoreRun(sql, runId, { requests, priced, matched, failed, aborted });
     console.log(JSON.stringify({ store: SULPAK.code, requests, listings, priced, matched, failed, aborted }));
+  }
+}
+
+/**
+ * Halyk Market, phones first, display only (DECISIONS.md 2026-11-17 "Halyk Market, display only"):
+ *   1. Prices: confirmed matches whose last price is 12 h+ old, from their product page (lowest price, sellers).
+ *   2. Matching: a phone people track or opened, never looked up here: the brand's phone lists (popular, cheapest,
+ *      dearest; only their first 12 are in the page) and "similar products" find its model; then the page's own
+ *      variant links step to its memory and colour. Only that exact variant is a match; a «Dual Sim» phone (two
+ *      physical SIMs, a version Halyk does not name) and a missing memory or colour are recorded as not matched.
+ */
+async function runHalyk() {
+  const mid = await storeMarketplaceId(sql, HALYK.code);
+  const runId = await startStoreRun(sql, mid);
+  const breaker = new CircuitBreaker();
+  let requests = 0, priced = 0, matched = 0, failed = 0;
+  const hm = createHalykClient({ minIntervalMs: STORE_RUN.spacingMs, beforeRequest: async () => { await gate(breaker); requests++; } });
+  /** A page's data, or null (counted on the breaker). */
+  async function read(path: string): Promise<Record<string, unknown> | null> {
+    try {
+      const d = await hm.page(`${HALYK.base}${halykPagePath(path)}`);
+      breaker.record(true);
+      return d;
+    } catch (e) {
+      if (e instanceof StoreRequestRefused) throw e;
+      failed++;
+      breaker.record(false, e instanceof HalykHttpError && e.isBlocked, e instanceof HalykParseError);
+      console.error(`[halyk] ${path}: ${e instanceof Error ? e.message : e}`);
+      return null;
+    }
+  }
+  const slugOf = (path: string) => halykPagePath(path).replace(/^\/category\//, "");
+  try {
+    // 1. Prices.
+    for (const m of await matchesToPrice(sql, mid, STORE_RUN.halykPrices)) {
+      const d = await read(`/category/${m.slug}`);
+      if (!d) continue;
+      let p;
+      try { p = parseHalykProduct(d); } catch { failed++; continue; }
+      if (p.skuId !== m.sku) { await setMatchStatus(sql, m.matchId, "rejected", `item changed to ${p.skuId}`); continue; }
+      await saveStorePrice(sql, m.matchId, { price: p.price, oldPrice: null, inStock: p.inStock, offers: p.offers });
+      priced++;
+    }
+    // 2. New phones.
+    const lists = new Map<string, HalykListItem[]>();
+    const seen = new Map<string, HalykListItem>();
+    const add = (items: HalykListItem[]) => { for (const it of items) seen.set(it.url.split("?")[0]!, it); };
+    const none = (t: { productId: number }, reason: string) =>
+      saveMatch(sql, { productId: t.productId, marketplaceId: mid, sku: "not-found", slug: "", title: null, method: "strict", status: "rejected", reason });
+    for (const t of await phonesToMatch(sql, mid, STORE_RUN.halykNewPhones)) {
+      const k = phoneKey(t.title);
+      if (k.dualSim) { await none(t, "SIM version unclear"); matched++; continue; }
+      if (!k.memory || !k.colour) { await none(t, "no memory or colour in the title"); matched++; continue; }
+      const brand = k.model.split(" ")[0]!;
+      if (!lists.has(brand)) {
+        const all: HalykListItem[] = [];
+        for (const sort of ["popular-desc", "price-desc", "price-asc"] as const) {
+          const d = await read(HALYK.phoneList(brand.charAt(0).toUpperCase() + brand.slice(1), sort).replace(HALYK.base, ""));
+          if (d) all.push(...halykListItems(d));
+        }
+        lists.set(brand, all);
+        add(all);
+      }
+      const family = () => [...seen.values()].find((it) => samePhoneModel(k, it.title));
+      let fam = family();
+      // Not in the lists: the nearest model's page lists the line's other models under "similar products" (≤ 2 hops).
+      const words = k.model.split(" ");
+      for (let hop = 0; hop < 2 && !fam; hop++) {
+        const near = [...seen.values()].filter((it) => !it.title.includes(" + "))
+          .map((it) => ({ it, n: words.filter((w) => it.title.toLowerCase().includes(w)).length }))
+          .sort((a, b) => b.n - a.n)[0];
+        if (!near || near.n < Math.min(3, words.length)) break;
+        const d = await read(near.it.url);
+        if (d) add(halykListItems(d));
+        seen.delete(near.it.url.split("?")[0]!); // not this one again
+        fam = family();
+      }
+      if (!fam) { await none(t, "not found"); matched++; continue; }
+      let path = fam.url;
+      let d = await read(path);
+      if (!d) continue;
+      add(halykListItems(d));
+      const memOpts = Object.entries(halykPickers(d)).find(([n]) => /памят|объем/i.test(n))?.[1];
+      if (memOpts) {
+        const o = pickMemory(memOpts, k.memory);
+        if (!o) { await none(t, `memory ${k.memory} not sold`); matched++; continue; }
+        if (!o.current) { path = o.url; d = await read(path); if (!d) continue; }
+      }
+      const colOpts = Object.entries(halykPickers(d)).find(([n]) => /цвет/i.test(n))?.[1];
+      if (colOpts) {
+        const o = pickColour(colOpts, k.colour);
+        if (!o) { await none(t, `colour not sold (${colOpts.map((x) => x.name).join(", ")})`.slice(0, 200)); matched++; continue; }
+        if (!o.current) { path = o.url; d = await read(path); if (!d) continue; }
+      }
+      let p;
+      try { p = parseHalykProduct(d); } catch { failed++; continue; }
+      // The page we ended on must still be our model, memory and colour.
+      const ok = samePhoneModel(k, p.title) && p.title.toLowerCase().replace(/\s+/g, "").includes(k.memory);
+      const saved = await saveMatch(sql, { productId: t.productId, marketplaceId: mid, sku: p.skuId, slug: slugOf(path), title: p.title,
+        method: "strict", status: ok ? "confirmed" : "rejected", reason: ok ? null : "variant page does not match" });
+      matched++;
+      if (saved.status === "confirmed") { await saveStorePrice(sql, saved.id, { price: p.price, oldPrice: null, inStock: p.inStock, offers: p.offers }); priced++; }
+    }
+  } catch (e) {
+    if (!(e instanceof StoreRequestRefused)) throw e;
+  } finally {
+    const aborted = breaker.openReason;
+    await finishStoreRun(sql, runId, { requests, priced, matched, failed, aborted });
+    console.log(JSON.stringify({ store: HALYK.code, requests, priced, matched, failed, aborted }));
   }
 }
 
