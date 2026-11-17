@@ -61,9 +61,12 @@ async function main() {
   }
   const started = new Date();
   try {
-    await runTechnodom();
-    if (inWindow()) await runSulpak();
-    if (inWindow()) await runHalyk();
+    // `--only halyk` (or technodom, sulpak): one store's run, e.g. a first run by hand.
+    const only = process.argv[process.argv.indexOf("--only") + 1];
+    const want = (code: string) => !process.argv.includes("--only") || only === code;
+    if (want("technodom")) await runTechnodom();
+    if (want("sulpak") && inWindow()) await runSulpak();
+    if (want("halyk") && inWindow()) await runHalyk();
   } finally {
     // Product pages are cached for a day: the ones with a new store price are rebuilt on their next visit.
     const ids = await sql<{ external_id: string }[]>`select distinct p.external_id from store_prices sp
