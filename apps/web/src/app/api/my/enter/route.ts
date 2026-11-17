@@ -1,10 +1,9 @@
-import { randomBytes } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
-import { addWatcherKey, getSql, watcherIdByAccessCode } from "@baga/db";
+import { getSql, watcherIdByAccessCode } from "@baga/db";
 import { allow } from "@/lib/rateLimit";
 import { clientIp } from "@/lib/turnstile";
-import { WATCHER_COOKIE, cookieOptions, currentWatcher, hashSecret } from "@/lib/watcher";
+import { giveBrowserKey } from "@/lib/browserKey";
 
 const isCode = (v: string | null): v is string => !!v && /^[A-Za-z0-9_-]{24,64}$/.test(v);
 /** Only our own pages: /ru/… or /kk/…, never another site. */
@@ -33,17 +32,7 @@ export async function GET(req: Request) {
   try {
     const id = await watcherIdByAccessCode(sql, code);
     if (!id) return res;
-    // This browser already belongs to this visitor: nothing to do. It belongs to someone with their own list or alerts:
-    // they keep it, a forwarded message never replaces it. An empty profile (made by browsing here) gives way.
-    const here = await currentWatcher();
-    if (here?.watcher.id === id) return res;
-    if (here) {
-      const [busy] = await sql<{ n: number }[]>`select count(*)::int as n from trackings where watcher_id = ${here.watcher.id} and status <> 'removed'`;
-      if ((busy?.n ?? 0) > 0 || here.watcher.telegramChatId || here.watcher.emailConfirmed) return res;
-    }
-    const secret = randomBytes(32).toString("base64url");
-    await addWatcherKey(sql, id, hashSecret(secret));
-    res.cookies.set(WATCHER_COOKIE, secret, cookieOptions());
+    await giveBrowserKey(sql, id, res);
   } catch (e) {
     console.error(`[enter] ${e}`);
   }

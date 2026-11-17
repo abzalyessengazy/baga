@@ -22,6 +22,8 @@ export async function GET() {
     // Where alerts can go, for the reminder bar of people who track products with neither (AlertsBar, 16 Nov).
     const w = found.watcher;
     const alerts = { telegram: !!w.telegramChatId, email: !!w.emailConfirmed,
+      // An address waiting for its «Подтвердить» (17 Nov: the bar said «некуда прислать» right after the email was sent).
+      emailPending: !w.emailConfirmed && w.email ? w.email : null,
       telegramUrl: !w.telegramChatId && !w.emailConfirmed && stats.tracked > 0 ? await telegramConnectUrl(w) : null };
     return NextResponse.json({ watcher: true, profile, stats, level: levelFor(stats.tracked), alerts }, { headers });
   } catch (e) {

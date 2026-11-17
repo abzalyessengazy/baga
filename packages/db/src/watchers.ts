@@ -248,11 +248,11 @@ export async function requestWatcherEmail(sql: postgres.Sql, watcherId: string, 
 }
 
 /** The confirmation link was opened and its button pressed: alerts may now go to the address. */
-export async function confirmWatcherEmail(sql: postgres.Sql, tokenHash: string): Promise<{ email: string; locale: "ru" | "kk" } | null> {
-  const [r] = await sql<{ email: string; locale: "ru" | "kk" }[]>`
+export async function confirmWatcherEmail(sql: postgres.Sql, tokenHash: string): Promise<{ id: string; email: string; locale: "ru" | "kk" } | null> {
+  const [r] = await sql<{ id: string; email: string; locale: "ru" | "kk" }[]>`
     update watchers set email_confirmed_at = now(), email_token_hash = null, email_token_expires_at = null
     where email_token_hash = ${tokenHash} and email_token_expires_at > now() and email is not null
-    returning email, locale`;
+    returning id::text as id, email, locale`;
   return r ?? null;
 }
 

@@ -2,6 +2,7 @@
 import { useId, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { Turnstile } from "./Turnstile";
+import { PROFILE_EVENT } from "@/lib/profileClient";
 
 export interface EmailInitial { address: string | null; confirmed: boolean }
 
@@ -52,6 +53,7 @@ export function EmailConnect({ initial, removable = false, onState }: { initial:
       setAddress(data.email ?? address);
       setState(data.code);
       onState?.(data.code);
+      window.dispatchEvent(new Event(PROFILE_EVENT)); // the alerts bar reads the new state
     } else {
       const code = data?.code;
       setMsg(code === "invalid_email" ? t("invalid") : code === "too_soon" ? t("tooSoon") : code === "too_many" || code === "rate_limited"
