@@ -485,3 +485,5 @@ The probes of 17 Nov (docs/ROADMAP_BEYOND_KASPI.md, step 0) found Halyk Market's
 
 ## 2026-11-17 Other stores in one place
 A product priced at another store showed that store once under the price, then Kaspi's sellers, then the stores again at the bottom (the owner: «we need to show them above … organize and align everything systematically»). Now every other store's price (exact items, then the colour-only «похожий» ones) is one block, «В других магазинах», right under the verdict and above Kaspi's sellers; the single glance under the price is gone. The bottom of the receipt keeps only the stores where no identical item has been found yet (Technodom, Sulpak, and Halyk Market for phones), with the note, which now says their price will appear next to Kaspi's.
+
+Amended the same day: the chip is Halyk Market's logo green (#008a52, white text), from the logo the owner sent, not its site's yellow.
