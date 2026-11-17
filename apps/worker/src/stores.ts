@@ -342,6 +342,8 @@ async function runHalyk() {
     }
     // 2. New phones.
     const lists = new Map<string, HalykListItem[]>();
+    // A brand list Halyk did not serve (17 Nov: a 503 on Redmi's): its phones are not "not found", only not looked at.
+    const listFailed = new Set<string>();
     const seen = new Map<string, HalykListItem>();
     const add = (items: HalykListItem[]) => { for (const it of items) seen.set(it.url.split("?")[0]!, it); };
     const none = (t: { productId: number }, reason: string) =>
@@ -355,7 +357,7 @@ async function runHalyk() {
         const all: HalykListItem[] = [];
         for (const sort of ["popular-desc", "price-desc", "price-asc"] as const) {
           const d = await read(HALYK.phoneList(brand.charAt(0).toUpperCase() + brand.slice(1), sort).replace(HALYK.base, ""));
-          if (d) all.push(...halykListItems(d));
+          if (d) all.push(...halykListItems(d)); else listFailed.add(brand);
         }
         lists.set(brand, all);
         add(all);
@@ -374,7 +376,7 @@ async function runHalyk() {
         seen.delete(near.it.url.split("?")[0]!); // not this one again
         fam = family();
       }
-      if (!fam) { await none(t, "not found"); matched++; continue; }
+      if (!fam) { if (!listFailed.has(brand)) { await none(t, "not found"); matched++; } continue; }
       let path = fam.url;
       let d = await read(path);
       if (!d) continue;
