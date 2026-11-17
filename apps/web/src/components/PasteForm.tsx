@@ -38,8 +38,8 @@ export const PasteForm = forwardRef<HTMLInputElement>(function PasteForm(_, ref)
   const step = (s: WaitStep) => setSteps((l) => (l.includes(s) ? l : [...l, s]));
   // Search results for typed text: null = not searched (or a link); [] = nothing found.
   const [results, setResults] = useState<CatalogListItem[] | null>(null);
-  // Turnstile is only needed for l.kaspi.kz short links; armed on first focus, so visitors who never use the
-  // form do not load Cloudflare's script.
+  // Turnstile is only needed for l.kaspi.kz short links and variant links: armed only when one is typed or pasted
+  // (the owner, 17 Nov: an ordinary link asked for a bot check it never used).
   const [armed, setArmed] = useState(false);
   const [widgetKey, setWidgetKey] = useState(0);
   const token = useRef<string | null>(null);
@@ -94,7 +94,7 @@ export const PasteForm = forwardRef<HTMLInputElement>(function PasteForm(_, ref)
     const text = await readClipboard();
     if (!text) { setClipFailed(true); inputRef.current?.focus(); return; }
     setClipFailed(false);
-    setValue(text); write(text); setError(null); setArmed(true);
+    setValue(text); write(text); setError(null); if (isShortLink(text)) setArmed(true);
     if (looksLikeLink(text)) void check(text);
     else inputRef.current?.focus();
   }
@@ -185,8 +185,7 @@ export const PasteForm = forwardRef<HTMLInputElement>(function PasteForm(_, ref)
         <input
           ref={setInput} id={id} inputMode="search" autoComplete="off" spellCheck={false}
           placeholder={t("pastePlaceholder")} value={value}
-          onFocus={() => setArmed(true)}
-          onChange={(e) => { setValue(e.target.value); write(e.target.value); setError(null); setArmed(true); }}
+          onChange={(e) => { setValue(e.target.value); write(e.target.value); setError(null); if (isShortLink(e.target.value)) setArmed(true); }}
           aria-invalid={error ? true : undefined} aria-describedby={`${id}-msg`}
           aria-controls={showSearch ? `${id}-results` : undefined}
         />

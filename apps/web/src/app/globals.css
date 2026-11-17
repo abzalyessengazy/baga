@@ -694,6 +694,8 @@ a { color: inherit; }
   animation: channel-pulse 1.6s ease-out 0.9s 2;
 }
 .channel-needed .note { margin-top: 8px; }
+/* The button inside the warning fits the box on a phone (17 Nov: it ran past the right edge) and wraps if it must. */
+.channel-needed .btn { display: block; box-sizing: border-box; width: 100%; max-width: 100%; text-align: center; white-space: normal; text-decoration: none; }
 .channel-title { margin: 0 0 4px; font: 800 var(--step-0)/1.25 var(--font-ui); color: var(--stamp); }
 /* The Telegram button of the next step breathes a few times until it is tapped (16 Nov). */
 .channel-needed .btn.is-pulse { animation: ch-pulse 1.8s ease-out 0.8s 4; }

@@ -44,6 +44,9 @@ export function Turnstile({ action, locale, onToken, onError }: {
   handlers.current = { onToken, onError };
 
   useEffect(() => {
+    // Passed a check in the last 30 minutes (lib/humanPass.ts): the server takes the pass, no widget needed. If the
+    // pass is no longer valid, the server clears this flag and the next try shows the widget.
+    if (/(?:^|;\s*)baga_hp_ok=1/.test(document.cookie)) { handlers.current.onToken("pass"); return; }
     if (!SITE_KEY) { handlers.current.onError?.("failed"); return; }
     let id: string | null = null;
     let cancelled = false;

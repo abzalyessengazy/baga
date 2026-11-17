@@ -34,15 +34,20 @@ export function EmailConnect({ initial, removable = false, onState }: { initial:
     e.preventDefault();
     setBusy(true);
     setMsg(null);
-    const tok = await nextToken();
-    const res = await fetch("/api/email", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: address, locale, token: tok }),
-    }).catch(() => null);
-    const data = (await res?.json().catch(() => null)) as { code?: string; email?: string } | null;
+    const send = async () => {
+      const tok = await nextToken();
+      const res = await fetch("/api/email", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: address, locale, token: tok }),
+      }).catch(() => null);
+      token.current = null;
+      setAttempt((n) => n + 1); // tokens are single-use
+      return (await res?.json().catch(() => null)) as { code?: string; email?: string } | null;
+    };
+    let data = await send();
+    // A first rejected check is often a stale token: one quiet retry with a fresh one before saying so.
+    if (data?.code === "check_failed") data = await send();
     setBusy(false);
-    token.current = null;
-    setAttempt((n) => n + 1); // tokens are single-use
     if (data?.code === "sent" || data?.code === "confirmed") {
       setAddress(data.email ?? address);
       setState(data.code);

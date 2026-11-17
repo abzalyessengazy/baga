@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { allow } from "@/lib/rateLimit";
-import { clientIp, verifyTurnstile } from "@/lib/turnstile";
+import { clientIp } from "@/lib/turnstile";
+import { verifyHuman, withPass } from "@/lib/humanPass";
 import { queueProductRequest } from "@/lib/product";
 import { requestManual } from "@/lib/manual";
 import { isValidSlug } from "@baga/core";
@@ -21,15 +22,16 @@ export async function POST(req: Request) {
   const id = typeof body.id === "string" && /^\d{5,12}$/.test(body.id) ? body.id : null;
   if (!id) return NextResponse.json({ error: "not_a_product" }, { status: 400 });
 
-  const check = await verifyTurnstile(body.token, ip, { expectedAction: "lookup" });
+  const check = await verifyHuman(req, body.token, ip, "lookup");
   if (!check.ok) {
     if (check.reason === "no_secret") console.error("[turnstile] TURNSTILE_SECRET_KEY is not set; refusing lookups");
-    return NextResponse.json({ error: check.reason === "no_secret" ? "generic" : "check_failed" }, { status: check.reason === "no_secret" ? 503 : 403 });
+    return withPass(NextResponse.json({ error: check.reason === "no_secret" ? "generic" : "check_failed" }, { status: check.reason === "no_secret" ? 503 : 403 }), false);
   }
+  const out = (r: NextResponse) => (check.fresh ? withPass(r, true) : r);
 
   const r = await queueProductRequest(id, typeof body.slug === "string" && isValidSlug(body.slug) ? body.slug : null);
   if (r === "queued") await requestManual({ externalId: id }, ip).catch((e) => console.error(`[manual] ${e}`));
-  if (r === "queued" || r === "exists") return NextResponse.json({ ok: true });
-  if (r === "full") return NextResponse.json({ error: "too_many" }, { status: 429 });
-  return NextResponse.json({ error: "generic" }, { status: 503 });
+  if (r === "queued" || r === "exists") return out(NextResponse.json({ ok: true }));
+  if (r === "full") return out(NextResponse.json({ error: "too_many" }, { status: 429 }));
+  return out(NextResponse.json({ error: "generic" }, { status: 503 }));
 }

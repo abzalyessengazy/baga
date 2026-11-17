@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { parseKaspiUrl, createKaspiClient, shortLinkCode, shortLinkUrl, variantLinkCode } from "@baga/kaspi";
 import { allow } from "@/lib/rateLimit";
-import { clientIp, verifyTurnstile } from "@/lib/turnstile";
+import { clientIp } from "@/lib/turnstile";
+import { verifyHuman, withPass } from "@/lib/humanPass";
 import { queueShortLinkRequest } from "@/lib/product";
 import { requestManual } from "@/lib/manual";
 
@@ -22,11 +23,15 @@ export async function POST(req: Request) {
   const body = (await req.json().catch(() => ({}))) as { input?: unknown; token?: unknown };
   const input = typeof body.input === "string" ? body.input.slice(0, 2000) : "";
   let parsed = parseKaspiUrl(input);
+  // A check passed here gives the visitor the 30-minute pass (lib/humanPass.ts).
+  let passed = false;
+  const out = (r: NextResponse) => (passed ? withPass(r, true) : r);
   if (!parsed.ok && parsed.reason === "short_link") {
     const link = shortLinkCode(input);
     if (!link) return NextResponse.json({ error: "short_link" }, { status: 400 });
-    const check = await verifyTurnstile(body.token, ip, { expectedAction: "resolve" });
-    if (!check.ok) return NextResponse.json({ error: "check_failed" }, { status: 403 });
+    const check = await verifyHuman(req, body.token, ip, "resolve");
+    if (!check.ok) return withPass(NextResponse.json({ error: "check_failed" }, { status: 403 }), false);
+    passed = check.fresh;
     const target = await kaspi.resolveShortLink(shortLinkUrl(link.path)).catch((e) => {
       console.error("[resolve] short link failed:", String(e));
       return null;
@@ -34,22 +39,23 @@ export async function POST(req: Request) {
     if (target) {
       parsed = parseKaspiUrl(target);
       const variant = parsed.ok ? null : variantLinkCode(target);
-      if (variant) return queued(variant.code, variant.path, ip);
+      if (variant) return out(await queued(variant.code, variant.path, ip));
       if (!parsed.ok) console.error("[resolve] short link pointed to:", target);
     }
-    if (!parsed.ok) return queued(link.code, link.path, ip);
+    if (!parsed.ok) return out(await queued(link.code, link.path, ip));
   }
   if (!parsed.ok && parsed.reason === "not_a_product") {
     const variant = variantLinkCode(input);
     if (variant) {
       // Queuing makes the collector send a request, so it takes the same bot check as a short link.
-      const check = await verifyTurnstile(body.token, ip, { expectedAction: "resolve" });
-      if (!check.ok) return NextResponse.json({ error: "check_failed" }, { status: 403 });
-      return queued(variant.code, variant.path, ip);
+      const check = await verifyHuman(req, body.token, ip, "resolve");
+      if (!check.ok) return withPass(NextResponse.json({ error: "check_failed" }, { status: 403 }), false);
+      passed = check.fresh;
+      return out(await queued(variant.code, variant.path, ip));
     }
   }
-  if (!parsed.ok) return NextResponse.json({ error: parsed.reason }, { status: 400 });
-  return NextResponse.json({ productId: parsed.productId, slug: parsed.slug });
+  if (!parsed.ok) return out(NextResponse.json({ error: parsed.reason }, { status: 400 }));
+  return out(NextResponse.json({ productId: parsed.productId, slug: parsed.slug }));
 }
 
 /** Waits for the collector: the visitor goes to /l/<code>, where they can already set a price. */
