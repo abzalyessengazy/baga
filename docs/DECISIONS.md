@@ -471,3 +471,6 @@ The owner added one product and met three Turnstile checks: the paste box armed 
 
 ## 2026-11-17 Confirming email signs the browser in
 The owner tracked an iPad, connected email, pressed «Подтвердить» in the letter and found «Мои товары» empty: the letter opened in another browser (the mail app's own, or Safari), which had no key to the list. The confirmation itself had worked. Now pressing «Подтвердить» gives that browser a key to the list, by the rules of the sign-in links in alerts (2026-11-16): a browser that already belongs to someone with their own list or channel keeps it. While an address waits for its confirmation, the alerts bar says «Осталось подтвердить почту…» with the address and the Telegram button, instead of «уведомления некуда прислать»; the email form tells the bar at once.
+
+## 2026-11-17 No move beyond 80%
+«№ 005» (the daily list for posts) led with men's shoes at 85 000 ₸, "was 1 450 000 ₸, −94%": one seller's absurd listing held two days, so rule W took it as the price a week ago. A drop of more than `MAX_DROP_PCT` (80%, the same line as for targets) or the mirror rise (more than 5×) is now a listing error, not a move: `plausibleMove` keeps it out of the week movers (find of the day, /drops, the week lists, the Telegram channel, the post digest) and the day lists. Real large drops stay (the coffee machine's −63% is in).

@@ -1,5 +1,5 @@
 import type postgres from "postgres";
-import { CHEAP, lastCompleteShiftDay, liveShiftDay, LIVE_MIN_CHECKED, MOVE_MIN_PCT, moveDirection } from "@baga/core";
+import { CHEAP, lastCompleteShiftDay, liveShiftDay, LIVE_MIN_CHECKED, MAX_DROP_PCT, MOVE_MIN_PCT, moveDirection } from "@baga/core";
 
 /**
  * Price moves, by the rules in docs/STATS.md. Prices are compared as daily lows (the lowest price of an Almaty
@@ -10,6 +10,14 @@ import { CHEAP, lastCompleteShiftDay, liveShiftDay, LIVE_MIN_CHECKED, MOVE_MIN_P
  * previous 7 Almaty days. A product needs a check today or yesterday and at least one earlier day, and must be in
  * stock. A drop that has since gone back up is no longer a drop. Biggest change in percent first.
  */
+/**
+ * A move a person could believe (the owner, 17 Nov: «№ 005» led with shoes at 85 000 ₸ "was 1 450 000, −94%", one
+ * seller's absurd listing for two days). A drop of more than MAX_DROP_PCT (80%, the same line as for targets), or the
+ * mirror rise (more than 5×), is a listing error, not a price change: it stays out of every list.
+ */
+export const PLAUSIBLE_RATIO = (100 - MAX_DROP_PCT) / 100;
+export const plausibleMove = (m: { was: number; now: number }) => m.now >= m.was * PLAUSIBLE_RATIO && m.now <= m.was / PLAUSIBLE_RATIO;
+
 export interface Mover {
   externalId: string; title: string; titleKk: string | null; imageUrl: string | null;
   now: number; was: number; pct: number; offerCount: number; checkedAt: Date;
@@ -61,6 +69,8 @@ export async function weekMovers(sql: postgres.Sql, dir: "down" | "up", limit = 
       and ${down
         ? sql`s.current_min_price <= pr.was * (1 - ${minPct}::numeric / 100)`
         : sql`s.current_min_price >= pr.was * (1 + ${minPct}::numeric / 100)`}
+      -- A listing error, not a move (plausibleMove).
+      and s.current_min_price >= pr.was * ${PLAUSIBLE_RATIO}::numeric and s.current_min_price <= pr.was / ${PLAUSIBLE_RATIO}::numeric
     order by s.current_min_price::numeric / pr.was ${down ? sql`asc` : sql`desc`}
     limit ${limit}`;
 }
@@ -120,7 +130,7 @@ export async function dayMoves(sql: postgres.Sql, now = new Date()): Promise<Day
     from r a join r b on b.product_id = a.product_id and b.rn = 2 and b.day = a.day - 1
     join products p on p.id = a.product_id left join product_state s on s.product_id = a.product_id
     where a.rn = 1 and a.day = ${head.day}::date and p.status = 'active'`;
-  const by = (dir: -1 | 1) => rows.filter((m) => moveDirection(m.was, m.now) === dir)
+  const by = (dir: -1 | 1) => rows.filter((m) => moveDirection(m.was, m.now) === dir && plausibleMove(m))
     .sort((x, y) => (y.now - y.was) / y.was * dir - (x.now - x.was) / x.was * dir);
   return { day: head.day, checked: head.checked, compared: rows.length, down: by(-1), up: by(1), live: false, asOf: null };
 }
@@ -144,7 +154,7 @@ async function liveDayMoves(sql: postgres.Sql, day: string, checked: number, asO
     from y join product_state s on s.product_id = y.product_id join products p on p.id = y.product_id
     where p.status = 'active' and s.in_stock and s.current_min_price is not null
       and s.last_checked_at >= (${day}::date::timestamp at time zone 'Asia/Almaty')`;
-  const by = (dir: -1 | 1) => rows.filter((m) => moveDirection(m.was, m.now) === dir)
+  const by = (dir: -1 | 1) => rows.filter((m) => moveDirection(m.was, m.now) === dir && plausibleMove(m))
     .sort((x, y) => (y.now - y.was) / y.was * dir - (x.now - x.was) / x.was * dir);
   return { day, checked, compared: rows.length, down: by(-1), up: by(1), live: true, asOf };
 }
