@@ -1,0 +1,23 @@
+# One-off «дешевле на Halyk Market» email (the owner approved the list on 18 Nov 2026; the Telegram messages were sent
+# from the owner's machine). Run by hand: Actions → One-off notice → Run workflow. Remove after use.
+name: One-off notice
+on:
+  workflow_dispatch:
+jobs:
+  notice:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @baga/worker halyk-notice --send --only email --max 5
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          SITE_URL: https://bagaapp.com

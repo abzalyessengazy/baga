@@ -43,6 +43,12 @@ export const STORE_RUN = {
   halykNewPhones: 25,
   /** Monitors, laptops, earbuds and tablets matched by the manufacturer's part number, per run. */
   halykNewByCode: 25,
+  /**
+   * Sulpak answered 403/429 to the first request on 18 Nov 2026 (after 70% and 100% failures the evening before): no
+   * Sulpak request until this Almaty day (the owner's go, DECISIONS 2026-11-18 "Sulpak paused"). Then one run, whose
+   * breaker stops at the first refusal again. Its last prices stay on the site with their check date.
+   */
+  sulpakPausedUntil: "2026-11-25",
 } as const;
 
 const minute = (d = new Date()) => d.getUTCHours() * 60 + d.getUTCMinutes() + d.getUTCSeconds() / 60;
@@ -67,7 +73,9 @@ async function main() {
     const only = process.argv[process.argv.indexOf("--only") + 1];
     const want = (code: string) => !process.argv.includes("--only") || only === code;
     if (want("technodom")) await runTechnodom();
-    if (want("sulpak") && inWindow()) await runSulpak();
+    const almatyToday = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Almaty" }).format(new Date());
+    if (want("sulpak") && almatyToday < STORE_RUN.sulpakPausedUntil) console.log(JSON.stringify({ sulpak: `paused until ${STORE_RUN.sulpakPausedUntil}` }));
+    else if (want("sulpak") && inWindow()) await runSulpak();
     if (want("halyk") && inWindow()) await runHalyk();
   } finally {
     // Product pages are cached for a day: the ones with a new store price are rebuilt on their next visit.

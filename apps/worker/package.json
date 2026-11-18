@@ -18,7 +18,8 @@
     "content": "node --env-file-if-exists=../../.env --env-file-if-exists=../web/.env.local --import tsx src/content.ts",
     "remind": "node --env-file-if-exists=../../.env --env-file-if-exists=../web/.env.local --import tsx src/remind.ts",
     "probe:halyk": "node --env-file-if-exists=../../.env --import tsx src/probe-halyk.ts",
-    "push:test": "node --env-file-if-exists=../../.env --env-file-if-exists=../web/.env.local --import tsx src/push-test.ts"
+    "push:test": "node --env-file-if-exists=../../.env --env-file-if-exists=../web/.env.local --import tsx src/push-test.ts",
+    "halyk-notice": "node --env-file-if-exists=../../.env --env-file-if-exists=../web/.env.local --import tsx src/halyk-notice.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.8.0",
