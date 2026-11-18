@@ -1,5 +1,6 @@
 import type postgres from "postgres";
 import type { ProductSnapshot } from "@baga/kaspi";
+import { CALM, PARKED_MINUTES } from "@baga/core";
 import { likePattern } from "./like";
 
 export interface ProductRow {
@@ -16,6 +17,8 @@ export interface ProductRow {
   delisted: boolean;
   lastCheckedAt: Date | null;
   observedSince: Date;
+  /** Checked weekly because its price has been calm 2+ weeks (CALM, DECISIONS 2026-11-18): the page says so. */
+  weekly: boolean;
 }
 
 export async function getProductByExternalId(sql: postgres.Sql, externalId: string): Promise<ProductRow | null> {
@@ -23,7 +26,9 @@ export async function getProductByExternalId(sql: postgres.Sql, externalId: stri
     select p.id, p.external_id as "externalId", p.slug, p.title, p.image_url as "imageUrl",
            p.category_path as "categoryPath", s.current_min_price as "currentMinPrice",
            coalesce(s.offer_count, 0) as "offerCount", coalesce(s.in_stock, false) as "inStock",
-           p.status = 'delisted' as delisted, s.last_checked_at as "lastCheckedAt", coalesce(s.observed_since, p.first_seen_at) as "observedSince"
+           p.status = 'delisted' as delisted, s.last_checked_at as "lastCheckedAt", coalesce(s.observed_since, p.first_seen_at) as "observedSince",
+           coalesce((select cs.interval_minutes >= ${CALM.intervalMinutes} and cs.interval_minutes < ${PARKED_MINUTES} and coalesce(s.in_stock, false)
+             from collection_schedule cs where cs.product_id = p.id), false) as weekly
     from products p
     join marketplaces m on m.id = p.marketplace_id and m.code = 'kaspi'
     left join product_state s on s.product_id = p.id
@@ -31,8 +36,9 @@ export async function getProductByExternalId(sql: postgres.Sql, externalId: stri
   return rows[0] ?? null;
 }
 
-/** Daily lowest observed price. Days without a check are absent, never interpolated. */
-export async function getDailyLows(sql: postgres.Sql, productId: number, days = 365) {
+/** Daily lowest observed price. Days without a check are absent, never interpolated. All of it by default (18 Nov:
+ * «Все» shows every observed day, however long ago). */
+export async function getDailyLows(sql: postgres.Sql, productId: number, days = 3650) {
   return sql<{ day: string; price: number }[]>`
     select to_char(date_trunc('day', observed_at at time zone 'Asia/Almaty'), 'YYYY-MM-DD') as day,
            min(min_price)::int as price

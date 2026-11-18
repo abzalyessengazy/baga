@@ -524,6 +524,8 @@ a { color: inherit; }
 .chart-readout { margin: 0 0 6px; font-family: var(--font-receipt); font-variant-numeric: tabular-nums; color: var(--ink-soft); font-size: 0.8125rem; }
 .chart-readout b { color: var(--ink); font-size: 1.125rem; margin: 0 4px; }
 .empty-history { padding: 18px; border: 1.5px dashed var(--rule); color: var(--ink-soft); font-family: var(--font-ui); text-align: center; }
+/* Under the chart of a product checked weekly (calm 2+ weeks, 18 Nov): why the bars thinned out, and how to get daily checks back. */
+.chart-note { margin: 8px 0 0; padding: 8px 10px; border-left: 3px solid var(--rule); color: var(--ink-soft); font-family: var(--font-ui); font-size: 13.5px; line-height: 1.4; }
 .offers { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
 .offers th { text-align: left; font-weight: 500; color: var(--ink-soft); padding: 4px 0; font-size: 0.75rem; }
 .offers td { padding: 6px 0; border-top: 1px dotted var(--rule); vertical-align: top; }

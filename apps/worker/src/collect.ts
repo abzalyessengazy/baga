@@ -531,7 +531,7 @@ async function reschedule(productId: number, minPrice: number | null) {
   // Daily lows of the last STABLE.days days (this check included): a catalog product whose price has not moved
   // is checked every third day (8 Nov 2026), freeing ~300 requests a day for daily checks of everything else.
   // The last CALM.days days of daily lows, each with its day: STABLE reads the last STABLE.days of them, CALM all
-  // (10 Nov 2026: calm for 2 weeks = every 5 days; no offers = every 3 days, unless someone tracks it).
+  // (18 Nov 2026: calm for 2+ weeks = weekly; no offers = every 3 days, unless someone tracks it).
   const lows14 = await sql<{ p: number; old: boolean; ago: number }[]>`
     select min(min_price)::int as p, (observed_at at time zone 'Asia/Almaty')::date < (now() at time zone 'Asia/Almaty')::date - ${STABLE.days - 1}::int as old,
            ((now() at time zone 'Asia/Almaty')::date - (observed_at at time zone 'Asia/Almaty')::date)::int as ago
@@ -548,7 +548,7 @@ async function reschedule(productId: number, minPrice: number | null) {
   const variant = variants.has(productId) && !(p?.viewed_days !== null && p?.viewed_days !== undefined && p.viewed_days <= 14);
   // Steady for STEADY.days (16 Nov 2026): a daily product nobody tracks is then checked every second day.
   const steady = isSteadyPrice(lows14.filter((r) => r.ago < STEADY.days).map((r) => r.p));
-  const minutes = intervalFor(priority, { calm: isCalmPrice(lows14.map((r) => r.p)), inStock: minPrice !== null, variant, price: minPrice, steady });
+  const minutes = intervalFor(priority, { calm: isCalmPrice(lows14), inStock: minPrice !== null, variant, price: minPrice, steady });
   await sql`update collection_schedule set priority = ${priority}, interval_minutes = ${minutes}, fail_count = 0,
     last_error = null, locked_until = null, next_check_at = now() + make_interval(mins => ${minutes})
     where product_id = ${productId}`;

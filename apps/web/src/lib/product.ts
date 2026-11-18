@@ -25,6 +25,8 @@ export interface ProductView {
   checkedAt: string; // ISO
   /** People with an active tracking on this product now (0 without a database). */
   watching: number;
+  /** Checked weekly: its price has been calm 2+ weeks and nobody tracks it (the chart says why the bars thinned out). */
+  weekly?: boolean;
   /** Other stores' fresh, in-stock prices for the exactly matched item (DECISIONS.md, 2026-11-07). */
   elsewhere: StoreOffer[];
 }
@@ -124,6 +126,7 @@ export const getProductView = cache(async function getProductView(externalId: st
         offerCount: row.delisted ? 0 : row.offerCount, inStock: row.inStock && !row.delisted, delisted: row.delisted,
         offers: row.delisted ? [] : offers,
         history, observedSince: row.observedSince.toISOString(), checkedAt: (row.lastCheckedAt ?? row.observedSince).toISOString(), watching, elsewhere,
+        weekly: row.weekly && watching === 0,
       },
     };
   }

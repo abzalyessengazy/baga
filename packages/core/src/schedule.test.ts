@@ -119,14 +119,16 @@ describe("stable prices are checked every third day (8 Nov 2026)", () => {
 });
 
 describe("longer gaps where nothing happens (10 Nov 2026)", () => {
-  it("calls a price calm after 7+ observed days within 2%", () => {
-    expect(isCalmPrice(Array(7).fill(50_000))).toBe(true);
-    expect(isCalmPrice([50_000, 50_500, 50_900, 50_000, 50_000, 50_000, 50_000])).toBe(true);
-    expect(isCalmPrice(Array(6).fill(50_000))).toBe(false); // too few days
-    expect(isCalmPrice([...Array(6).fill(50_000), 52_000])).toBe(false); // a 4% move
+  const days = (ps: number[], step = 1) => ps.map((p, i) => ({ p, ago: i * step }));
+  it("calls a price calm when 3+ observed days, the earliest 14+ days ago, stay within 2%", () => {
+    expect(isCalmPrice(days(Array(15).fill(50_000)))).toBe(true);
+    expect(isCalmPrice(days([50_000, 50_900, 50_000], 7))).toBe(true); // weekly checks keep it calm
+    expect(isCalmPrice(days(Array(14).fill(50_000)))).toBe(false); // earliest only 13 days ago
+    expect(isCalmPrice(days([50_000, 50_000], 14))).toBe(false); // too few days
+    expect(isCalmPrice(days([50_000, 50_000, 52_000], 7))).toBe(false); // a 4% move
   });
-  it("checks calm catalog products every 5 days and untracked ones out of stock every 3", () => {
-    expect(intervalFor("catalog", { calm: true, inStock: true })).toBe(5 * 24 * 60);
+  it("checks calm catalog products weekly and untracked ones out of stock every 3", () => {
+    expect(intervalFor("catalog", { calm: true, inStock: true })).toBe(7 * 24 * 60);
     expect(intervalFor("catalog", { calm: false, inStock: true })).toBe(INTERVAL_MINUTES.catalog);
     expect(intervalFor("catalog", { calm: false, inStock: true, price: 500 })).toBe(PARKED_MINUTES);
     expect(intervalFor("seed", { calm: false, inStock: true, price: 49_999 })).toBe(PARKED_MINUTES); // opened lately: only when opened again
@@ -139,7 +141,7 @@ describe("longer gaps where nothing happens (10 Nov 2026)", () => {
   });
   it("checks a later colour/memory variant every third day, unless someone tracks it", () => {
     expect(intervalFor("seed", { calm: false, inStock: true, variant: true })).toBe(3 * 24 * 60);
-    expect(intervalFor("catalog", { calm: true, inStock: true, variant: true })).toBe(5 * 24 * 60);
+    expect(intervalFor("catalog", { calm: true, inStock: true, variant: true })).toBe(7 * 24 * 60);
     expect(intervalFor("tracked", { calm: false, inStock: true, variant: true })).toBe(INTERVAL_MINUTES.tracked);
   });
   it("never stretches what someone tracks", () => {

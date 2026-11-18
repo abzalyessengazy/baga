@@ -266,6 +266,9 @@ export default async function ProductPage({ params }: Props) {
           const h = showCity ? cityHistories.get(city) ?? [] : v.history;
           return <PriceChart key={city} history={h} empty={emptyHistory(h, showCity ? cityName : t("cityIn.almaty"), totalPrice !== null || h.length > 0)} />;
         })}
+        {/* Calm 2+ weeks, nobody tracks it: checked weekly (DECISIONS 2026-11-18). Says why the bars thinned out and how to
+            bring daily checks back. */}
+        {v.weekly && !v.delisted && <p className="chart-note"><span aria-hidden>⏸</span> {t("weeklyNote")}</p>}
         <hr className="rule" />
         <h2 className="receipt-caption" style={{ fontSize: "inherit", fontWeight: 400, margin: "0 0 6px" }}>{t("sellersTitle")}</h2>
         {perCity(({ city, sellerRows, shownCount, checkedAt, shownIn, offerCount }) => (<>

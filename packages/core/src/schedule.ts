@@ -77,18 +77,22 @@ export function isSteadyPrice(lows: number[]): boolean {
 }
 
 /**
- * Longer gaps where nothing happens (DECISIONS.md 2026-11-10 "More checks from the same rules"; 52% of products kept one
- * lowest price all week): a catalog product calm for CALM.days (CALM.minDays observed days, all within CALM.pct) is
- * checked every 5 days; an untracked product nobody can buy (no offers) every 3 days. Opening a product or tracking it
- * still brings it to the next run (queueLane), and any move puts it back on its tier.
+ * Longer gaps where nothing happens (DECISIONS.md 2026-11-10 "More checks from the same rules"; 2026-11-18 "Calm
+ * products weekly", the owner's go: on 18 Nov 696 of 1 314 daily checks were products whose lowest price had not moved
+ * in 14 days). A catalog product nobody tracks whose observed lows over the last CALM.days days stay within CALM.pct,
+ * with at least CALM.minDays observed days and the earliest at least CALM.minSpanDays ago, is checked weekly. The span
+ * rule (not "7 of 14 days") keeps it calm under weekly checks. An untracked product nobody can buy (no offers) is
+ * checked every 3 days. Opening a product or tracking it still brings it to the next run (queueLane), any move puts
+ * it back on its tier, and its page says why the bars thinned out.
  */
-export const CALM = { days: 14, minDays: 7, pct: 2, intervalMinutes: 5 * 24 * 60 } as const;
+export const CALM = { days: 21, minDays: 3, minSpanDays: 14, pct: 2, intervalMinutes: 7 * 24 * 60 } as const;
 export const OUT_OF_STOCK_INTERVAL_MINUTES = 3 * 24 * 60;
 
-/** Whether daily lows (the last CALM.days days, observed days only) say the price has been calm that long. */
-export function isCalmPrice(lows: number[]): boolean {
-  if (lows.length < CALM.minDays) return false;
-  const lo = Math.min(...lows), hi = Math.max(...lows);
+/** Whether daily lows (the last CALM.days days, observed days only; `ago` = days before today) say the price is calm. */
+export function isCalmPrice(lows: { p: number; ago: number }[]): boolean {
+  if (lows.length < CALM.minDays || Math.max(...lows.map((l) => l.ago)) < CALM.minSpanDays) return false;
+  const ps = lows.map((l) => l.p);
+  const lo = Math.min(...ps), hi = Math.max(...ps);
   return lo > 0 && hi <= lo * (1 + CALM.pct / 100);
 }
 
