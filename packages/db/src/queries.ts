@@ -48,11 +48,22 @@ export async function getDailyLows(sql: postgres.Sql, productId: number, days = 
     group by 1 order by 1`;
 }
 
+/**
+ * The sellers of the latest check, cheapest first. `prevPrice`/`changedAt`: the seller's price before its latest change
+ * and when that change was seen (migration 0039), only for a change in the last 30 days.
+ */
 export async function getOffers(sql: postgres.Sql, productId: number) {
-  return sql<{ sellerId: string; sellerName: string; sellerRating: number | null; sellerReviews: number | null; price: number; deliveryDuration: string | null }[]>`
+  return sql<{ sellerId: string; sellerName: string; sellerRating: number | null; sellerReviews: number | null; price: number; deliveryDuration: string | null;
+    prevPrice: number | null; changedAt: Date | null }[]>`
     select se.external_id as "sellerId", se.name as "sellerName", se.rating as "sellerRating", se.reviews as "sellerReviews",
-           o.price, o.delivery_duration as "deliveryDuration"
+           o.price, o.delivery_duration as "deliveryDuration", ch.prev as "prevPrice", ch.at as "changedAt"
     from offers_current o join sellers se on se.id = o.seller_id
+    left join lateral (
+      select h[2] as prev, at from (
+        select array_agg(p.price order by p.seen_at desc) as h, max(p.seen_at) as at
+        from (select price, seen_at from offer_prices p where p.product_id = o.product_id and p.seller_id = o.seller_id
+              order by seen_at desc limit 2) p) x
+      where x.at > now() - interval '30 days' and h[1] = o.price and h[2] is not null) ch on true
     where o.product_id = ${productId} order by o.price asc limit 50`;
 }
 
@@ -130,6 +141,11 @@ export async function saveSnapshot(
       await tx`insert into offers_current ${tx(offers.map((o) => ({
         product_id: productId, seller_id: idOf.get(o.sellerId)!, price: o.price, delivery_duration: o.deliveryDuration,
       })))}`;
+      // Each seller's own history (migration 0039): a row only when its price differs from its last one.
+      await tx`insert into offer_prices (product_id, seller_id, price)
+        select o.product_id, o.seller_id, o.price from offers_current o
+        where o.product_id = ${productId} and o.price > 0 and o.price is distinct from (
+          select p.price from offer_prices p where p.product_id = o.product_id and p.seller_id = o.seller_id order by p.seen_at desc limit 1)`;
       // Today's rating and review count of each shop (migration 0016), the day's latest value.
       const day = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Almaty" }).format(new Date());
       const daily = offers.filter((o) => o.sellerReviews != null || o.sellerRating != null)

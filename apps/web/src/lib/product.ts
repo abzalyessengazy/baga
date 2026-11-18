@@ -19,7 +19,9 @@ export interface ProductView {
   delisted: boolean;
   /** The latest observed lowest price, also for a delisted product (minPrice is null then). */
   lastPrice?: number | null;
-  offers: { sellerId: string; sellerName: string; sellerRating: number | null; sellerReviews: number | null; price: number; deliveryDuration: string | null }[];
+  offers: { sellerId: string; sellerName: string; sellerRating: number | null; sellerReviews: number | null; price: number; deliveryDuration: string | null;
+    /** The seller's price before its latest change in the last 30 days, and when that change was seen (migration 0039). */
+    prevPrice?: number | null; changedAt?: string | null }[];
   history: DailyLow[]; // observed daily lows only
   observedSince: string; // ISO
   checkedAt: string; // ISO
@@ -124,7 +126,7 @@ export const getProductView = cache(async function getProductView(externalId: st
         kaspiUrl: `https://kaspi.kz/shop/p/${row.slug ? `${row.slug}-` : "-"}${row.externalId}/`,
         minPrice: row.delisted ? null : row.currentMinPrice, lastPrice: row.currentMinPrice,
         offerCount: row.delisted ? 0 : row.offerCount, inStock: row.inStock && !row.delisted, delisted: row.delisted,
-        offers: row.delisted ? [] : offers,
+        offers: row.delisted ? [] : offers.map((o) => ({ ...o, changedAt: o.changedAt?.toISOString() ?? null })),
         history, observedSince: row.observedSince.toISOString(), checkedAt: (row.lastCheckedAt ?? row.observedSince).toISOString(), watching, elsewhere,
         weekly: row.weekly && watching === 0,
       },

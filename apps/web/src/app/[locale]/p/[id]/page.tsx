@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import type { Metadata } from "next";
-import { isCityDependent, REFERENCE_CITY, CITY_LIST, type City, priceNotes, computeVerdict, formatTenge, moveDirection } from "@baga/core";
+import { isCityDependent, REFERENCE_CITY, CITY_LIST, type City, priceNotes, computeVerdict, formatTenge, moveDirection, MOVE_MIN_PCT } from "@baga/core";
 import { getProductView } from "@/lib/product";
 import { ToWait } from "@/components/ProductReady";
 import { alreadyTracked } from "@/lib/catalog";
@@ -130,9 +130,16 @@ export default async function ProductPage({ params }: Props) {
   // Shop evidence for every offer (packages/core/src/sellers.ts): Kaspi's rating as a label, and an offer far below
   // the other sellers pointed out. Computed over all stored offers, not only the 12 shown.
   const notes = priceNotes(v.offers);
+  // A seller's own latest move (migration 0039, 18 Nov): «▲ 30 000 ₸ · 15 ноя», only from MOVE_MIN_PCT; violet down, red up.
+  const sellerChange = (price: number, prev: number | null, at: string | null): SellerRow["change"] => {
+    if (prev === null || !at || Math.abs(price - prev) * 100 < MOVE_MIN_PCT * prev) return null;
+    const dir = price > prev ? "up" : "down", amount = f(Math.abs(price - prev)), date = dayMonth(at, td);
+    return { dir, text: `${dir === "up" ? "▲" : "▼"} ${amount} · ${date}`, label: t(dir === "up" ? "sellerUp" : "sellerDown", { amount, date }) };
+  };
   const almatyRows: SellerRow[] = v.offers.map((o, i) => ({
     sellerId: o.sellerId, sellerName: o.sellerName, sellerRating: o.sellerRating, sellerReviews: o.sellerReviews,
     price: o.price, priceText: f(o.price), deliveryText: delivery(o.deliveryDuration), note: notes[i] ?? null,
+    change: sellerChange(o.price, o.prevPrice ?? null, o.changedAt ?? null),
   }));
   /** What the page shows for one city. */
   const forCity = (city: City) => {

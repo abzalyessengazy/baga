@@ -531,6 +531,10 @@ a { color: inherit; }
 .offers td { padding: 6px 0; border-top: 1px dotted var(--rule); vertical-align: top; }
 .offers td.num, .offers th.num { text-align: right; }
 .offers tr.is-best td { color: var(--stamp); font-weight: 700; }
+/* A seller's own latest price move (migration 0039): under its price, small; violet down, red up (design rules). */
+.offers .offer-move { display: block; margin-top: 2px; font-size: 0.72rem; font-weight: 600; white-space: nowrap; }
+.offers .offer-move.is-down { color: var(--stamp); }
+.offers .offer-move.is-up { color: var(--stamp-red); }
 .kaspi-link { display: inline-block; margin-top: 14px; font-family: var(--font-ui); font-weight: 650; color: var(--stamp); }
 .side-panel { position: relative; }
 .side-panel .track-card { border-radius: 0 0 2px 2px; }

@@ -10,6 +10,8 @@ export interface SellerRow {
   price: number; priceText: string; deliveryText: string;
   /** An offer far below the other sellers (priceNote), or null. */
   note: PriceNote;
+  /** This seller's own latest price change (migration 0039), when it moved by MOVE_MIN_PCT or more. */
+  change?: { dir: "up" | "down"; text: string; label: string } | null;
 }
 
 /**
@@ -49,7 +51,10 @@ export function SellerTable({ rows, shown, ratedAt }: { rows: SellerRow[]; shown
                 </span>
               </td>
               <td className="col-delivery">{o.deliveryText}</td>
-              <td className="num">{o.priceText}</td>
+              <td className="num">
+                {o.priceText}
+                {o.change && <span className={`offer-move is-${o.change.dir}`} title={o.change.label} aria-label={o.change.label}>{o.change.text}</span>}
+              </td>
             </tr>
           ))}
         </tbody>
