@@ -13,10 +13,10 @@ const browserUA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36";
 const variants = {
   "old site UA (with URL)": {
-    "User-Agent": "BAGA price history bot (+https://github.com/baga-kz; contact: hello@baga.app)",
+    "User-Agent": "BAGA price history bot (+https://github.com/baga-kz; contact: hello@bagaapp.com)",
     "Accept-Language": "ru-RU,ru;q=0.9",
   },
-  "bot UA": { "User-Agent": "BAGA price history bot (+contact: hello@baga.app)" },
+  "bot UA": { "User-Agent": "BAGA price history bot (+contact: hello@bagaapp.com)" },
   "browser UA": { "User-Agent": browserUA, "Accept-Language": "ru-RU,ru;q=0.9" },
   "browser UA + full headers": {
     "User-Agent": browserUA,
