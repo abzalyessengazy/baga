@@ -8,7 +8,9 @@ export type PushSupport = "yes" | "install" | "no";
 
 export function pushSupport(): PushSupport {
   if (typeof window === "undefined") return "no";
-  const ios = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const ua = navigator.userAgent;
+  // iPadOS Safari calls itself a Mac; only a touch "Mac" that is not Android is one.
+  const ios = /iP(hone|ad|od)/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1 && !/Android/.test(ua));
   const standalone = matchMedia("(display-mode: standalone)").matches || (navigator as { standalone?: boolean }).standalone === true;
   if (ios && !standalone) return "install";
   return "serviceWorker" in navigator && "PushManager" in window && "Notification" in window ? "yes" : "no";
