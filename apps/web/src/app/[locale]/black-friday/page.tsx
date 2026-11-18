@@ -7,8 +7,9 @@ import { botUsername } from "@/lib/watcher";
 
 type Props = { params: Promise<{ locale: string }> };
 // Store and Kaspi prices arrive once a day; an hour of caching keeps the database quiet.
-// Every 3 hours (18 Nov: the page grew from 50 to ~350 products; store prices come once a day, Kaspi's in the morning).
-export const revalidate = 10800;
+// Once a day (18 Nov, the owner: «why not once a day?»): the store run rebuilds it when it ends, with that day's store
+// and Kaspi prices (apps/worker/src/stores.ts → /api/revalidate-products). The day here is only the fallback.
+export const revalidate = 86400;
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { locale } = await params;

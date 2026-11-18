@@ -81,7 +81,8 @@ async function main() {
     // Product pages are cached for a day: the ones with a new store price are rebuilt on their next visit.
     const ids = await sql<{ external_id: string }[]>`select distinct p.external_id from store_prices sp
       join store_matches m on m.id = sp.match_id join products p on p.id = m.product_id where sp.observed_at >= ${started}`.catch(() => []);
-    const n = await refreshPages(env.siteUrl(), env.telegramBotToken(), ids.map((r) => r.external_id));
+    // And «Чёрная пятница», once a day: its store and Kaspi prices are all in by now (it is cached for a day).
+    const n = await refreshPages(env.siteUrl(), env.telegramBotToken(), ids.map((r) => r.external_id), fetch, ["black-friday"]);
     if (ids.length) console.log(`site refresh: ${n} of ${ids.length} product pages`);
   }
 }

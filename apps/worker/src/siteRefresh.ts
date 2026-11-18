@@ -12,11 +12,12 @@ export function refreshSignature(botToken: string, body: string): string {
   return createHmac("sha256", key).update(body).digest("hex");
 }
 
-export async function refreshPages(siteUrl: string, botToken: string | null, ids: string[], fetchImpl: typeof fetch = fetch): Promise<number> {
-  if (!botToken || !ids.length) return 0;
+/** `pages`: whole pages to rebuild as well (the site accepts only "black-friday"), sent with the first batch. */
+export async function refreshPages(siteUrl: string, botToken: string | null, ids: string[], fetchImpl: typeof fetch = fetch, pages: string[] = []): Promise<number> {
+  if (!botToken || (!ids.length && !pages.length)) return 0;
   let sent = 0;
-  for (let i = 0; i < ids.length; i += 200) {
-    const body = JSON.stringify({ ids: ids.slice(i, i + 200), ts: Date.now() });
+  for (let i = 0; i < Math.max(ids.length, 1); i += 200) {
+    const body = JSON.stringify({ ids: ids.slice(i, i + 200), ts: Date.now(), ...(i === 0 && pages.length ? { pages } : {}) });
     try {
       const res = await fetchImpl(`${siteUrl}/api/revalidate-products`, {
         method: "POST",
