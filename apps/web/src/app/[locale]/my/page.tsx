@@ -42,6 +42,7 @@ export default async function MyPage({ params }: Props) {
     if (sql) sellersOf.set(i.externalId!, await productSellers(sql, i.externalId!).catch(() => []));
   }
   const tgUrl = found ? await telegramConnectUrl(found.watcher) : null;
+  const tp = await getTranslations("push");
   const shareUrl = found ? `${siteUrl()}/api/my?k=${found.secret}&l=${locale}` : null;
   // The profile needs migration 0027: until it is applied the page stays the plain list.
   const prof = found && sql ? await (async () => {
@@ -87,26 +88,29 @@ export default async function MyPage({ params }: Props) {
             }))}
           />
         )}
-        {found && (
+        {found && (() => { const w = found.watcher; const reachable = !!(w.telegramChatId || w.emailConfirmed || w.push); return (
           <>
             <hr className="rule" id="alerts" />
-            {found.watcher.telegramChatId ? (
-              <p className="note">{t("telegramLinked")}</p>
-            ) : tgUrl ? (
-              <>
-                <TelegramLink className="btn btn-stamp" href={tgUrl} where="telegram_my">{t("telegramConnect")}</TelegramLink>
-                <p className="note">{t("telegramHint")}</p>
-              </>
-            ) : !botUsername() ? <p className="note">{t("telegramSoon")}</p> : null}
-            <hr className="rule" />
-            <PushConnect where="push_my" />
-            {emailReady() && (
-              <>
-                <hr className="rule" />
-                <EmailConnect initial={{ address: found.watcher.email, confirmed: found.watcher.emailConfirmed }} removable />
-              </>
+            {/* One channel is enough (the owner, 18 Nov): once one is connected, only its state shows, no other offers.
+                Without one, Telegram and the browser are offered in the warning above (when there is a list), the email
+                form here, where «или подключите почту ниже» points. */}
+            {w.telegramChatId ? <p className="channel-ok">✓ {t("telegramLinked")}</p>
+              : w.push ? <p className="channel-ok">✓ {tp("onAny")}</p>
+              : !w.emailConfirmed && items.length === 0 ? (
+                <>
+                  {tgUrl ? (
+                    <>
+                      <TelegramLink className="btn btn-stamp" href={tgUrl} where="telegram_my">{t("telegramConnect")}</TelegramLink>
+                      <p className="note">{t("telegramHint")}</p>
+                    </>
+                  ) : !botUsername() ? <p className="note">{t("telegramSoon")}</p> : null}
+                  <PushConnect where="push_my" />
+                </>
+              ) : null}
+            {emailReady() && (w.email || !reachable) && (
+              <EmailConnect initial={{ address: w.email, confirmed: w.emailConfirmed }} removable />
             )}
-            {!found.watcher.telegramChatId && !found.watcher.emailConfirmed && !found.watcher.push && (tgUrl || emailReady()) && <ConsentNote />}
+            {!reachable && (tgUrl || emailReady()) && <ConsentNote />}
             <hr className="rule" />
             <p className="note">{t("shareNote")}</p>
             <p className="my-share">{shareUrl}</p>
@@ -114,7 +118,7 @@ export default async function MyPage({ params }: Props) {
             <SignOutElsewhere />
             <ForgetMe />
           </>
-        )}
+        ); })()}
       </article>
       {prof && <Suggestions items={prof.suggestions} />}
     </main>

@@ -35,6 +35,7 @@ export function TrackPanel({ productId, shortLink, current, initial, related }: 
 }) {
   const t = useTranslations("track");
   const tr = useTranslations("receipt");
+  const tp = useTranslations("push");
   const locale = useLocale() as "ru" | "kk";
   const id = useId();
   const reduce = useReducedMotion();
@@ -195,12 +196,10 @@ export function TrackPanel({ productId, shortLink, current, initial, related }: 
       {reached && <p className="note">{tracked.price === null ? t("dropNote") : current === null ? t("firstPriceNote") : t("targetNote")}</p>}
       {reached ? (
         <>
-          {tg.linked && <p className="channel-ok">✓ {t("telegramLinked")}</p>}
-          {pushOn && !tg.linked && <PushConnect where="push" onOn={() => setPushOn(true)} />}
-          {!tg.linked && tg.url && (
-            <a className="link-btn channel-more" href={tg.url} target="_blank" rel="noopener" onClick={tapTg}>{t("telegramAlso")}</a>
-          )}
-          {initial.emailReady && <EmailConnect initial={initial.email} onState={setMail} />}
+          {/* One channel is enough (the owner, 18 Nov): show the one that works, offer nothing else. */}
+          {tg.linked ? <p className="channel-ok">✓ {t("telegramLinked")}</p>
+            : pushOn ? <p className="channel-ok">✓ {tp("onAny")}</p>
+            : initial.emailReady ? <EmailConnect initial={initial.email} onState={setMail} /> : null}
         </>
       ) : (
         <motion.div className="channel-needed" role="alert" ref={channelRef}
