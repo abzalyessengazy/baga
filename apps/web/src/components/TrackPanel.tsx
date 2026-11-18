@@ -7,6 +7,7 @@ import { Link } from "@/i18n/navigation";
 import { TearCoupon } from "./TearCoupon";
 import { ConsentNote } from "./ConsentNote";
 import { EmailConnect, type EmailInitial } from "./EmailConnect";
+import { PushConnect } from "./PushConnect";
 import { track as trackStep } from "@/lib/analytics";
 import { BoardNudge } from "./BoardNudge";
 import { OPEN_EVENT, STATE_EVENT } from "@/lib/trackCta";
@@ -15,6 +16,8 @@ export interface TrackInitial {
   /** dropPct: a percentage target waiting for the product's first price (migration 0010). */
   target: number | null; dropPct: number | null; linked: boolean; telegramUrl: string | null; botReady: boolean;
   email: EmailInitial; emailReady: boolean;
+  /** Migration 0038: a browser of this visitor shows BAĞA's notifications. */
+  push?: boolean;
 }
 
 /**
@@ -52,7 +55,8 @@ export function TrackPanel({ productId, shortLink, current, initial, related }: 
   // Without Telegram or a confirmed address a tracking can never write (16 Nov: 5 of 15 trackers connected one). Right
   // after the price is set, the next step is brought into view; the leaderboard nudge and similar products wait for it.
   const channelRef = useRef<HTMLDivElement>(null);
-  const reached = tg.linked || mail === "confirmed";
+  const [pushOn, setPushOn] = useState(!!initial.push);
+  const reached = tg.linked || mail === "confirmed" || pushOn;
   useEffect(() => {
     if (!just || reached) return;
     const id = setTimeout(() => channelRef.current?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "center" }), 650);
@@ -64,13 +68,14 @@ export function TrackPanel({ productId, shortLink, current, initial, related }: 
   useEffect(() => { trackStep("product_view", { externalId: productId }); }, [productId]);
   const [reachedAtStart] = useState(reached);
   useEffect(() => {
-    if (reached && !reachedAtStart) trackStep("channel", { externalId: productId, detail: tg.linked ? "telegram" : "email" });
-  }, [reached, reachedAtStart, productId, tg.linked]);
+    if (reached && !reachedAtStart) trackStep("channel", { externalId: productId, detail: tg.linked ? "telegram" : pushOn ? "push" : "email" });
+  }, [reached, reachedAtStart, productId, tg.linked, pushOn]);
   useEffect(() => {
     if (tracked === null || reached) return;
     const check = () => fetch("/api/my/channels").then((r) => (r.ok ? r.json() : null))
-      .then((c: { telegram?: boolean; email?: boolean } | null) => {
+      .then((c: { telegram?: boolean; email?: boolean; push?: boolean } | null) => {
         if (c?.telegram) setTg((s) => ({ ...s, linked: true }));
+        if (c?.push) setPushOn(true);
         if (c?.email) setMail("confirmed");
       }).catch(() => {});
     const onVisible = () => { if (document.visibilityState === "visible") check(); };
@@ -191,6 +196,7 @@ export function TrackPanel({ productId, shortLink, current, initial, related }: 
       {reached ? (
         <>
           {tg.linked && <p className="channel-ok">✓ {t("telegramLinked")}</p>}
+          {pushOn && !tg.linked && <PushConnect where="push" onOn={() => setPushOn(true)} />}
           {!tg.linked && tg.url && (
             <a className="link-btn channel-more" href={tg.url} target="_blank" rel="noopener" onClick={tapTg}>{t("telegramAlso")}</a>
           )}
@@ -207,6 +213,8 @@ export function TrackPanel({ productId, shortLink, current, initial, related }: 
               <p className="note">{waitTg ? t("telegramWaiting") : t("telegramHint")}</p>
             </>
           ) : !initial.emailReady ? <p className="note">{t("telegramSoon")}</p> : null}
+          {/* No Telegram, no email wanted: the browser itself (migration 0038). Hidden where the browser has none. */}
+          <PushConnect where="push" onOn={() => setPushOn(true)} />
           {initial.emailReady && (
             <>
               {tg.url && <p className="or-rule"><span>{t("or")}</span></p>}

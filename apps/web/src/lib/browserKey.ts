@@ -13,7 +13,7 @@ export async function giveBrowserKey(sql: NonNullable<ReturnType<typeof getSql>>
   if (here?.watcher.id === watcherId) return;
   if (here) {
     const [busy] = await sql<{ n: number }[]>`select count(*)::int as n from trackings where watcher_id = ${here.watcher.id} and status <> 'removed'`;
-    if ((busy?.n ?? 0) > 0 || here.watcher.telegramChatId || here.watcher.emailConfirmed) return;
+    if ((busy?.n ?? 0) > 0 || here.watcher.telegramChatId || here.watcher.emailConfirmed || here.watcher.push) return;
   }
   const secret = randomBytes(32).toString("base64url");
   await addWatcherKey(sql, watcherId, hashSecret(secret));

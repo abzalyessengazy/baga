@@ -129,7 +129,7 @@ export async function getFunnel(sql: postgres.Sql, which: PeriodKey = "week"): P
       where p.external_id = v.external_id) f on true`;
   const [accounts] = await sql<{ newPeople: number; connected: number }[]>`
     select count(*)::int as "newPeople",
-      count(*) filter (where telegram_chat_id is not null or email_confirmed_at is not null)::int as connected
+      count(*) filter (where telegram_chat_id is not null or email_confirmed_at is not null or exists (select 1 from push_subscriptions ps where ps.watcher_id = watchers.id))::int as connected
     from watchers where not internal and created_at >= ${since} and created_at < ${until}`;
   const by = new Map(steps.map((s) => [s.name, s]));
   by.set("visit", { name: "visit", ...all! });

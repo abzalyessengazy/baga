@@ -13,7 +13,7 @@ export function TrackPanelLive({ productId, current, ready, related }: {
   const [initial, setInitial] = useState<TrackInitial | null>(null);
   useEffect(() => {
     let live = true;
-    const blank: TrackInitial = { ...ready, target: null, dropPct: null, linked: false, telegramUrl: null, email: { address: null, confirmed: false } };
+    const blank: TrackInitial = { ...ready, target: null, dropPct: null, linked: false, telegramUrl: null, email: { address: null, confirmed: false }, push: false };
     fetch(`/api/track?productId=${productId}`, { cache: "no-store" })
       .then((r) => (r.ok ? (r.json() as Promise<TrackInitial>) : blank))
       .catch(() => blank)

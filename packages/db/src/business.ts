@@ -115,7 +115,7 @@ export async function getBusiness(sql: postgres.Sql, which: PeriodKey | Period):
         (select count(distinct vid) from p where name = 'track')::int as "pTracked",
         (select count(*) from watchers where not internal and created_at >= ${start(a)} and created_at < ${end(b)})::int as "newPeople",
         (select count(*) from watchers where not internal and created_at >= ${start(a)} and created_at < ${end(b)}
-           and (telegram_chat_id is not null or email_confirmed_at is not null))::int as "newPeopleConnected",
+           and (telegram_chat_id is not null or email_confirmed_at is not null or exists (select 1 from push_subscriptions ps where ps.watcher_id = watchers.id)))::int as "newPeopleConnected",
         (select count(*) from trackings where watcher_id is not null and not exists (select 1 from watchers tw where tw.id = trackings.watcher_id and tw.internal) and created_at >= ${start(a)} and created_at < ${end(b)})::int as "newTrackings"
       from e`;
     const nul = (n: number) => (persons ? n : null);
@@ -195,7 +195,7 @@ export async function getBusiness(sql: postgres.Sql, which: PeriodKey | Period):
 
   const [people] = await sql<Business["people"][]>`
     select count(*)::int as watchers,
-      count(*) filter (where telegram_chat_id is not null or email_confirmed_at is not null)::int as connected,
+      count(*) filter (where telegram_chat_id is not null or email_confirmed_at is not null or exists (select 1 from push_subscriptions ps where ps.watcher_id = watchers.id))::int as connected,
       count(*) filter (where last_seen_at > created_at + interval '1 day')::int as "returnedAfterADay"
     from watchers where not internal`;
   const digest = await sql<Business["digest"][]>`

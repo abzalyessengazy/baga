@@ -6,6 +6,8 @@ function required(name: string): string {
 export const env = {
   databaseUrl: () => required("DATABASE_URL"),
   resendApiKey: () => process.env.RESEND_API_KEY ?? null,
+  /** The private half of the push key (packages/core/src/push.ts has the public one). Unset: no browser notifications. */
+  vapidPrivateKey: () => process.env.VAPID_PRIVATE_KEY?.trim() || null,
   telegramBotToken: () => process.env.TELEGRAM_BOT_TOKEN?.trim() || null,
   /** Public channel for the daily drops post (@name or -100… id; the bot must be its admin). Unset: no post. */
   telegramChannel: () => process.env.TELEGRAM_CHANNEL?.trim() || null,

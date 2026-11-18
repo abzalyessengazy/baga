@@ -7,7 +7,7 @@ export type MyProfile = {
   stats?: { tracked: number; total: number; potential: number; saved: number; rank: number | null; boardSize: number; tag: string | null; ahead: { rank: number; gap: number } | null };
   level?: { id: LevelId; index: number; next: { id: LevelId; need: number; from: number } | null; progress: number };
   /** Where alerts can go; telegramUrl only for someone who tracks products and has neither. */
-  alerts?: { telegram: boolean; email: boolean; emailPending?: string | null; telegramUrl: string | null };
+  alerts?: { telegram: boolean; email: boolean; push?: boolean; emailPending?: string | null; telegramUrl: string | null };
 };
 
 /**

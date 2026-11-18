@@ -8,7 +8,7 @@ import { currentWatcher } from "@/lib/watcher";
 export async function GET() {
   const w = await currentWatcher().catch(() => null);
   return NextResponse.json(
-    { telegram: !!w?.watcher.telegramChatId, email: !!w?.watcher.emailConfirmed },
+    { telegram: !!w?.watcher.telegramChatId, email: !!w?.watcher.emailConfirmed, push: !!w?.watcher.push },
     { headers: { "Cache-Control": "private, no-store" } },
   );
 }

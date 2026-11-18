@@ -5,7 +5,7 @@ import { DELIVERY, afterFailedDelivery, type DeliveryOutcome } from "@baga/core"
  * Notification delivery state (migration 0015; rules in packages/core/src/delivery.ts, DECISIONS.md 2026-11-05
  * "Recoverable delivery"). The collector claims, sends and records; these queries hold the rules that need SQL.
  */
-export type DeliveryChannel = "telegram" | "email";
+export type DeliveryChannel = "telegram" | "email" | "push";
 
 /**
  * Claims up to `limit` due messages of one channel ('sending'): an overlapping run skips them (skip locked). Only
@@ -14,6 +14,7 @@ export type DeliveryChannel = "telegram" | "email";
 export async function claimNotifications(sql: postgres.Sql, channel: DeliveryChannel, limit = 30): Promise<number[]> {
   const reachable = channel === "telegram"
     ? sql`w.telegram_chat_id is not null`
+    : channel === "push" ? sql`exists (select 1 from push_subscriptions ps where ps.watcher_id = w.id)`
     : sql`w.email_confirmed_at is not null and w.email_stop_code is not null`;
   const rows = await sql<{ id: number }[]>`
     update notifications set status = 'sending', claimed_at = now(), send_started_at = null

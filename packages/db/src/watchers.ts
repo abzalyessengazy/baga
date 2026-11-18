@@ -9,6 +9,8 @@ export interface Watcher {
   id: string; locale: "ru" | "kk"; telegramChatId: string | null; telegramLinkCode: string | null;
   /** Migration 0008: the address alerts go to once confirmed. */
   email: string | null; emailConfirmed: boolean;
+  /** Migration 0038: at least one browser allowed notifications. */
+  push: boolean;
   /** The owner's own browsers (migration 0030): left out of the board and the numbers. */
   internal?: boolean;
 }
@@ -24,7 +26,8 @@ export interface WatchedItem {
 
 const watcherCols = (sql: postgres.Sql) =>
   sql`id, locale, telegram_chat_id::text as "telegramChatId", telegram_link_code as "telegramLinkCode",
-      email, email_confirmed_at is not null as "emailConfirmed"`;
+      email, email_confirmed_at is not null as "emailConfirmed",
+      exists (select 1 from push_subscriptions ps where ps.watcher_id = watchers.id) as push`;
 
 export async function createWatcher(sql: postgres.Sql, secretHash: string, locale: "ru" | "kk", linkCode: string): Promise<Watcher> {
   const [w] = await sql<Watcher[]>`insert into watchers (secret_hash, locale, telegram_link_code)

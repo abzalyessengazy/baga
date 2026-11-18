@@ -120,7 +120,7 @@ export default async function AdminPage({ params, searchParams }: Props) {
               <tbody>
                 {funnel.steps.filter((s) => s.name !== "channel" && s.name !== "channel_tap").map((s) => {
                   const visits = funnel.steps[0]!.sessions, people = funnel.steps[0]!.people;
-                  const label = { visit: "stepVisit", paste: "stepPaste", product_view: "stepProductView", track: "stepTrack", channel: "stepChannel" }[s.name];
+                  const label = { visit: "stepVisit", paste: "stepPaste", product_view: "stepProductView", track: "stepTrack", channel: "stepChannel", channel_tap: "stepChannel" }[s.name];
                   return (
                     <tr key={s.name}>
                       <td>{t(label as "stepVisit")}</td><td>{count(s.sessions)}</td>

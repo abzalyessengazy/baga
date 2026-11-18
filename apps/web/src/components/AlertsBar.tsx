@@ -26,7 +26,7 @@ export function AlertsBar() {
     const check = (fresh = false) => loadMyProfile(fresh).then((me) => {
       if (!live) return;
       const a = me?.alerts, n = me?.stats?.tracked ?? 0;
-      setState(a && !a.telegram && !a.email && n > 0 && !me?.profile?.internal ? { count: n, url: a.telegramUrl, pending: a.emailPending ?? null } : null);
+      setState(a && !a.telegram && !a.email && !a.push && n > 0 && !me?.profile?.internal ? { count: n, url: a.telegramUrl, pending: a.emailPending ?? null } : null);
     });
     check();
     // The email form or the bot changed something on this page: read again.

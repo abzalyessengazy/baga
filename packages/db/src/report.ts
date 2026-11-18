@@ -159,13 +159,14 @@ export async function ownerReport(sql: postgres.Sql): Promise<OwnerReport> {
   const [people] = await sql<OwnerReport["people"][]>`
     select (select count(*) from watchers where not internal)::int as watchers,
       (select count(*) from watchers where not internal and created_at > now() - interval '24 hours')::int as "newWatchers",
-      (select count(*) from watchers where not internal and (telegram_chat_id is not null or email_confirmed_at is not null))::int as connected,
+      (select count(*) from watchers where not internal and (telegram_chat_id is not null or email_confirmed_at is not null or exists (select 1 from push_subscriptions ps where ps.watcher_id = watchers.id)))::int as connected,
       (select count(*) from trackings where watcher_id is not null and not exists (select 1 from watchers tw where tw.id = trackings.watcher_id and tw.internal) and status = 'active')::int as "activeTrackings",
       (select count(*) from trackings where watcher_id is not null and not exists (select 1 from watchers tw where tw.id = trackings.watcher_id and tw.internal) and created_at > now() - interval '24 hours')::int as "newTrackings",
       (select count(*) from trackings where watcher_id is not null and not exists (select 1 from watchers tw where tw.id = trackings.watcher_id and tw.internal) and created_at > now() - interval '7 days')::int as "newTrackings7d",
       t.trackers, t.reachable
     from (select count(*)::int as trackers,
-        count(*) filter (where w.telegram_chat_id is not null or w.email_confirmed_at is not null)::int as reachable
+        count(*) filter (where w.telegram_chat_id is not null or w.email_confirmed_at is not null
+          or exists (select 1 from push_subscriptions ps where ps.watcher_id = w.id))::int as reachable
       from watchers w where not w.internal
         and exists (select 1 from trackings k where k.watcher_id = w.id and k.status in ('pending', 'active'))) t`;
 

@@ -6,7 +6,8 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "BAĞA",
     short_name: "BAĞA",
     start_url: "/",
-    display: "browser",
+    // standalone: an iPhone shows notifications only to a site added to the home screen as an app (iOS 16.4+, 0038).
+    display: "standalone",
     background_color: "#dde0e4",
     theme_color: "#5b47e0",
     icons: [

@@ -8,6 +8,7 @@ import { createKaspiClient, buildSnapshot, KaspiHttpError, KaspiParseError, Kasp
 import { queuedManualChecks, finishManualCheck, MANUAL_CHECKS, cityChecksDue, saveCityPrice } from "@baga/db";
 import { createMarketParser, snapshotOf, MarketParserError } from "./marketparser";
 import { refreshPages, checkedSince } from "./siteRefresh";
+import { pushSubscriptionsOf, pushWorked, dropPushSubscription } from "@baga/db";
 import { accessCodeFor, dropUnusedKeys, saveSnapshot, claimNotifications, startSend, markSent, markFailed, tidyDeliveries, connectionOptions, requestProduct, attachShortLinkTrackings, weekMovers } from "@baga/db";
 import {
   evaluateAlert, priorityFor, newProductTurn, isStablePrice, isCalmPrice, isSteadyPrice, intervalFor, laterVariants, CALM, STABLE, STEADY, INTERVAL_MINUTES, PRIORITY_ORDER, USER_INTEREST, CATALOG, SEED_MIN_PRICE, backoffMinutes, isSuspiciousJump, type TrackingAlertState,
@@ -20,6 +21,7 @@ import { CircuitBreaker } from "./breaker";
 import { renderAlertEmail, renderBoughtEmail, sendViaResend } from "./email";
 import { renderTelegramAlert, renderTelegramBoughtAsk, sendTelegram, sendTelegramCard, DeliveryError, type TelegramButton } from "./telegram";
 import { renderChannelPost } from "./channel";
+import { renderPushAlert, sendPush } from "./push";
 
 const sql = postgres(env.databaseUrl(), { max: 2, ...connectionOptions(env.databaseUrl()) });
 /**
@@ -576,13 +578,13 @@ async function afterSave(productId: number, externalId: string, price: number | 
   // happen in one transaction, so a crash cannot mark a tracking as told without its message.
   if (price !== null) {
     await sql.begin(async (tx) => {
-      const waiting = await tx<{ id: string; tg: boolean; mail: boolean }[]>`
+      const waiting = await tx<{ id: string; tg: boolean; mail: boolean; push: boolean }[]>`
         update trackings t set first_price_sent_at = now()
         from watchers w
         where t.product_id = ${productId} and t.watcher_id = w.id and t.status = 'active' and t.first_price_sent_at is null
           and ${city === REFERENCE_CITY ? tx`coalesce(t.city, 'almaty') = 'almaty'` : tx`t.city = ${city}`}
-          and (w.telegram_chat_id is not null or w.email_confirmed_at is not null)
-        returning t.id, w.telegram_chat_id is not null as tg, w.email_confirmed_at is not null as mail`;
+          and (w.telegram_chat_id is not null or w.email_confirmed_at is not null or exists (select 1 from push_subscriptions ps where ps.watcher_id = w.id))
+        returning t.id, w.telegram_chat_id is not null as tg, w.email_confirmed_at is not null as mail, exists (select 1 from push_subscriptions ps where ps.watcher_id = w.id) as push`;
       for (const w of waiting) await queueNotification(tx, w, "first_price", price, `${w.id}:first`);
     });
   }
@@ -594,18 +596,23 @@ async function afterSave(productId: number, externalId: string, price: number | 
  * One notification row per connected channel. Telegram keeps the plain idempotency key (rows from before email
  * existed use it); email adds ":email". The unique key makes a duplicate impossible, even with overlapping runs.
  */
-async function queueNotification(sql: postgres.Sql | postgres.TransactionSql, t: { id: string; tg: boolean; mail: boolean }, type: "first_price" | "target_reached" | "bought_ask", price: number, key: string) {
-  if (t.tg || t.mail) newMessages = true;
+async function queueNotification(sql: postgres.Sql | postgres.TransactionSql, t: { id: string; tg: boolean; mail: boolean; push?: boolean }, type: "first_price" | "target_reached" | "bought_ask", price: number, key: string) {
+  // Browser notifications carry price alerts only; "Вы купили?" needs answer buttons (Telegram, email, «Мои товары»).
+  const push = !!t.push && type !== "bought_ask";
+  if (t.tg || t.mail || push) newMessages = true;
   if (t.tg) await sql`insert into notifications (tracking_id, type, channel, price, idempotency_key)
     values (${t.id}, ${type}, 'telegram', ${price}, ${key}) on conflict (idempotency_key) do nothing`;
   if (t.mail) await sql`insert into notifications (tracking_id, type, channel, price, idempotency_key)
     values (${t.id}, ${type}, 'email', ${price}, ${`${key}:email`}) on conflict (idempotency_key) do nothing`;
+  if (push) await sql`insert into notifications (tracking_id, type, channel, price, idempotency_key)
+    values (${t.id}, ${type}, 'push', ${price}, ${`${key}:push`}) on conflict (idempotency_key) do nothing`;
 }
 
 async function evaluateTrackings(productId: number, externalId: string, price: number, seller: string | null, city: City = REFERENCE_CITY) {
-  const rows = await sql<{ id: string; target_price: number; alert_state: "armed" | "triggered"; episode: number; last_triggered_at: Date | null; above_since: Date | null; tg: boolean; mail: boolean }[]>`
+  const rows = await sql<{ id: string; target_price: number; alert_state: "armed" | "triggered"; episode: number; last_triggered_at: Date | null; above_since: Date | null; tg: boolean; mail: boolean; push: boolean }[]>`
     select t.id, t.target_price, t.alert_state, t.episode, t.last_triggered_at, t.above_since,
-           coalesce(w.telegram_chat_id is not null, false) as tg, coalesce(w.email_confirmed_at is not null, false) as mail
+           coalesce(w.telegram_chat_id is not null, false) as tg, coalesce(w.email_confirmed_at is not null, false) as mail,
+           coalesce(exists (select 1 from push_subscriptions ps where ps.watcher_id = w.id), false) as push
     from trackings t left join watchers w on w.id = t.watcher_id
     where t.product_id = ${productId} and t.status = 'active' and t.target_price is not null
       and ${city === REFERENCE_CITY ? sql`coalesce(t.city, 'almaty') = 'almaty'` : sql`t.city = ${city}`}`;
@@ -712,6 +719,7 @@ async function sendQueued(full = true) {
   newMessages = false;
   await sendTelegramQueued();
   await sendEmailQueued();
+  await sendPushQueued();
 }
 async function sendAfterCheck() {
   if (Date.now() - lastFullSend >= FULL_SEND_EVERY_MS) await sendQueued(true);
@@ -808,6 +816,46 @@ async function sendEmailQueued() {
       await deliveryFailed(q.id, e);
     }
     await new Promise((r) => setTimeout(r, 600));
+  }
+}
+
+/**
+ * Queued browser notifications (migration 0038): one message to every browser the watcher allowed. A browser the push
+ * service no longer knows (404/410) loses its row; the message counts as sent when at least one browser took it.
+ */
+async function sendPushQueued() {
+  const key = env.vapidPrivateKey();
+  if (!key) return;
+  const queued = await sql<{ id: number; type: "first_price" | "target_reached" | "bought_ask"; price: number; target_price: number | null; watcher_id: string; locale: "ru" | "kk"; title: string; external_id: string; current: number | null }[]>`
+    select n.id, n.type, n.price, t.target_price, w.id as watcher_id, w.locale, p.title, p.external_id, s.current_min_price as current
+    from notifications n
+    join trackings t on t.id = n.tracking_id
+    join watchers w on w.id = t.watcher_id
+    join products p on p.id = t.product_id
+    left join product_state s on s.product_id = p.id
+    where n.id = any(${sql.array(await claimNotifications(sql, "push"))}::bigint[])`;
+  for (const q of queued) {
+    try {
+      await startSend(sql, q.id);
+      if (q.type === "bought_ask") throw new DeliveryError("no bought ask by push", true);
+      const msg = renderPushAlert({
+        type: q.type, locale: q.locale, title: q.title, externalId: q.external_id,
+        price: q.type === "first_price" ? q.current : q.price, target: q.target_price,
+        url: `/${q.locale}/p/${q.external_id}?utm_source=push_alert`, // a path: the site that subscribed opens it
+      });
+      let delivered = 0, gone = 0, lastError: unknown = null;
+      const subs = await pushSubscriptionsOf(sql, q.watcher_id);
+      for (const sub of subs) {
+        try {
+          if ((await sendPush(sub, msg, key, env.siteUrl())) === "ok") { delivered++; await pushWorked(sql, sub.id); }
+          else { gone++; await dropPushSubscription(sql, sub.id); }
+        } catch (e) { lastError = e; }
+      }
+      if (delivered) await markSent(sql, q.id, `push:${delivered}`);
+      else throw new DeliveryError(lastError ? String(lastError) : `no browser took it (${gone} gone)`, !lastError);
+    } catch (e) {
+      await deliveryFailed(q.id, e);
+    }
   }
 }
 

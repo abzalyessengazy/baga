@@ -80,7 +80,7 @@ export async function trackInitial(key: string | { shortLink: string }): Promise
   const base = { botReady, emailReady: emailReady() };
   const found = await currentWatcher().catch(() => null);
   const sql = getSql();
-  if (!found || !sql) return { ...base, target: null, dropPct: null, linked: false, telegramUrl: null, email: { address: null, confirmed: false } };
+  if (!found || !sql) return { ...base, target: null, dropPct: null, linked: false, telegramUrl: null, email: { address: null, confirmed: false }, push: false };
   const t = typeof key === "string"
     ? await getWatcherTracking(sql, found.watcher.id, key)
     : await getWatcherShortLinkTracking(sql, found.watcher.id, key.shortLink);
@@ -91,5 +91,6 @@ export async function trackInitial(key: string | { shortLink: string }): Promise
     linked: !!found.watcher.telegramChatId,
     telegramUrl: t ? await telegramConnectUrl(found.watcher) : null,
     email: { address: found.watcher.email, confirmed: found.watcher.emailConfirmed },
+    push: found.watcher.push,
   };
 }

@@ -4,6 +4,7 @@ import { getSql, listWatched, productSellers, getProfile, getProfileStats, sugge
 import { levelFor, slugName } from "@baga/core";
 import { currentWatcher, telegramConnectUrl, botUsername, emailReady } from "@/lib/watcher";
 import { TelegramLink } from "@/components/TelegramLink";
+import { PushConnect } from "@/components/PushConnect";
 import { siteUrl } from "@/lib/site";
 import { MyList } from "@/components/MyList";
 import { EmailConnect } from "@/components/EmailConnect";
@@ -56,16 +57,17 @@ export default async function MyPage({ params }: Props) {
         <ProfileCard
           profile={{ ...prof.profile, profileAt: prof.profile.profileAt?.toISOString() ?? null, since: prof.profile.since.toISOString() }}
           stats={prof.stats} level={levelFor(prof.stats.tracked)}
-          hasChannel={!!found?.watcher.telegramChatId || !!found?.watcher.emailConfirmed} />
+          hasChannel={!!found?.watcher.telegramChatId || !!found?.watcher.emailConfirmed || !!found?.watcher.push} />
       )}
       <h1 className="product-title" style={{ color: "var(--ink-on-counter, var(--ink))" }}>{t("title")}</h1>
       <article className="receipt">
-        {found && items.length > 0 && !found.watcher.telegramChatId && !found.watcher.emailConfirmed && (
+        {found && items.length > 0 && !found.watcher.telegramChatId && !found.watcher.emailConfirmed && !found.watcher.push && (
           <div className="channel-needed my-alert" role="alert">
             <p className="channel-title">{t("noChannelTitle")}</p>
             <p className="channel-text">{t("noChannelText")}</p>
             {/* The way out right in the warning (16 Nov): the buttons below sit under the whole list. */}
             {tgUrl && <TelegramLink className="btn btn-stamp is-pulse" href={tgUrl} where="telegram_my">{t("telegramConnect")}</TelegramLink>}
+            <PushConnect where="push_my" />
             {emailReady() && <p className="note"><a href="#alerts">{t("noChannelEmail")}</a></p>}
           </div>
         )}
@@ -96,13 +98,15 @@ export default async function MyPage({ params }: Props) {
                 <p className="note">{t("telegramHint")}</p>
               </>
             ) : !botUsername() ? <p className="note">{t("telegramSoon")}</p> : null}
+            <hr className="rule" />
+            <PushConnect where="push_my" />
             {emailReady() && (
               <>
                 <hr className="rule" />
                 <EmailConnect initial={{ address: found.watcher.email, confirmed: found.watcher.emailConfirmed }} removable />
               </>
             )}
-            {!found.watcher.telegramChatId && !found.watcher.emailConfirmed && (tgUrl || emailReady()) && <ConsentNote />}
+            {!found.watcher.telegramChatId && !found.watcher.emailConfirmed && !found.watcher.push && (tgUrl || emailReady()) && <ConsentNote />}
             <hr className="rule" />
             <p className="note">{t("shareNote")}</p>
             <p className="my-share">{shareUrl}</p>
