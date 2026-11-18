@@ -26,7 +26,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          n=$(gh run list -R "$GITHUB_REPOSITORY" --workflow report.yml --status success --created ">=$(date -u +%F)" --json databaseId --jq length)
+          # By Almaty's day, not UTC's (18 Nov: a delayed backup run sent a second report at 02:03 Almaty).
+          n=$(gh run list -R "$GITHUB_REPOSITORY" --workflow report.yml --status success --created ">=$(TZ=Asia/Almaty date +%F)T00:00:00+05:00" --json databaseId --jq length)
           echo "count=$n" >> "$GITHUB_OUTPUT"
       - if: steps.sent.outputs.count == '0' || inputs.force
         uses: actions/checkout@v4

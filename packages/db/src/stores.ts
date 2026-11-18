@@ -38,6 +38,23 @@ export async function productsToMatch(sql: postgres.Sql, marketplaceId: number) 
 }
 
 /**
+ * Tracked or recently opened products of these categories (Kaspi's leaf names) never checked against this store.
+ * As phonesToMatch, for the matching by the manufacturer's model code (Halyk Market, 18 Nov).
+ */
+export async function productsToMatchIn(sql: postgres.Sql, marketplaceId: number, categories: string[], limit: number) {
+  return sql<{ productId: number; externalId: string; title: string; price: number; category: string }[]>`
+    select p.id as "productId", p.external_id as "externalId", p.title, s.current_min_price as price,
+           p.category_path[array_length(p.category_path, 1)] as category
+    from products p join product_state s on s.product_id = p.id
+    where p.status = 'active' and s.in_stock and s.current_min_price is not null
+      and p.category_path[array_length(p.category_path, 1)] = any(${categories})
+      and (exists (select 1 from trackings t where t.product_id = p.id and t.status = 'active') or p.last_viewed_at > now() - interval '14 days')
+      and not exists (select 1 from store_matches m where m.product_id = p.id and m.marketplace_id = ${marketplaceId})
+    order by (select count(*) from trackings t where t.product_id = p.id and t.status = 'active') desc, p.last_viewed_at desc nulls last
+    limit ${limit}`;
+}
+
+/**
  * Phones never checked against this store (Halyk Market, phones first): people's products first, then opened ones.
  * A phone looked up and not found is recorded (status 'rejected', reason 'not found') and tried again after 14 days.
  */
@@ -240,6 +257,23 @@ export async function saveListingPage(sql: postgres.Sql, marketplaceId: number, 
     crawled_at = case when ${done} then now() else crawled_at end
     where marketplace_id = ${marketplaceId} and slug = ${category}`;
 }
+/**
+ * Items a store showed us in passing (Halyk Market's lists and "similar products", 18 Nov): kept as an index that
+ * grows run by run, so a product its 12-item lists did not show today can still be matched later. sku = the page
+ * address after /category/ (model and variant), slug = the same; no request is made for it.
+ */
+export async function rememberStoreItems(sql: postgres.Sql, marketplaceId: number, category: string | null, items: { sku: string; title: string; price: number | null }[]): Promise<void> {
+  const uniq = [...new Map(items.filter((i) => i.sku && i.title).map((i) => [i.sku, i])).values()];
+  if (!uniq.length) return;
+  await sql`
+    insert into store_items (marketplace_id, sku, slug, title, category, price, on_order, seen_at)
+    select ${marketplaceId}, x.sku, x.sku, x.title, ${category}, nullif(x.price, 0), false, now()
+    from unnest(${sql.array(uniq.map((i) => i.sku))}::text[], ${sql.array(uniq.map((i) => i.title))}::text[], ${sql.array(uniq.map((i) => i.price ?? 0))}::int[])
+      as x(sku, title, price)
+    on conflict (marketplace_id, sku) do update set title = excluded.title, price = excluded.price,
+      category = coalesce(excluded.category, store_items.category), seen_at = now()`;
+}
+
 export interface StoreItem { sku: string; slug: string; title: string; price: number | null; oldPrice: number | null; onOrder: boolean; seenAt: Date }
 export async function storeItems(sql: postgres.Sql, marketplaceId: number): Promise<StoreItem[]> {
   return sql<StoreItem[]>`select sku, slug, title, price, old_price as "oldPrice", on_order as "onOrder", seen_at as "seenAt" from store_items

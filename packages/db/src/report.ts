@@ -116,13 +116,16 @@ export async function ownerReport(sql: postgres.Sql): Promise<OwnerReport> {
 
   const [catalog] = await sql<OwnerReport["catalog"][]>`
     select count(*)::int as products,
-      count(*) filter (where s.last_checked_at > now() - interval '3 days')::int as "fresh3d",
+      -- On schedule: checked in the last 3 days, or not due yet (a steady or less wanted product is checked every 2nd
+      -- or 3rd day on purpose since 16 Nov; it is not "missed"). 18 Nov: the plain 3-day count said 89% on clean runs.
+      count(*) filter (where s.last_checked_at > now() - interval '3 days' or cs.next_check_at > now())::int as "fresh3d",
       count(*) filter (where s.in_stock)::int as "inStock",
       count(*) filter (where s.observed_since < now() - interval '7 days')::int as "history7d",
       count(*) filter (where s.observed_since < now() - interval '30 days')::int as "history30d",
       (select count(*) from seed_queue)::int as "seedQueue",
       (select count(*) from short_link_queue where status = 'pending')::int as "linksWaiting"
-    from products p join product_state s on s.product_id = p.id where p.status = 'active'`;
+    from products p join product_state s on s.product_id = p.id left join collection_schedule cs on cs.product_id = p.id
+    where p.status = 'active'`;
 
   // Today's store runs together (Almaty day): the main run plus backup starts that find nothing due. Not the last 24 h:
   // on 16 Nov the evening report repeated a stop from an extra run the evening before.

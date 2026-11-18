@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { createHalykClient, listItems, nuxtData, pagePath, parseHalykProduct, phoneKey, pickColour, pickMemory, sameModel, variantPickers } from "./halyk";
+import { brandOf, modelCodes, partNumber, sameCode, createHalykClient, listItems, nuxtData, pagePath, parseHalykProduct, phoneKey, pickColour, pickMemory, sameModel, variantPickers } from "./halyk";
 
 // The payload of a real product page (iPhone 17 Pro Max 256Gb Silver, 17 Nov 2026), the rest of the page cut.
 const page = readFileSync(join(__dirname, "../fixtures", "halyk-product.html"), "utf8");
@@ -63,5 +63,24 @@ describe("Halyk client", () => {
     const e = await c.page("https://halykmarket.kz/category/smartfony").catch((x) => x);
     expect(ua).toBe("BAGA test");
     expect(e.isBlocked).toBe(true);
+  });
+});
+
+describe("model codes", () => {
+  it("finds the manufacturer's codes, the part number last, and the brand", () => {
+    const laptop = "Ноутбук Lenovo LOQ 15ARP10E 15.6\" / AMD Ryzen 5 150 / 16 Гб / SSD 512 Гб / GeForce RTX 3050 / Win 11 Home / 83S000HPRK серый";
+    expect(modelCodes(laptop)).toEqual(["15ARP10E", "83S000HPRK"]);
+    expect(partNumber(laptop)).toBe("83S000HPRK");
+    expect(brandOf(laptop)).toBe("Lenovo");
+    expect(partNumber("Монитор 27\" XTREON XT2769VD черный")).toBe("XT2769VD");
+    expect(partNumber("Наушники Sony WF-1000XM6 черный")).toBe("WF1000XM6");
+    expect(partNumber("Наушники Apple AirPods 5 with Wireless Charging Case белый")).toBeNull();
+  });
+  it("matches the part number as a whole word, with a region suffix only after a digit", () => {
+    expect(sameCode("83S000HPRK", "Ноутбук Lenovo LOQ 15ARP10E 83S000HPRK 15.6\" 16Gb")).toBe(true);
+    expect(sameCode("XT2769VD", "27 XTREON XT2769VD черный")).toBe(true);
+    expect(sameCode("XT2769VD", "XTREON XT2769VDX")).toBe(false);
+    expect(sameCode("MDH74", "Ноутбук Apple MacBook Air 13 M5 MDH74RU/A")).toBe(true);
+    expect(sameCode("15ARP10E", "Lenovo LOQ 15ARP10E 83S000BNRK")).toBe(true); // why only the part number decides
   });
 });

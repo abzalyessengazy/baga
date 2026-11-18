@@ -33,7 +33,7 @@ describe("reportIssues", () => {
     expect(issues).toEqual([
       "Kaspi collector sent only 300 requests today",
       "Kaspi run stopped: 429 &lt;Too Many&gt;",
-      "Only 65% of products checked in the last 3 days",
+      "Only 65% of products checked on schedule",
       "The store run (Technodom, Sulpak) has not run for over 36 h",
       "1 notifications failed to send",
       "Review 22 store matches (admin)",
@@ -60,7 +60,8 @@ describe("headline", () => {
 describe("renderOwnerReport", () => {
   it("shows the day, an aligned target table, savings kept apart and escaped text", () => {
     const html = renderOwnerReport(base, [{ hash: "abc1234", subject: "Fix <b> & more" }], now);
-    expect(html).toContain("<b>BAĞA · 11 Nov</b>");
+    expect(html).toContain("<b>BAĞA · 12 Nov</b>"); // the day it is sent
+    expect(html).toContain("<b>Yesterday, 11 Nov</b>"); // the day it covers
     expect(html).toContain("✅ All normal");
     expect(html).toContain("People/day    30  🎯100  🔴");
     expect(html).toContain("Open item    50%  🎯50%  ✅");
@@ -91,7 +92,7 @@ describe("renderOwnerReport", () => {
   });
   it("puts the CTO note on top, escaped, or says why it was withheld", () => {
     const html = renderOwnerReport(base, [], now, { cto: { note: "• Backup <failed>: run it again (you)." } });
-    expect(html.split("\n").slice(0, 3).join("\n")).toBe("<b>BAĞA · 11 Nov</b>\n🧠 <b>CTO</b>\n• Backup &lt;failed&gt;: run it again (you).");
+    expect(html.split("\n").slice(0, 3).join("\n")).toBe("<b>BAĞA · 12 Nov</b>\n🧠 <b>CTO</b>\n• Backup &lt;failed&gt;: run it again (you).");
     expect(renderOwnerReport(base, [], now, { cto: { withheld: "it cited 70, not in the data" } })).toContain("<i>CTO note withheld: it cited 70, not in the data.</i>");
     expect(renderOwnerReport(base, [], now, { cto: null })).not.toContain("CTO");
   });

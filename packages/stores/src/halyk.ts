@@ -16,6 +16,10 @@ export const HALYK = {
   productUrl: (slug: string) => `https://halykmarket.kz/category/${slug}`,
   phoneList: (brand: string, sort: "popular-desc" | "price-asc" | "price-desc") =>
     `https://halykmarket.kz/category/smartfony?sort=${sort}&f=brands:${encodeURIComponent(brand)}`,
+  categoryList: (category: string, brand: string, sort: "popular-desc" | "price-asc" | "price-desc") =>
+    `https://halykmarket.kz/category/${category}?sort=${sort}&f=brands:${encodeURIComponent(brand)}`,
+  /** Kaspi's leaf category → Halyk Market's (its category tree, 17 Nov 2026), for the matching by model code. */
+  codeCategories: { "Мониторы": "monitori", "Ноутбуки": "noutbuki", "Наушники": "naushniki", "Планшеты": "plansheti" } as Record<string, string>,
 } as const;
 
 export class HalykHttpError extends Error {
@@ -161,6 +165,42 @@ export function sameModel(k: PhoneKey, halykTitle: string): boolean {
   const esim = /\besim\b/.test(t);
   const words = (s: string) => s.replace(/^(xiaomi|poco)\s+(?=(redmi|poco)\b)/, "");
   return words(t.replace(/\besim\b/, "").replace(/\s+/g, " ").trim()) === words(k.model) && esim === k.esimOnly;
+}
+
+/**
+ * The manufacturer's model codes in a title: words with both letters and digits, 5+ characters (83S000HPRK,
+ * XT2769VD, LS24F330EAIXCI, 90NR0JF7-M00JD0, WF-1000XM6), upper case without dots, dashes or slashes. Memory and
+ * sizes (16GB, 512Гб, 27", 1TB, M5) are not codes.
+ */
+export function modelCodes(title: string): string[] {
+  const out = new Set<string>();
+  for (const raw of title.split(/[\s,()]+/)) {
+    const w = raw.replace(/^[^0-9a-z]+|[^0-9a-z]+$/gi, "");
+    const c = w.toUpperCase().replace(/[./-]/g, "");
+    if (c.length < 5 || !/[A-Z]/.test(c) || !/\d/.test(c) || /[А-ЯЁ]/i.test(w)) continue;
+    if (/^\d+(GB|TB|MB|HZ|MAH|W|MM|CM)$/.test(c)) continue;
+    out.add(c);
+  }
+  return [...out];
+}
+/**
+ * The code that decides a match: the last one in the title, the part number (a laptop's "15ARP10E" is a series that
+ * several configurations share; its "83S000HPRK" is one of them).
+ */
+export const partNumber = (title: string): string | null => modelCodes(title).at(-1) ?? null;
+/**
+ * Halyk's title carries our part number as a whole word. A code ending in a digit may carry a region suffix there
+ * (Apple's MDH74 → MDH74RU/A); a code ending in a letter must match exactly (XT2769VD is not XT2769VDX).
+ */
+export function sameCode(code: string, halykTitle: string): boolean {
+  const t = halykTitle.toUpperCase().replace(/[./-]/g, "");
+  const suffix = /\d$/.test(code) ? "(?:[A-Z]{1,3})?" : "";
+  return new RegExp(`(^|[^A-Z0-9])${code}${suffix}([^A-Z0-9]|$)`).test(t);
+}
+/** The brand in a Kaspi title: its first Latin word (after the category word), not a size. */
+export function brandOf(title: string): string | null {
+  for (const w of title.split(/\s+/)) if (/^[A-Za-z][A-Za-z0-9-]{1,}$/.test(w)) return w;
+  return null;
 }
 
 /** The option for our memory or colour, or null when Halyk does not sell it. */

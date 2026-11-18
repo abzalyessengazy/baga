@@ -493,3 +493,14 @@ The free team ran out of ISR writes (200 000) and reached 90% of its CPU (4 h); 
 - robots.txt also turns away GPTBot, Amazonbot, SE Ranking's bots, CCBot, Bytespider, ClaudeBot and meta-externalagent (AI-training and backlink crawlers; they bring no visitors). OAI-SearchBot and ChatGPT-User stay: they answer people's questions.
 - A link-preview image carries `Cache-Control: s-maxage=86400`, so Vercel's CDN draws it once a day instead of on every request. The previews stay (the owner: keep them if they cost little; with bots gone and a day's cache they do).
 - Deploys go out in batches, about once a day (each deploy empties the page cache, and every page is written again on its next visit).
+
+## 2026-11-18 Halyk Market: an index and part numbers
+On 17 Nov Halyk matched 10 of 23 tracked phones and none of the other 78 tracked products (only phones were looked up; its pages list only the first 12 of a brand, the rest come from /api/, which we never read). Now (the owner's go):
+- Every product a Halyk page shows us (lists, "similar products") is kept in `store_items` (marketplace halyk, sku = the page address after /category/), so the catalogue we know grows run by run and a phone missing from today's 12 can be matched from an earlier run. No extra request.
+- Monitors, laptops, earbuds and tablets are matched by the manufacturer's part number: the last code in the Kaspi title (a laptop's "15ARP10E" is a series several configurations share; "83S000HPRK" is one of them). A match only when Halyk's own product page carries the same part number as a whole word (a code ending in a digit may carry a region suffix there: MDH74 → MDH74RU/A). A title without a part number is not matched. 25 a run, display only.
+
+## 2026-11-18 Small things
+- Black Friday banner: the arrow is a round white button that nudges twice when the page opens, and the strip presses in on tap; same size (the owner: it did not look clickable).
+- Owner report: titled with the day it is sent; the full-day block says which day it covers («Yesterday, 17 Nov»); "on schedule" counts a product checked in 3 days or not due yet (16 Nov's slower schedules made the plain 3-day count read 89% on clean runs); the "already sent today" check counts Almaty's day (a delayed backup run sent a report at 02:03).
+- robots.txt also turns away meta-webindexer (Meta's index crawler, ~5 500 pages in 6 h on 18 Nov); facebookexternalhit (link previews) stays.
+- Vercel builds the site only when the site or the packages it uses changed since the last deployment (`ignoreCommand` in apps/web/vercel.json, against VERCEL_GIT_PREVIOUS_SHA; an unknown history builds): worker-only pushes no longer redeploy it and empty its cache.

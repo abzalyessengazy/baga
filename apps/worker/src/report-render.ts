@@ -43,7 +43,7 @@ export function reportIssues(r: OwnerReport, now = new Date(), failures: Workflo
   // Stops behind a clean later run are history, shown under «Data today» (12 Nov: the morning stops stayed in «Needs you»).
   if (!c.lastOk) for (const a of c.aborted) out.push(`Kaspi run stopped: ${a}`);
   if (r.catalog.products > 0 && share(r.catalog.fresh3d, r.catalog.products) < 0.9) {
-    out.push(`Only ${pct(share(r.catalog.fresh3d, r.catalog.products))} of products checked in the last 3 days`);
+    out.push(`Only ${pct(share(r.catalog.fresh3d, r.catalog.products))} of products checked on schedule`);
   }
   if (!r.store.startedAt) out.push("The store run (Technodom, Sulpak) has never run");
   else if (now.getTime() - new Date(r.store.startedAt).getTime() > 36 * 3600_000) out.push("The store run (Technodom, Sulpak) has not run for over 36 h");
@@ -83,13 +83,15 @@ export function renderOwnerReport(r: OwnerReport, commits: Commit[], now = new D
   const daily = r.weekPeopleReliable ? { label: "People/day", now: f.people, avg: w.people } : { label: "Visits/day", now: f.tabs, avg: w.tabs };
   const out: string[] = [];
 
-  out.push(`<b>BAĞA · ${dayLabel(r.day)}</b>`);
+  // Titled with the day it is sent (18 Nov: «BAĞA · 16 Nov» on the 17th read as an old report); the full-day block says
+  // which day it covers.
+  out.push(`<b>BAĞA · ${dayLabel(new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Almaty" }).format(now))}</b>`);
   const cto = extras.cto;
   if (cto && "note" in cto) out.push(`🧠 <b>CTO</b>\n${esc(cto.note)}`, "");
   else if (cto) out.push(`<i>CTO note withheld: ${esc(cto.withheld)}.</i>`, "");
   out.push(issues.length === 0 ? "✅ All normal" : `⚠️ <b>Needs you</b>\n${issues.map((i) => `• ${i}`).join("\n")}`);
 
-  out.push("", `<b>Yesterday</b> · targets for ${dayLabel(TARGETS.by)}`);
+  out.push("", `<b>Yesterday, ${dayLabel(r.day)}</b> · targets for ${dayLabel(TARGETS.by)}`);
   out.push("<pre>" + [
     row(daily.label, num(daily.now), String(TARGETS.visitorsPerDay), targetMark(daily.avg, TARGETS.visitorsPerDay)),
     row("Open item", pct(openRate), pct(TARGETS.productOpenRate), targetMark(openRate, TARGETS.productOpenRate)),
@@ -116,7 +118,7 @@ export function renderOwnerReport(r: OwnerReport, commits: Commit[], now = new D
   out.push(`Stores ${r.store.aborted ? "⚠️" : "✅"} ${num(r.store.priced)} priced · ${r.store.cheaperThere} cheaper than Kaspi`);
   const recovered = failures.filter((f) => f.recovered);
   if (recovered.length) out.push(`GitHub: ${recovered.map((f) => `${esc(f.name)} failed ${f.failed}×, then ok`).join(" · ")}`);
-  out.push(`${pct(share(r.catalog.fresh3d, r.catalog.products))} of ${num(r.catalog.products)} products fresh · ${num(r.catalog.seedQueue)} waiting to be added`);
+  out.push(`${pct(share(r.catalog.fresh3d, r.catalog.products))} of ${num(r.catalog.products)} products on schedule · ${num(r.catalog.seedQueue)} waiting to be added`);
 
   if (commits.length) {
     out.push("", `<b>Code</b> · ${commits.length} change${commits.length === 1 ? "" : "s"}`);

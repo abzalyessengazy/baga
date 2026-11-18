@@ -15,13 +15,13 @@ import postgres from "postgres";
 import { KASPI_VISIT_WINDOW_UTC, isInStoreWindow, bestCandidate, looseCandidates, mismatch, storeIndex, storeTokens, kaspiColour } from "@baga/core";
 import {
   connectionOptions, isSimilarReason, storeMarketplaceId, productsToMatch, productsSoldOnKaspiBy, productIdByExternal, exactTitleForSku, saveMatch, matchesToPrice, saveStorePrice,
-  setMatchStatus, startStoreRun, finishStoreRun, phonesToMatch, saveStoreCategories, storeCategories, ourLeafCategories, saveListingPage, storeItems, STORE_INDEX,
+  setMatchStatus, startStoreRun, finishStoreRun, phonesToMatch, productsToMatchIn, rememberStoreItems, saveStoreCategories, storeCategories, ourLeafCategories, saveListingPage, storeItems, STORE_INDEX,
 } from "@baga/db";
 import {
   createTechnodomClient, TECHNODOM, TechnodomHttpError, TechnodomParseError, StoreRequestRefused, skuOf, type TechnodomProduct,
   createSulpakClient, SULPAK, SulpakHttpError, SulpakParseError, sulpakCategoriesFor, type SulpakProduct,
   createHalykClient, HALYK, HalykHttpError, HalykParseError, halykListItems, halykPickers, halykPagePath, parseHalykProduct, phoneKey, samePhoneModel,
-  pickMemory, pickColour, type HalykListItem,
+  pickMemory, pickColour, partNumber, sameCode, halykBrandOf, type HalykListItem,
 } from "@baga/stores";
 import { env } from "./env";
 import { CircuitBreaker } from "./breaker";
@@ -41,6 +41,8 @@ export const STORE_RUN = {
   /** Halyk Market: matched phones priced per run, and new phones looked up per run (≤ ~6 pages each). */
   halykPrices: 300,
   halykNewPhones: 25,
+  /** Monitors, laptops, earbuds and tablets matched by the manufacturer's part number, per run. */
+  halykNewByCode: 25,
 } as const;
 
 const minute = (d = new Date()) => d.getUTCHours() * 60 + d.getUTCMinutes() + d.getUTCSeconds() / 60;
@@ -319,6 +321,10 @@ async function runHalyk() {
     try {
       const d = await hm.page(`${HALYK.base}${halykPagePath(path)}`);
       breaker.record(true);
+      // Everything a page lists goes into the index (store_items), so the catalogue we know grows run by run.
+      const seenHere = halykListItems(d);
+      if (seenHere.length) await rememberStoreItems(sql, mid, null, seenHere.map((it) => ({ sku: halykPagePath(it.url).replace(/^\/category\//, ""), title: it.title, price: it.price })))
+        .catch((e) => console.error(`[halyk] index: ${e}`));
       return d;
     } catch (e) {
       if (e instanceof StoreRequestRefused) throw e;
@@ -341,11 +347,15 @@ async function runHalyk() {
       priced++;
     }
     // 2. New phones.
+    // The index of everything seen in earlier runs (store_items), so a phone their 12-item lists did not show today
+    // can still be found.
+    const known: HalykListItem[] = (await storeItems(sql, mid)).map((it) => ({ title: it.title, price: it.price, url: `/category/${it.slug}` }));
     const lists = new Map<string, HalykListItem[]>();
     // A brand list Halyk did not serve (17 Nov: a 503 on Redmi's): its phones are not "not found", only not looked at.
     const listFailed = new Set<string>();
     const seen = new Map<string, HalykListItem>();
-    const add = (items: HalykListItem[]) => { for (const it of items) seen.set(it.url.split("?")[0]!, it); };
+    const add = (items: HalykListItem[]) => { for (const it of items) seen.set(halykPagePath(it.url).split("?")[0]! + "?" + (halykPagePath(it.url).split("?")[1] ?? ""), it); };
+    add(known);
     const none = (t: { productId: number }, reason: string) =>
       saveMatch(sql, { productId: t.productId, marketplaceId: mid, sku: "not-found", slug: "", title: null, method: "strict", status: "rejected", reason });
     for (const t of await phonesToMatch(sql, mid, STORE_RUN.halykNewPhones)) {
@@ -399,6 +409,42 @@ async function runHalyk() {
       const ok = samePhoneModel(k, p.title) && p.title.toLowerCase().replace(/\s+/g, "").includes(k.memory);
       const saved = await saveMatch(sql, { productId: t.productId, marketplaceId: mid, sku: p.skuId, slug: slugOf(path), title: p.title,
         method: "strict", status: ok ? "confirmed" : "rejected", reason: ok ? null : "variant page does not match" });
+      matched++;
+      if (saved.status === "confirmed") { await saveStorePrice(sql, saved.id, { price: p.price, oldPrice: null, inStock: p.inStock, offers: p.offers }); priced++; }
+    }
+    // 3. Monitors, laptops, earbuds, tablets: by the manufacturer's part number (18 Nov). The brand's lists in that
+    //    category and the index; a match only when Halyk's own page title carries the same part number.
+    const catLists = new Map<string, HalykListItem[] | null>();
+    for (const t of await productsToMatchIn(sql, mid, Object.keys(HALYK.codeCategories), STORE_RUN.halykNewByCode)) {
+      const code = partNumber(t.title);
+      const brand = halykBrandOf(t.title);
+      if (!code || !brand) { await none(t, "no part number in the title"); matched++; continue; }
+      const cat = HALYK.codeCategories[t.category]!;
+      const key = `${cat}|${brand.toLowerCase()}`;
+      if (!catLists.has(key)) {
+        let all: HalykListItem[] | null = [];
+        // Halyk spells brands its own way ("Asus", "XTREON"): as in the title, then capitalised.
+        for (const b of [...new Set([brand, brand.charAt(0).toUpperCase() + brand.slice(1).toLowerCase()])]) {
+          for (const sort of ["popular-desc", "price-desc", "price-asc"] as const) {
+            const d = await read(HALYK.categoryList(cat, b, sort).replace(HALYK.base, ""));
+            if (!d) { all = null; break; }
+            all.push(...halykListItems(d));
+          }
+          if (!all || all.length) break;
+        }
+        catLists.set(key, all);
+        if (all) add(all);
+      }
+      const hit = [...seen.values()].find((it) => !it.title.includes(" + ") && sameCode(code, it.title));
+      if (!hit) { if (catLists.get(key) !== null) { await none(t, "not found"); matched++; } continue; }
+      const path = hit.url;
+      const d = await read(path);
+      if (!d) continue;
+      let p;
+      try { p = parseHalykProduct(d); } catch { failed++; continue; }
+      const ok = sameCode(code, p.title);
+      const saved = await saveMatch(sql, { productId: t.productId, marketplaceId: mid, sku: p.skuId, slug: slugOf(path), title: p.title,
+        method: "strict", status: ok ? "confirmed" : "rejected", reason: ok ? null : "part number differs on the page" });
       matched++;
       if (saved.status === "confirmed") { await saveStorePrice(sql, saved.id, { price: p.price, oldPrice: null, inStock: p.inStock, offers: p.offers }); priced++; }
     }

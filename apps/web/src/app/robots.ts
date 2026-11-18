@@ -11,7 +11,10 @@ export default function robots(): MetadataRoute.Robots {
   return {
     rules: [
       { userAgent: ["AhrefsBot", "SemrushBot", "MJ12bot", "DotBot", "BLEXBot", "DataForSeoBot", "PetalBot", "barkrowler",
-          "GPTBot", "Amazonbot", "SERankingBacklinksBot", "SERankingBot", "CCBot", "Bytespider", "ClaudeBot", "meta-externalagent"], disallow: ["/"] },
+          "GPTBot", "Amazonbot", "SERankingBacklinksBot", "SERankingBot", "CCBot", "Bytespider", "ClaudeBot", "meta-externalagent",
+          // 18 Nov: Meta's index crawler, ~5 500 product and share pages in 6 h. facebookexternalhit (link previews in
+          // WhatsApp, Instagram, Facebook) is another bot and stays allowed.
+          "meta-webindexer"], disallow: ["/"] },
       { userAgent: "*", allow: ["/", "/api/digest"], disallow: ["/api/", "/go/", "/*/explore?", "/*/p/*/wait"] },
     ],
     sitemap: `${base}/sitemap.xml`,
