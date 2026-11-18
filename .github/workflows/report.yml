@@ -1,11 +1,8 @@
 name: Daily owner report
 on:
-  # One Telegram message to the owner a day (DECISIONS.md, 2026-11-11 "Daily owner report"), after the collector's
-  # window (ends 08:42 UTC) and the Technodom run (starts 08:50 UTC, ~35 min): 09:45 UTC = 14:45 Almaty.
-  # GitHub sometimes skips or delays a schedule, so there are two later backups; a day already reported is skipped.
-  schedule:
-    - cron: "45 9 * * *"
-    - cron: "15 11,13 * * *"
+  # No longer sent automatically (18 Nov 2026, the owner: «useless, arrives so late, just delete it»; DECISIONS
+  # 2026-11-18 "Daily owner report off"). Kept runnable by hand (Actions → Daily owner report → Run workflow); Claude
+  # reads the same numbers with `pnpm --filter @baga/worker report --dry` when asked.
   workflow_dispatch:
     inputs:
       force:
