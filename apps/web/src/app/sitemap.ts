@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 import { getSql } from "@baga/db";
 import { siteUrl } from "@/lib/site";
+import { GUIDE_SLUGS } from "@/lib/guides";
 
 // Rendered per request: the product list grows between deploys, and builds must not depend on the database.
 // Only products people opened in the last 60 days or track (the owner, 16 Nov: crawlers walking all ~3 000 products
@@ -15,6 +16,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${base}/${l}/black-friday`, changeFrequency: "daily" as const },
     { url: `${base}/${l}/explore`, changeFrequency: "daily" as const },
     ...["privacy", "terms"].map((doc) => ({ url: `${base}/${l}/${doc}`, changeFrequency: "yearly" as const })),
+    ...GUIDE_SLUGS.map((g) => ({ url: `${base}/${l}/guide/${g}`, changeFrequency: "monthly" as const })),
   ]);
   const sql = getSql();
   if (sql) {

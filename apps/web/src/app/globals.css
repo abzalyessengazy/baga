@@ -1367,3 +1367,11 @@ span.ticker-thumb { background: var(--paper-shade); box-shadow: none; }
   .product-grid { padding-bottom: 84px; }
 }
 @media (prefers-reduced-motion: reduce) { .track-bar { transition: none; } }
+
+/* Guides (18 Nov): the legal page's receipt, with a lead paragraph, numbered steps and the link box at the end. */
+.guide .guide-lead { font-size: 1.02rem; line-height: 1.55; }
+.guide ol { padding-left: 1.3em; }
+.guide ol li, .guide ul li { margin: 4px 0; }
+.guide a.guide-cta { display: inline-block; margin-top: 8px; text-decoration: none; color: var(--paper); white-space: normal; }
+.guide-more { margin-top: 18px; }
+.guide-more ul { list-style: none; padding: 0; margin: 6px 0 0; display: grid; gap: 6px; }

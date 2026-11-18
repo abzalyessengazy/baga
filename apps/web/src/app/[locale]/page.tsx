@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { setRequestLocale } from "next-intl/server";
+import { getTranslations, setRequestLocale } from "next-intl/server";
+import { siteUrl } from "@/lib/site";
 import { HomeHero } from "@/components/HomeHero";
 import { ZReport } from "@/components/ZReport";
 import { HowItWorks } from "@/components/HowItWorks";
@@ -17,8 +18,17 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
 export default async function Home({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params;
   setRequestLocale(locale);
+  const t = await getTranslations("meta");
+  // What BAĞA is, for search engines and AI assistants (18 Nov, DECISIONS "Guides for search and AI answers"): the same
+  // name and description as the page's own meta tags, nothing added.
+  const ld = {
+    "@context": "https://schema.org", "@type": "WebApplication", name: "BAĞA", url: `${siteUrl()}/${locale}`,
+    description: t("description"), inLanguage: locale === "kk" ? "kk-KZ" : "ru-KZ", applicationCategory: "ShoppingApplication",
+    operatingSystem: "Web", areaServed: "KZ", offers: { "@type": "Offer", price: 0, priceCurrency: "KZT" },
+  };
   return (
     <main>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(ld).replace(/</g, "\\u003c") }} />
       <Ticker />
       <HomeHero />
       <BlackFridayBanner />

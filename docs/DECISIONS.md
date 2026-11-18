@@ -528,3 +528,7 @@ On 17 Nov Halyk matched 10 of 23 tracked phones and none of the other 78 tracked
 
 ## 2026-11-18 — Daily owner report off
 The owner: the daily Telegram report («CTO report») is not useful and arrives too late («just delete it»). Its schedules are removed and the store run no longer starts it; the workflow stays runnable by hand, and Claude reads the same numbers (`report --dry`) when the owner asks. The 3-day note to users is unchanged.
+
+## 2026-11-18 — Guides for search and AI answers
+**Context.** ChatGPT already sends visitors (7 on 17 Nov). An audit: OAI-SearchBot, ChatGPT-User, Bing and Perplexity can read every page; product pages carry Product data, ru/kk alternates and canonicals; GPTBot and ClaudeBot (training crawlers) stay blocked, which does not affect ChatGPT search. Missing: pages answering what people ask.
+**Decision.** Three guides in ru and kk, texts approved by the owner: `/guide/real-discount` («Как проверить, настоящая ли скидка на Kaspi»), `/guide/price-history`, `/guide/price-alerts`. Text in messages (guide.*), observed examples dated 18 Nov, static pages with Article data, linked from the footer of every page and listed in the sitemap. The home page also describes BAĞA as a WebApplication (its own meta description, nothing added). The owner adds the site to Bing Webmaster Tools (import from Google Search Console). Not now: a custom GPT (needs a public data endpoint) and a Kaspi-vs-stores page (coverage still thin).
