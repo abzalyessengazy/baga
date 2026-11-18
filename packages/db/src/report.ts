@@ -43,7 +43,12 @@ export interface OwnerReport {
   cityPrices24h: number;
   manual24h: { done: number; failed: number; blocked: number };
   people: { watchers: number; newWatchers: number; connected: number; activeTrackings: number; newTrackings: number;
-    newTrackings7d: number };
+    newTrackings7d: number;
+    /** People with a tracking that is still on, and how many of them an alert can reach (Telegram or a confirmed email). */
+    trackers: number; reachable: number };
+  /** The connect step over 7 days, per visit (migration 0037): visits that set a price, then tapped Telegram or sent an
+   * email confirmation, then connected. Taps count only from 0037 on. */
+  connect7d: { tracked: number; tappedTelegram: number; sentEmail: number; connected: number };
   alerts: { targetSent24h: number; firstPriceSent24h: number; failed24h: number; boughtYes: number; boughtAnswered: number };
   /** Notification numbers of the last 24 h, the same definitions as the dashboard (alertStats). */
   alerts24h: AlertStats;
@@ -157,7 +162,20 @@ export async function ownerReport(sql: postgres.Sql): Promise<OwnerReport> {
       (select count(*) from watchers where not internal and (telegram_chat_id is not null or email_confirmed_at is not null))::int as connected,
       (select count(*) from trackings where watcher_id is not null and not exists (select 1 from watchers tw where tw.id = trackings.watcher_id and tw.internal) and status = 'active')::int as "activeTrackings",
       (select count(*) from trackings where watcher_id is not null and not exists (select 1 from watchers tw where tw.id = trackings.watcher_id and tw.internal) and created_at > now() - interval '24 hours')::int as "newTrackings",
-      (select count(*) from trackings where watcher_id is not null and not exists (select 1 from watchers tw where tw.id = trackings.watcher_id and tw.internal) and created_at > now() - interval '7 days')::int as "newTrackings7d"`;
+      (select count(*) from trackings where watcher_id is not null and not exists (select 1 from watchers tw where tw.id = trackings.watcher_id and tw.internal) and created_at > now() - interval '7 days')::int as "newTrackings7d",
+      t.trackers, t.reachable
+    from (select count(*)::int as trackers,
+        count(*) filter (where w.telegram_chat_id is not null or w.email_confirmed_at is not null)::int as reachable
+      from watchers w where not w.internal
+        and exists (select 1 from trackings k where k.watcher_id = w.id and k.status in ('pending', 'active'))) t`;
+
+  const [connect7d] = await sql<OwnerReport["connect7d"][]>`
+    with tr as (select distinct sid from events where name = 'track' and at > now() - interval '7 days')
+    select count(*)::int as tracked,
+      count(*) filter (where exists (select 1 from events e where e.sid = tr.sid and e.name = 'channel_tap' and e.detail like 'telegram%'))::int as "tappedTelegram",
+      count(*) filter (where exists (select 1 from events e where e.sid = tr.sid and e.name = 'channel_tap' and e.detail = 'email'))::int as "sentEmail",
+      count(*) filter (where exists (select 1 from events e where e.sid = tr.sid and e.name = 'channel'))::int as connected
+    from tr`;
 
   const [alerts] = await sql<OwnerReport["alerts"][]>`
     select count(*) filter (where type = 'target_reached' and status = 'sent' and sent_at > now() - interval '24 hours')::int as "targetSent24h",
@@ -196,7 +214,7 @@ export async function ownerReport(sql: postgres.Sql): Promise<OwnerReport> {
     store: { startedAt: lastStore?.startedAt ?? null, requests: lastStore?.requests ?? 0, priced: lastStore?.priced ?? 0,
       failed: lastStore?.failed ?? 0, aborted: lastStore?.aborted ?? null, pendingMatches: cmp?.pending ?? 0,
       compared: cmp?.compared ?? 0, cheaperThere: cmp?.cheaper ?? 0 },
-    cityPrices24h: city?.n ?? 0, manual24h: manual!, people: people!, alerts: alerts!, savings: savings!,
+    cityPrices24h: city?.n ?? 0, manual24h: manual!, people: people!, connect7d: connect7d!, alerts: alerts!, savings: savings!,
   };
 }
 

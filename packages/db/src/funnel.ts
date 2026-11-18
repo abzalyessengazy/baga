@@ -5,7 +5,7 @@ import { periodRange, PERSON_METRICS_FROM, type Period, type PeriodKey } from "@
  * The in-house funnel (migration 0011, DECISIONS.md 2026-11-03 "In-house funnel instead of PostHog"): steps of one
  * visit joined by a per-tab random id, no cookie and no IP; since 11 Nov also an anonymous per-browser id (0025). And the "Вы купили?" answers on trackings.
  */
-export const EVENT_NAMES = ["visit", "paste", "product_view", "track", "channel"] as const;
+export const EVENT_NAMES = ["visit", "paste", "product_view", "track", "channel", "channel_tap"] as const;
 export type EventName = (typeof EVENT_NAMES)[number];
 export interface FunnelEvent {
   name: EventName; sid: string; locale: "ru" | "kk" | null; device: "mobile" | "desktop" | null;

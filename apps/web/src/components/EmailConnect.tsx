@@ -3,6 +3,7 @@ import { useId, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { Turnstile } from "./Turnstile";
 import { PROFILE_EVENT } from "@/lib/profileClient";
+import { track } from "@/lib/analytics";
 
 export interface EmailInitial { address: string | null; confirmed: boolean }
 
@@ -53,6 +54,7 @@ export function EmailConnect({ initial, removable = false, onState }: { initial:
       setAddress(data.email ?? address);
       setState(data.code);
       onState?.(data.code);
+      if (data.code === "sent") track("channel_tap", { detail: "email" }); // the connect funnel: a confirmation went out
       window.dispatchEvent(new Event(PROFILE_EVENT)); // the alerts bar reads the new state
     } else {
       const code = data?.code;

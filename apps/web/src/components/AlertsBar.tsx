@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { loadMyProfile, PROFILE_EVENT } from "@/lib/profileClient";
+import { track } from "@/lib/analytics";
 
 const HIDDEN = "baga.alertsBar";
 
@@ -43,7 +44,7 @@ export function AlertsBar() {
       <p className="alerts-bar-text"><span aria-hidden>🔔</span> {state.pending ? t("pending", { email: state.pending }) : t("text", { count: state.count })}</p>
       <div className="alerts-bar-actions">
         {state.url && (
-          <a className="btn btn-stamp alerts-bar-tg" href={state.url} target="_blank" rel="noopener">{t("telegram")}</a>
+          <a className="btn btn-stamp alerts-bar-tg" href={state.url} target="_blank" rel="noopener" onClick={() => track("channel_tap", { detail: "telegram_bar" })}>{t("telegram")}</a>
         )}
         {!state.pending && <Link className="alerts-bar-mail" href="/my#alerts">{t("email")}</Link>}
         <button type="button" className="alerts-bar-close" onClick={hide} aria-label={t("close")} title={t("close")}>×</button>

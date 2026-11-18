@@ -3,6 +3,7 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import { getSql, listWatched, productSellers, getProfile, getProfileStats, suggestFor } from "@baga/db";
 import { levelFor, slugName } from "@baga/core";
 import { currentWatcher, telegramConnectUrl, botUsername, emailReady } from "@/lib/watcher";
+import { TelegramLink } from "@/components/TelegramLink";
 import { siteUrl } from "@/lib/site";
 import { MyList } from "@/components/MyList";
 import { EmailConnect } from "@/components/EmailConnect";
@@ -64,7 +65,7 @@ export default async function MyPage({ params }: Props) {
             <p className="channel-title">{t("noChannelTitle")}</p>
             <p className="channel-text">{t("noChannelText")}</p>
             {/* The way out right in the warning (16 Nov): the buttons below sit under the whole list. */}
-            {tgUrl && <a className="btn btn-stamp is-pulse" href={tgUrl} target="_blank" rel="noopener">{t("telegramConnect")}</a>}
+            {tgUrl && <TelegramLink className="btn btn-stamp is-pulse" href={tgUrl} where="telegram_my">{t("telegramConnect")}</TelegramLink>}
             {emailReady() && <p className="note"><a href="#alerts">{t("noChannelEmail")}</a></p>}
           </div>
         )}
@@ -91,7 +92,7 @@ export default async function MyPage({ params }: Props) {
               <p className="note">{t("telegramLinked")}</p>
             ) : tgUrl ? (
               <>
-                <a className="btn btn-stamp" href={tgUrl} target="_blank" rel="noopener">{t("telegramConnect")}</a>
+                <TelegramLink className="btn btn-stamp" href={tgUrl} where="telegram_my">{t("telegramConnect")}</TelegramLink>
                 <p className="note">{t("telegramHint")}</p>
               </>
             ) : !botUsername() ? <p className="note">{t("telegramSoon")}</p> : null}

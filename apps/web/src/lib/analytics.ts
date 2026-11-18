@@ -4,7 +4,7 @@
  * more random id per browser in localStorage counts unique and returning visitors; no cookie, no name, no IP.
  * Fire-and-forget: a failed or blocked beacon never affects the page.
  */
-export type FunnelStep = "visit" | "paste" | "product_view" | "track" | "channel";
+export type FunnelStep = "visit" | "paste" | "product_view" | "track" | "channel" | "channel_tap";
 const SID_KEY = "baga.sid";
 
 const VID_KEY = "baga.vid";

@@ -48,6 +48,7 @@ export function TrackPanel({ productId, shortLink, current, initial, related }: 
   // Alerts need somewhere to go: until Telegram or a confirmed address is connected, the coupon says so loudly.
   const [mail, setMail] = useState<"form" | "sent" | "confirmed">(initial.email.address ? (initial.email.confirmed ? "confirmed" : "sent") : "form");
   const [waitTg, setWaitTg] = useState(false); // the Telegram button was tapped: watch for the link
+  const tapTg = () => { setWaitTg(true); trackStep("channel_tap", { externalId: productId, detail: "telegram" }); };
   // Without Telegram or a confirmed address a tracking can never write (16 Nov: 5 of 15 trackers connected one). Right
   // after the price is set, the next step is brought into view; the leaderboard nudge and similar products wait for it.
   const channelRef = useRef<HTMLDivElement>(null);
@@ -191,7 +192,7 @@ export function TrackPanel({ productId, shortLink, current, initial, related }: 
         <>
           {tg.linked && <p className="channel-ok">✓ {t("telegramLinked")}</p>}
           {!tg.linked && tg.url && (
-            <a className="link-btn channel-more" href={tg.url} target="_blank" rel="noopener" onClick={() => setWaitTg(true)}>{t("telegramAlso")}</a>
+            <a className="link-btn channel-more" href={tg.url} target="_blank" rel="noopener" onClick={tapTg}>{t("telegramAlso")}</a>
           )}
           {initial.emailReady && <EmailConnect initial={initial.email} onState={setMail} />}
         </>
@@ -202,7 +203,7 @@ export function TrackPanel({ productId, shortLink, current, initial, related }: 
           <p className="channel-text">{mail === "sent" ? t("channelConfirm") : t("channelText")}</p>
           {tg.url ? (
             <>
-              <a className={`btn btn-stamp${waitTg ? "" : " is-pulse"}`} href={tg.url} target="_blank" rel="noopener" style={{ width: "100%" }} onClick={() => setWaitTg(true)}>{t("telegramConnect")}</a>
+              <a className={`btn btn-stamp${waitTg ? "" : " is-pulse"}`} href={tg.url} target="_blank" rel="noopener" style={{ width: "100%" }} onClick={tapTg}>{t("telegramConnect")}</a>
               <p className="note">{waitTg ? t("telegramWaiting") : t("telegramHint")}</p>
             </>
           ) : !initial.emailReady ? <p className="note">{t("telegramSoon")}</p> : null}

@@ -13,7 +13,8 @@ const base: OwnerReport = {
   catalog: { products: 1534, fresh3d: 1460, inStock: 1400, history7d: 640, history30d: 0, seedQueue: 1200, linksWaiting: 0 },
   store: { startedAt: "2026-11-12T08:50:00Z", requests: 210, priced: 164, failed: 0, aborted: null, pendingMatches: 0, compared: 160, cheaperThere: 12 },
   cityPrices24h: 40, manual24h: { done: 2, failed: 0, blocked: 0 },
-  people: { watchers: 22, newWatchers: 1, connected: 10, activeTrackings: 30, newTrackings: 2, newTrackings7d: 18 },
+  people: { watchers: 22, newWatchers: 1, connected: 10, activeTrackings: 30, newTrackings: 2, newTrackings7d: 18, trackers: 20, reachable: 6 },
+  connect7d: { tracked: 12, tappedTelegram: 5, sentEmail: 1, connected: 3 },
   alerts: { targetSent24h: 1, firstPriceSent24h: 2, failed24h: 0, boughtYes: 0, boughtAnswered: 2 },
   savings: { confirmed: 0, confirmedCount: 0, dropsCaught: 480389, dropsCaughtCount: 3 },
 };
@@ -73,6 +74,12 @@ describe("renderOwnerReport", () => {
     expect(html).toContain("Kaspi ✅ 1 650 requests");
     expect(html).toContain("• Fix &lt;b&gt; &amp; more");
     expect(html.length).toBeLessThan(4096);
+  });
+  it("shows how many people tracking can be reached, and where the connect step stops", () => {
+    const html = renderOwnerReport(base, [], now);
+    expect(html).toContain("Reach: 6 of 20 people tracking can get an alert");
+    expect(html).toContain("12 visits set a price → 5 tapped Telegram · 1 sent an email → 3 connected in that visit");
+    expect(html).toMatch(/Reachable\s+30%/);
   });
   it("counts visits, not people, until browser ids cover the days", () => {
     const html = renderOwnerReport({ ...base, peopleReliable: false, weekPeopleReliable: false }, [], now);

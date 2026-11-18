@@ -63,7 +63,7 @@ function row(name: string, value: string, target: string, mark: TargetMark): str
 export function reportRates(r: OwnerReport) {
   return {
     openItemPct: Math.round(share(r.funnel.productViews, r.funnel.tabs) * 100),
-    connectedPct: Math.round(share(r.people.connected, r.people.watchers) * 100),
+    connectedPct: Math.round(share(r.people.reachable, r.people.trackers) * 100),
     fromPostsPct: Math.round(share(r.utmVisits, r.funnel.tabs) * 100),
     fresh3dPct: Math.round(share(r.catalog.fresh3d, r.catalog.products) * 100),
   };
@@ -77,7 +77,9 @@ export function renderOwnerReport(r: OwnerReport, commits: Commit[], now = new D
   const f = r.funnel;
   const w = r.funnelWeek;
   const openRate = share(f.productViews, f.tabs);
-  const connected = share(r.people.connected, r.people.watchers);
+  // Of the people tracking something, the share an alert can reach (18 Nov: «Connected» counted every visitor who
+  // ever got a browser key, most of whom never tracked anything).
+  const connected = share(r.people.reachable, r.people.trackers);
   const utm = share(r.utmVisits, f.tabs);
   // Visitors per day: people once the 7 days before have browser ids, visits (tabs) until then.
   const daily = r.weekPeopleReliable ? { label: "People/day", now: f.people, avg: w.people } : { label: "Visits/day", now: f.tabs, avg: w.tabs };
@@ -96,7 +98,7 @@ export function renderOwnerReport(r: OwnerReport, commits: Commit[], now = new D
     row(daily.label, num(daily.now), String(TARGETS.visitorsPerDay), targetMark(daily.avg, TARGETS.visitorsPerDay)),
     row("Open item", pct(openRate), pct(TARGETS.productOpenRate), targetMark(openRate, TARGETS.productOpenRate)),
     row("Alerts/wk", num(r.people.newTrackings7d), String(TARGETS.alertsPerWeek), targetMark(r.people.newTrackings7d, TARGETS.alertsPerWeek)),
-    row("Connected", pct(connected), pct(TARGETS.connectedRate), targetMark(connected, TARGETS.connectedRate)),
+    row("Reachable", pct(connected), pct(TARGETS.connectedRate), targetMark(connected, TARGETS.connectedRate)),
     row("From posts", pct(utm), pct(TARGETS.utmShare), targetMark(utm, TARGETS.utmShare)),
     row("Bought", num(r.alerts.boughtYes), String(TARGETS.boughtYes), targetMark(r.alerts.boughtYes, TARGETS.boughtYes)),
   ].join("\n") + "</pre>");
@@ -104,6 +106,9 @@ export function renderOwnerReport(r: OwnerReport, commits: Commit[], now = new D
   const sources = new Map<string, number>();
   for (const s of r.sources) sources.set(sourceName(s.source), (sources.get(sourceName(s.source)) ?? 0) + s.n);
   if (sources.size) out.push(`From: ${[...sources].map(([k, n]) => `${esc(k)} ${n}`).join(" · ")}`);
+  const k = r.connect7d;
+  out.push(`Reach: ${r.people.reachable} of ${r.people.trackers} people tracking can get an alert`);
+  if (k.tracked) out.push(`Connect 7 d: ${k.tracked} visits set a price → ${k.tappedTelegram} tapped Telegram · ${k.sentEmail} sent an email → ${k.connected} connected in that visit`);
 
   out.push("", "<b>Savings</b>");
   out.push(`Confirmed: ${formatTenge(r.savings.confirmed)} (${r.savings.confirmedCount} bought)`);

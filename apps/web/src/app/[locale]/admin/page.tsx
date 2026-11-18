@@ -118,7 +118,7 @@ export default async function AdminPage({ params, searchParams }: Props) {
             <table className="admin-table">
               <thead><tr><th /><th>{t("colVisits")}</th><th /><th>{t("colPeople")}</th><th /></tr></thead>
               <tbody>
-                {funnel.steps.filter((s) => s.name !== "channel").map((s) => {
+                {funnel.steps.filter((s) => s.name !== "channel" && s.name !== "channel_tap").map((s) => {
                   const visits = funnel.steps[0]!.sessions, people = funnel.steps[0]!.people;
                   const label = { visit: "stepVisit", paste: "stepPaste", product_view: "stepProductView", track: "stepTrack", channel: "stepChannel" }[s.name];
                   return (
