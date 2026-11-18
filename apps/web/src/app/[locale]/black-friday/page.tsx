@@ -7,7 +7,8 @@ import { botUsername } from "@/lib/watcher";
 
 type Props = { params: Promise<{ locale: string }> };
 // Store and Kaspi prices arrive once a day; an hour of caching keeps the database quiet.
-export const revalidate = 3600;
+// Every 3 hours (18 Nov: the page grew from 50 to ~350 products; store prices come once a day, Kaspi's in the morning).
+export const revalidate = 10800;
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { locale } = await params;
@@ -56,36 +57,7 @@ export default async function BlackFridayPage({ params }: Props) {
     }
   };
 
-  return (
-    <main className="wrap untracked bf">
-      <p className="bf-kicker">{t("kicker", dates)}</p>
-      <h1 className="product-title" style={{ color: "var(--ink-on-counter, var(--ink))" }}>{t("title")}</h1>
-      <p className="drops-intro">{t(phase === "before" ? "introBefore" : phase === "during" ? "introDuring" : "introAfter", dates)}</p>
-
-      <article className="receipt bf-sum">
-        <dl>
-          <div><dt>{t("sumProducts")}</dt><dd>{rows.length}</dd></div>
-          <div><dt>{t("sumKaspiCheaper")}</dt><dd>{kaspiCheaper}</dd></div>
-          <div><dt>{t("sumStoreCheaper")}</dt><dd>{storeCheaper}</dd></div>
-          {phase !== "before" && (<>
-            <div><dt>{t("sumReal")}</dt><dd className="is-real">{count("real")}</dd></div>
-            <div><dt>{t("sumSame")}</dt><dd>{count("same")}</dd></div>
-            <div><dt>{t("sumPricier")}</dt><dd className="is-pricier">{count("pricier")}</dd></div>
-          </>)}
-        </dl>
-        <p className="note">{t("sumNote")}</p>
-      </article>
-
-      {remind && (
-        <aside className="receipt bf-remind">
-          <p className="bf-remind-text"><b>{t("remindTitle", dates)}</b><br />{t("remindText")}</p>
-          <a className="btn btn-stamp bf-remind-btn" href={remind} target="_blank" rel="noopener">{t("remindButton")}</a>
-        </aside>
-      )}
-
-      {rows.length === 0 ? <article className="receipt"><p className="untracked-status">{t("none")}</p></article> : (
-        <ol className="bf-list">
-          {rows.map((r, i) => {
+  const row = (r: BfRow, i: number) => {
             const name = shortTitle((L === "kk" && r.titleKk) || r.title);
             const best = Math.min(...storeNow(r), Infinity);
             return (
@@ -117,8 +89,46 @@ export default async function BlackFridayPage({ params }: Props) {
                 </ul>
               </li>
             );
-          })}
-        </ol>
+          };
+
+  return (
+    <main className="wrap untracked bf">
+      <p className="bf-kicker">{t("kicker", dates)}</p>
+      <h1 className="product-title" style={{ color: "var(--ink-on-counter, var(--ink))" }}>{t("title")}</h1>
+      <p className="drops-intro">{t(phase === "before" ? "introBefore" : phase === "during" ? "introDuring" : "introAfter", dates)}</p>
+
+      <article className="receipt bf-sum">
+        <dl>
+          <div><dt>{t("sumProducts")}</dt><dd>{rows.length}</dd></div>
+          <div><dt>{t("sumKaspiCheaper")}</dt><dd>{kaspiCheaper}</dd></div>
+          <div><dt>{t("sumStoreCheaper")}</dt><dd>{storeCheaper}</dd></div>
+          {phase !== "before" && (<>
+            <div><dt>{t("sumReal")}</dt><dd className="is-real">{count("real")}</dd></div>
+            <div><dt>{t("sumSame")}</dt><dd>{count("same")}</dd></div>
+            <div><dt>{t("sumPricier")}</dt><dd className="is-pricier">{count("pricier")}</dd></div>
+          </>)}
+        </dl>
+        <p className="note">{t("sumNote")}</p>
+      </article>
+
+      {remind && (
+        <aside className="receipt bf-remind">
+          <p className="bf-remind-text"><b>{t("remindTitle", dates)}</b><br />{t("remindText")}</p>
+          <a className="btn btn-stamp bf-remind-btn" href={remind} target="_blank" rel="noopener">{t("remindButton")}</a>
+        </aside>
+      )}
+
+      {rows.length === 0 ? <article className="receipt"><p className="untracked-status">{t("none")}</p></article> : (
+        <>
+          <ol className="bf-list">{rows.slice(0, BLACK_FRIDAY.shown).map((r, i) => row(r, i))}</ol>
+          {/* The rest of the pairs, one tap away (18 Nov): plain HTML, no script, and the first screen stays light. */}
+          {rows.length > BLACK_FRIDAY.shown && (
+            <details className="bf-more">
+              <summary className="btn btn-ghost">{t("showMore", { count: rows.length - BLACK_FRIDAY.shown })}</summary>
+              <ol className="bf-list" start={BLACK_FRIDAY.shown + 1}>{rows.slice(BLACK_FRIDAY.shown).map((r, i) => row(r, i + BLACK_FRIDAY.shown))}</ol>
+            </details>
+          )}
+        </>
       )}
       <p className="note bf-foot">{t("foot")}</p>
     </main>

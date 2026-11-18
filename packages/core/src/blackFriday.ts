@@ -16,7 +16,10 @@ export const BLACK_FRIDAY = {
   samePct: 3,
   /** Only products from this price: the page is about big purchases. */
   minPrice: 50_000,
-  rows: 50,
+  /** Every product with a fair comparison (18 Nov: 348 pairs; the owner: «i dont want to keep black friday to 48
+   * products only»). The page shows `shown` first, the rest one tap away. */
+  rows: 500,
+  shown: 50,
 } as const;
 
 export type SalePhase = "before" | "during" | "after";

@@ -1301,7 +1301,8 @@
     "storeCheaperBy": "дешевле Kaspi на {amount}",
     "remindTitle": "Напомнить {start}?",
     "remindText": "Пришлём в Telegram итоги: какие скидки настоящие. Одно сообщение, без регистрации.",
-    "remindButton": "Напомнить в Telegram"
+    "remindButton": "Напомнить в Telegram",
+    "showMore": "Показать ещё {count, plural, one {# товар} few {# товара} other {# товаров}}"
   },
   "alertsBar": {
     "text": "Вы следите за {count, plural, one {# товаром} other {# товарами}}, но уведомления некуда прислать.",

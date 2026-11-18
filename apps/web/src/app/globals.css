@@ -1261,6 +1261,11 @@ span.ticker-thumb { background: var(--paper-shade); box-shadow: none; }
 .bf-sum dd.is-real { color: var(--stamp); }
 .bf-sum dd.is-pricier { color: var(--stamp-red); }
 .bf-list { list-style: none; margin: 18px 0 0; padding: 0; display: grid; gap: 12px; }
+/* «Показать все N товаров» (18 Nov): the pairs after the first 50, one tap away. */
+.bf-more { margin-top: 14px; }
+.bf-more > summary { list-style: none; display: block; width: 100%; text-align: center; cursor: pointer; }
+.bf-more > summary::-webkit-details-marker { display: none; }
+.bf-more[open] > summary { display: none; }
 .bf-row { padding: 16px; }
 .bf-head { display: grid; grid-template-columns: 24px 56px minmax(0, 1fr); gap: 12px; align-items: center; }
 .bf-rank { font: 0.75rem var(--font-receipt); color: var(--ink-faint); text-align: center; }

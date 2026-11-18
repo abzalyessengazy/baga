@@ -1301,7 +1301,8 @@
     "storeCheaperBy": "Kaspi-ден {amount} арзан",
     "remindTitle": "{start} еске салайық па?",
     "remindText": "Telegram-ға қорытынды жібереміз: қай жеңілдік шынайы. Бір хабарлама, тіркелусіз.",
-    "remindButton": "Telegram-да еске салу"
+    "remindButton": "Telegram-да еске салу",
+    "showMore": "Тағы {count} тауарды көрсету"
   },
   "alertsBar": {
     "text": "Сіз {count} тауарды бақылап отырсыз, бірақ хабарламаны жіберетін жер жоқ.",
