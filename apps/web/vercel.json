@@ -1,5 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "regions": ["arn1"],
-  "ignoreCommand": "git diff --quiet ${VERCEL_GIT_PREVIOUS_SHA:-HEAD^} HEAD -- . ../../packages/core ../../packages/db ../../packages/kaspi ../../package.json ../../pnpm-lock.yaml ../../pnpm-workspace.yaml"
+  "ignoreCommand": "P=${VERCEL_GIT_PREVIOUS_SHA:-HEAD^}; git cat-file -e \"$P^{commit}\" 2>/dev/null || exit 1; git diff --quiet \"$P\" HEAD -- . ../../packages/core ../../packages/db ../../packages/kaspi ../../package.json ../../pnpm-lock.yaml ../../pnpm-workspace.yaml"
 }
