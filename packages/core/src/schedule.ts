@@ -123,6 +123,20 @@ export const CHEAP = { price: 5_000 } as const;
 export const AUTO_MIN_PRICE = 50_000;
 export const PARKED_MINUTES = 365 * 24 * 60;
 
+/**
+ * Exploring: new seed products fill the window's spare time (the owner, 19 Nov 2026: «don't waste available requests»;
+ * DECISIONS.md 2026-11-19 "Spare requests explore new products"). Only once nothing is due (CATALOG.newShare stays 0),
+ * at most `perRun` a run, and only while the products due in the next 24 h stay under `maxDueNextDay`: about 85% of
+ * a full window (~1,600 requests at the 10 s pace, ~1.15 requests a product), so tomorrow's checks always fit and
+ * the catalog stops growing by itself once the spare time is used up.
+ */
+export const EXPLORE = { perRun: 300, maxDueNextDay: 1_200 } as const;
+
+/** Whether the collector may add one more new seed product this run. */
+export function mayExplore(addedThisRun: number, dueNextDay: number): boolean {
+  return addedThisRun < EXPLORE.perRun && dueNextDay < EXPLORE.maxDueNextDay;
+}
+
 /** Whether daily lows (the last STABLE.days days, observed days only) say the price is stable. */
 export function isStablePrice(lows: number[]): boolean {
   if (lows.length < STABLE.minDays) return false;

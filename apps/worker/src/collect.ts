@@ -12,7 +12,7 @@ import { pushSubscriptionsOf, pushWorked, dropPushSubscription } from "@baga/db"
 import { accessCodeFor, dropUnusedKeys, saveSnapshot, claimNotifications, startSend, markSent, markFailed, tidyDeliveries, connectionOptions, requestProduct, attachShortLinkTrackings, weekMovers } from "@baga/db";
 import {
   evaluateAlert, priorityFor, newProductTurn, isStablePrice, isCalmPrice, isSteadyPrice, intervalFor, laterVariants, CALM, STABLE, STEADY, INTERVAL_MINUTES, PRIORITY_ORDER, USER_INTEREST, CATALOG, SEED_MIN_PRICE, backoffMinutes, isSuspiciousJump, type TrackingAlertState,
-  KASPI_CRAWL_DELAY_MS, CITIES, CITY_CHECKS, REFERENCE_CITY, type City, isCityDependent, isInVisitWindow, isManualCheckTime, needsPageRefresh, msUntilVisitWindow, targetForDrop, almatyDay, runningSale, type Priority,
+  KASPI_CRAWL_DELAY_MS, CITIES, CITY_CHECKS, REFERENCE_CITY, type City, isCityDependent, isInVisitWindow, isManualCheckTime, needsPageRefresh, msUntilVisitWindow, targetForDrop, almatyDay, runningSale, type Priority, mayExplore, PARKED_MINUTES,
 } from "@baga/core";
 import postgres from "postgres";
 import { randomBytes } from "node:crypto";
@@ -246,6 +246,12 @@ async function main() {
     }
   }
 
+  // Products due in the next 24 h (tomorrow's window), parked ones aside: the brake on exploring.
+  let explored = 0;
+  const dueNextDay = async () => (await sql<{ n: number }[]>`select count(*)::int as n from collection_schedule cs
+    join products p on p.id = cs.product_id and p.status = 'active'
+    where cs.next_check_at < now() + interval '24 hours' and cs.interval_minutes < ${PARKED_MINUTES}`)[0]!.n;
+
   // The request count is saved as the run goes, so a crashed or cancelled run keeps it.
   let savedRequests = -1;
   const saveRequests = async () => {
@@ -267,13 +273,14 @@ async function main() {
       }
       continue;
     }
-    const seeds = await nextQueued("seed", tried);
+    // Spare time: new seed products, under the run cap and while tomorrow's checks still fit (EXPLORE, 19 Nov 2026).
+    const seeds = mayExplore(explored, await dueNextDay()) ? await nextQueued("seed", tried) : [];
     if (seeds.length) {
       for (const q of seeds) {
         if (!breaker.openReason && inWindow()) await serveVisitors();
-        if (breaker.openReason || !inWindow()) break;
+        if (breaker.openReason || !inWindow() || !mayExplore(explored, 0)) break;
         tried.add(q.external_id);
-        if (await addQueued(q, runId)) seeded++;
+        if (await addQueued(q, runId)) { seeded++; explored++; }
       }
       continue;
     }
@@ -288,7 +295,7 @@ async function main() {
   const [left] = await sql<{ due: number; queued: number }[]>`
     select (select count(*)::int from collection_schedule where next_check_at <= now() and fail_count < 10) as due,
            (select count(*)::int from seed_queue where status = 'pending' and attempts < 3) as queued`;
-  console.log(JSON.stringify({ runId, requests, checked: breaker.checked, changed, seeded, failed: breaker.failed, aborted, stillDue: left?.due, stillQueued: left?.queued }));
+  console.log(JSON.stringify({ runId, requests, checked: breaker.checked, changed, seeded, explored, failed: breaker.failed, aborted, stillDue: left?.due, stillQueued: left?.queued }));
   if (!aborted) await postToChannel(runId).catch((e) => console.error(`channel post: ${e}`));
   const hc = env.healthcheckUrl();
   if (hc) await fetch(aborted ? `${hc}/fail` : hc, { method: "POST", body: aborted ?? "ok" }).catch(() => {});

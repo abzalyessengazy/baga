@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { priorityFor, backoffMinutes, isSuspiciousJump, needsPageRefresh, queueLane, newProductTurn, isStablePrice, isCalmPrice, intervalFor, INTERVAL_MINUTES, CATALOG, PARKED_MINUTES, VIEWED, STEADY, isSteadyPrice } from "./schedule";
+import { priorityFor, backoffMinutes, isSuspiciousJump, needsPageRefresh, queueLane, newProductTurn, isStablePrice, isCalmPrice, intervalFor, INTERVAL_MINUTES, CATALOG, PARKED_MINUTES, VIEWED, STEADY, isSteadyPrice, mayExplore, EXPLORE } from "./schedule";
 import { VISIT_WINDOW_MINUTES } from "./window";
 import { formatTenge, toTenge } from "./money";
 
@@ -177,5 +177,14 @@ describe("stretching the daily requests (16 Nov 2026)", () => {
     expect(intervalFor("seed", { calm: false, inStock: true, steady: false, price: 100_000 })).toBe(18 * 60);
     expect(intervalFor("tracked", { calm: false, inStock: true, steady: true })).toBe(18 * 60);
     expect(intervalFor("hot", { calm: false, inStock: true, steady: true })).toBe(60);
+  });
+});
+
+describe("mayExplore", () => {
+  it("adds new products only under the run cap and while tomorrow's checks fit", () => {
+    expect(mayExplore(0, 923)).toBe(true);
+    expect(mayExplore(EXPLORE.perRun - 1, 923)).toBe(true);
+    expect(mayExplore(EXPLORE.perRun, 923)).toBe(false);
+    expect(mayExplore(10, EXPLORE.maxDueNextDay)).toBe(false);
   });
 });
