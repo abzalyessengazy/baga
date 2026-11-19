@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { formatTenge, moveDirection, type DailyLow } from "@baga/core";
+import { formatTenge, type DailyLow } from "@baga/core";
 import { dayMonth, type DatesT } from "@/lib/dayMonth";
 
 const DAY = 86_400_000;
@@ -49,6 +49,7 @@ export function PriceChart({ history, empty }: { history: DailyLow[]; empty?: st
   const prices = data.map((d) => d.price);
   const lo = Math.min(...prices), hi = Math.max(...prices);
   const span = Math.max(hi - lo, hi * 0.02);
+  const loIdx = prices.lastIndexOf(lo), hiIdx = prices.lastIndexOf(hi);
   // Bars stand on a floor below the lowest price (not on zero), so small moves stay visible; the dashed lines
   // with their prices give the scale.
   const floor = lo - span * 0.6, top = hi + span * 0.08;
@@ -103,8 +104,9 @@ export function PriceChart({ history, empty }: { history: DailyLow[]; empty?: st
           ))}
           {data.map((d, i) => {
             const s = slotOf(d);
-            const dir = i > 0 ? moveDirection(data[i - 1]!.price, d.price) : 0;
-            const fill = dir < 0 ? "var(--stamp)" : dir > 0 ? "var(--stamp-red)" : "var(--ink)";
+            // One violet bar (the period's lowest) and one red (its highest), the latest day of each when a price repeats;
+            // every other bar is ink (the owner, 19 Nov 2026: day-to-day colours read as a mess).
+            const fill = hi === lo ? "var(--ink)" : i === loIdx ? "var(--stamp)" : i === hiIdx ? "var(--stamp-red)" : "var(--ink)";
             const on = d.day === sel.day;
             return (
               <g key={d.day}>

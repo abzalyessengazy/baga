@@ -14,6 +14,8 @@
   /* Stamp violet as text on the counter: lighter in dark mode (10 Nov 2026), the brand book's dark violet. */
   --stamp-on-counter: #5b47e0;
   --stamp-red: #c23b2c;
+  /* Drop green: only a seller's own price drop in the sellers table (the owner, 19 Nov 2026); 5.3:1 on paper. */
+  --drop: #1d7a3e;
   --kaspi: #f14635; /* Kaspi's brand red: only the «Открыть на Kaspi» button */
   --technodom: #fc6b3f; /* Technodom's brand orange: only its name chip (other stores' prices, DECISIONS 2026-11-07) */
   --sulpak: #d71a21; /* Sulpak's brand red (its site's theme colour): only its name chip (DECISIONS 2026-11-14) */
@@ -533,7 +535,7 @@ a { color: inherit; }
 .offers tr.is-best td { color: var(--stamp); font-weight: 700; }
 /* A seller's own latest price move (migration 0039): under its price, small; violet down, red up (design rules). */
 .offers .offer-move { display: block; margin-top: 2px; font-size: 0.72rem; font-weight: 600; white-space: nowrap; }
-.offers .offer-move.is-down { color: var(--stamp); }
+.offers .offer-move.is-down { color: var(--drop); }
 .offers .offer-move.is-up { color: var(--stamp-red); }
 .kaspi-link { display: inline-block; margin-top: 14px; font-family: var(--font-ui); font-weight: 650; color: var(--stamp); }
 .side-panel { position: relative; }
