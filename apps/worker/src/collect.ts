@@ -166,6 +166,10 @@ async function runManual() {
           await sql`update products set last_viewed_at = now() where id = ${productId}`;
           await afterSave(productId, b.q.external_id, got.snap.minPrice, got.snap.offers[0]?.sellerName ?? null);
           await reschedule(productId, got.snap.minPrice);
+          // MarketParser has no product page (photo, category, Kaspi's title): due at once, so the next Kaspi window
+          // fetches it first. 19 Nov 2026: 18 h after an evening check fell just past the window, and 17 products went a
+          // day and a half with no photo and one price.
+          await sql`update collection_schedule set next_check_at = now() where product_id = ${productId}`;
           await sql`delete from seed_queue where external_id = ${b.q.external_id}`;
           await finishManualCheck(sql, b.id, "done"); done++;
         }
