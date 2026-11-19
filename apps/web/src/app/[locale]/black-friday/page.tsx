@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { getTranslations, setRequestLocale } from "next-intl/server";
-import { BLACK_FRIDAY, formatTenge, salePhase, shortTitle, type StoreSaleCheck } from "@baga/core";
+import { BLACK_FRIDAY, bfOrder, formatTenge, salePhase, shortTitle, type StoreSaleCheck } from "@baga/core";
 import { almatyToday, blackFridayRows, getSql, type BfRow } from "@baga/db";
 import { Link } from "@/i18n/navigation";
 import { botUsername } from "@/lib/watcher";
@@ -36,7 +36,8 @@ export default async function BlackFridayPage({ params }: Props) {
   const sql = getSql();
   const today = sql ? await almatyToday(sql).catch(() => null) : null;
   const phase = today ? salePhase(today) ?? "after" : "before";
-  const rows: BfRow[] = sql && today ? await blackFridayRows(sql, today).catch(() => []) : [];
+  // Biggest real drops first, then Halyk or Technodom below Kaspi, then popularity (the database's order; the owner, 19 Nov).
+  const rows: BfRow[] = bfOrder(sql && today ? await blackFridayRows(sql, today).catch(() => []) : []);
 
   const storeNow = (r: BfRow) => r.stores.map((s) => s.now).filter((n): n is number => n !== null);
   const kaspiCheaper = rows.filter((r) => storeNow(r).length && r.kaspiNow < Math.min(...storeNow(r))).length;

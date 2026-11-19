@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { salePhase, storeSaleCheck, type StoreDay } from "./blackFriday";
+import { bfOrder, salePhase, storeSaleCheck, type StoreDay } from "./blackFriday";
 
 const d = (day: string, price: number, oldPrice: number | null = null): StoreDay => ({ day, price, oldPrice });
 const before = [d("2026-11-16", 300_000), d("2026-11-20", 290_000), d("2026-11-25", 300_000)];
@@ -30,5 +30,22 @@ describe("storeSaleCheck", () => {
   });
   it("no verdict without enough days before", () => {
     expect(storeSaleCheck([d("2026-11-26", 300_000), d("2026-11-27", 200_000)], "2026-11-27").kind).toBe("noBaseline");
+  });
+});
+
+describe("bfOrder", () => {
+  const pending = { kind: "pending", pct: null };
+  const row = (id: string, kaspiNow: number, stores: { store: string; now: number | null; check: { kind: string; pct: number | null } }[]) => ({ id, kaspiNow, stores });
+  it("puts real drops first (biggest first), then Halyk or Technodom below Kaspi (biggest saving), then the given order", () => {
+    const rows = [
+      row("popular", 100_000, [{ store: "technodom", now: 120_000, check: pending }]),
+      row("halyk-cheaper", 100_000, [{ store: "halyk", now: 90_000, check: pending }]),
+      row("sulpak-cheaper", 100_000, [{ store: "sulpak", now: 50_000, check: pending }]),
+      row("drop-10", 100_000, [{ store: "technodom", now: 95_000, check: { kind: "real", pct: -10 } }]),
+      row("td-cheaper-more", 200_000, [{ store: "technodom", now: 150_000, check: pending }]),
+      row("drop-25", 100_000, [{ store: "halyk", now: 80_000, check: { kind: "real", pct: -25 } }]),
+      row("pricier", 100_000, [{ store: "halyk", now: 130_000, check: { kind: "pricier", pct: 8 } }]),
+    ];
+    expect(bfOrder(rows).map((r) => r.id)).toEqual(["drop-25", "drop-10", "td-cheaper-more", "halyk-cheaper", "popular", "sulpak-cheaper", "pricier"]);
   });
 });

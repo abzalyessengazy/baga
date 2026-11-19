@@ -66,3 +66,21 @@ export function storeSaleCheck(history: StoreDay[], today: string, cfg = BLACK_F
   const kind: StoreSaleKind = pct <= -cfg.samePct ? "real" : pct >= cfg.samePct ? "pricier" : "same";
   return { kind, before, during, pct, claimedPct };
 }
+
+/**
+ * The «Чёрная пятница» list order (the owner, 19 Nov 2026): first the biggest real drops (a store's sale price against
+ * its own lowest in the two weeks before, in percent), then products Halyk Market or Technodom sells below Kaspi now
+ * (the larger the saving, the higher), then the order given (popularity: trackings and views). Stable.
+ */
+export const BF_CHEAPER_STORES = ["halyk", "technodom"] as const;
+
+export function bfOrder<T extends { kaspiNow: number; stores: { store: string; now: number | null; check: { kind: string; pct: number | null } }[] }>(rows: T[]): T[] {
+  const drop = (r: T) => Math.min(0, ...r.stores.map((s) => (s.check.kind === "real" && s.check.pct !== null ? s.check.pct : 0)));
+  const saving = (r: T) => Math.max(0, ...r.stores
+    .filter((s) => (BF_CHEAPER_STORES as readonly string[]).includes(s.store) && s.now !== null)
+    .map((s) => r.kaspiNow - s.now!));
+  return rows
+    .map((r, i) => ({ r, i, drop: drop(r), saving: saving(r) }))
+    .sort((a, b) => a.drop - b.drop || b.saving - a.saving || a.i - b.i)
+    .map((x) => x.r);
+}
