@@ -12,10 +12,10 @@ import type { WorkflowFailure } from "./workflows";
 export interface Commit { hash: string; subject: string }
 
 /**
- * A finished collection day with fewer requests than this is reported as a problem: about half a full day, which is
- * ~3,300 at the 5 s pace (14 Nov 2026, the owner's stress test; ~1,600 and a floor of 800 at 10 s before).
+ * A finished collection day that left at least this many due products unchecked is reported: the window had no room
+ * for them. Not a request floor: since calm products are checked weekly (19 Nov 2026), a clean day can need ~900.
  */
-export const LOW_REQUESTS = 1_400;
+export const LEFT_DUE = 100;
 
 const MARK: Record<TargetMark, string> = { on: "✅", half: "🟡", off: "🔴" };
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -39,7 +39,7 @@ export function reportIssues(r: OwnerReport, now = new Date(), failures: Workflo
   for (const f of failures) if (!f.recovered) out.push(`GitHub: ${f.name} failed${f.failed > 1 ? ` ${f.failed}×` : ""}, no good run since`);
   const c = r.collector;
   if (c.runs === 0) out.push("Kaspi collector did not run today");
-  else if (!c.running && c.requests < LOW_REQUESTS) out.push(`Kaspi collector sent only ${num(c.requests)} requests today`);
+  else if (!c.running && c.leftDue >= LEFT_DUE) out.push(`Kaspi run ended with ${num(c.leftDue)} due products unchecked`);
   // Stops behind a clean later run are history, shown under «Data today» (12 Nov: the morning stops stayed in «Needs you»).
   if (!c.lastOk) for (const a of c.aborted) out.push(`Kaspi run stopped: ${a}`);
   if (r.catalog.products > 0 && share(r.catalog.fresh3d, r.catalog.products) < 0.9) {

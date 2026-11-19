@@ -9,7 +9,7 @@ const base: OwnerReport = {
   peopleReliable: true, weekPeopleReliable: true,
   alerts24h: { products: 1, people: 1, triggers: 1, targetMessages: 2, messages: { sent: 3, failed: 0, waiting: 0 }, clicks: 1, clickedProducts: 1 },
   sources: [{ source: "direct", n: 20 }, { source: "insta<post>", n: 6 }],
-  collector: { runs: 1, requests: 1650, running: false, checked: 1600, changed: 40, failed: 2, aborted: [], lastOk: true },
+  collector: { runs: 1, requests: 1650, running: false, checked: 1600, changed: 40, failed: 2, aborted: [], lastOk: true, leftDue: 0 },
   catalog: { products: 1534, fresh3d: 1460, inStock: 1400, history7d: 640, history30d: 0, seedQueue: 1200, linksWaiting: 0 },
   store: { startedAt: "2026-11-12T08:50:00Z", requests: 210, priced: 164, failed: 0, aborted: null, pendingMatches: 0, compared: 160, cheaperThere: 12 },
   cityPrices24h: 40, manual24h: { done: 2, failed: 0, blocked: 0 },
@@ -26,13 +26,13 @@ describe("reportIssues", () => {
   it("flags a missing or short collector day, a stop, stale data and a quiet store", () => {
     const issues = reportIssues({
       ...base,
-      collector: { ...base.collector, requests: 300, aborted: ["429 <Too Many>"], lastOk: false },
+      collector: { ...base.collector, requests: 300, leftDue: 640, aborted: ["429 <Too Many>"], lastOk: false },
       catalog: { ...base.catalog, fresh3d: 1000 },
       store: { ...base.store, startedAt: "2026-11-10T08:50:00Z", pendingMatches: 22 },
       alerts: { ...base.alerts, failed24h: 1 },
     }, now);
     expect(issues).toEqual([
-      "Kaspi collector sent only 300 requests today",
+      "Kaspi run ended with 640 due products unchecked",
       "Kaspi run stopped: 429 &lt;Too Many&gt;",
       "Only 65% of products checked on schedule",
       "The store run (Technodom, Sulpak) has not run for over 36 h",
@@ -45,7 +45,10 @@ describe("reportIssues", () => {
 
 describe("reportIssues while the collector runs", () => {
   it("does not call a running day short", () => {
-    expect(reportIssues({ ...base, collector: { ...base.collector, running: true, requests: 300 } }, now)).toEqual([]);
+    expect(reportIssues({ ...base, collector: { ...base.collector, running: true, requests: 300, leftDue: 640 } }, now)).toEqual([]);
+  });
+  it("does not flag a quiet day that checked everything due", () => {
+    expect(reportIssues({ ...base, collector: { ...base.collector, requests: 924, leftDue: 28 } }, now)).toEqual([]);
   });
 });
 

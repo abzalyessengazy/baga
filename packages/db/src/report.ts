@@ -35,7 +35,9 @@ export interface OwnerReport {
   sources: { source: string; n: number }[];
   /** Today's Kaspi collection: runs started since Almaty midnight. */
   /** `lastOk`: the latest run today finished without stopping, so earlier stops (`aborted`) are already behind. */
-  collector: { runs: number; requests: number; running: boolean; checked: number; changed: number; failed: number; aborted: string[]; lastOk: boolean };
+  /** `leftDue`: active products that were due well before today's daily run ended and are still unchecked (0 while it runs). */
+  collector: { runs: number; requests: number; running: boolean; checked: number; changed: number; failed: number; aborted: string[]; lastOk: boolean;
+    leftDue: number };
   catalog: { products: number; fresh3d: number; inStock: number; history7d: number; history30d: number; seedQueue: number; linksWaiting: number };
   /** Technodom: requests, priced and failed over the last 24 h; startedAt is the latest run ever. */
   store: { startedAt: string | null; requests: number; priced: number; failed: number; aborted: string | null; pendingMatches: number;
@@ -114,7 +116,12 @@ export async function ownerReport(sql: postgres.Sql): Promise<OwnerReport> {
       coalesce(sum(r.failed), 0)::int as failed,
       array_remove(array_agg(distinct r.aborted_reason), null) as aborted,
       coalesce((select l.finished_at is not null and l.aborted_reason is null from collection_runs l, today
-        where l.started_at >= today.t and l.runner <> 'manual' order by l.started_at desc limit 1), false) as "lastOk"
+        where l.started_at >= today.t and l.runner <> 'manual' order by l.started_at desc limit 1), false) as "lastOk",
+      -- Due at least 30 min before the daily run ended and still not checked: what the window had no room for. Replaces
+      -- a request floor (19 Nov: calm products went weekly, a clean day sent 924 requests and was called short).
+      (select count(*) from collection_schedule cs join products p on p.id = cs.product_id and p.status = 'active'
+        where cs.next_check_at < (select max(l.finished_at) - interval '30 minutes' from collection_runs l, today
+          where l.started_at >= today.t and l.runner <> 'manual'))::int as "leftDue"
     -- The daily run only: manual checks are reported on their own (manual24h). On 16 Nov a manual check's 403 made the
     -- report call the clean morning run «blocked».
     from today left join collection_runs r on r.started_at >= today.t and r.runner <> 'manual'`;
