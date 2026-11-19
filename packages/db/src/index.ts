@@ -22,3 +22,4 @@ export * from "./profile";
 export * from "./blackFriday";
 export * from "./reminders";
 export * from "./push";
+export * from "./storeTargets";

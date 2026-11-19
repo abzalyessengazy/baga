@@ -8,7 +8,8 @@ import { createKaspiClient, buildSnapshot, KaspiHttpError, KaspiParseError, Kasp
 import { queuedManualChecks, finishManualCheck, MANUAL_CHECKS, cityChecksDue, saveCityPrice } from "@baga/db";
 import { createMarketParser, snapshotOf, MarketParserError } from "./marketparser";
 import { refreshPages, checkedSince } from "./siteRefresh";
-import { pushSubscriptionsOf, pushWorked, dropPushSubscription } from "@baga/db";
+import { renderStoreTargetTelegram, renderStoreTargetEmail, renderStoreTargetPush, type StoreTargetMessage } from "./storeTarget";
+import { pushSubscriptionsOf, pushWorked, dropPushSubscription, storeTargetInfo } from "@baga/db";
 import { accessCodeFor, dropUnusedKeys, saveSnapshot, claimNotifications, startSend, markSent, markFailed, tidyDeliveries, connectionOptions, requestProduct, attachShortLinkTrackings, weekMovers } from "@baga/db";
 import {
   evaluateAlert, priorityFor, newProductTurn, isStablePrice, isCalmPrice, isSteadyPrice, intervalFor, laterVariants, CALM, STABLE, STEADY, INTERVAL_MINUTES, PRIORITY_ORDER, USER_INTEREST, CATALOG, SEED_MIN_PRICE, backoffMinutes, isSuspiciousJump, type TrackingAlertState,
@@ -187,6 +188,8 @@ async function runManual() {
 
 async function main() {
   if (MANUAL) return runManual();
+  // Messages only, no Kaspi request: right after the store run (its «ваша цена есть на …» messages, migration 0040).
+  if (process.argv.includes("--send")) { await sendQueued(); return; }
   const wait = msUntilVisitWindow(new Date());
   if (wait > env.windowWaitMaxMs()) {
     console.log(JSON.stringify({ skipped: "outside collection window (04:01-08:42 UTC)", opensInMinutes: Math.round(wait / 60_000) }));
@@ -668,11 +671,25 @@ async function enterUrl(watcherId: string, locale: "ru" | "kk", to: string): Pro
   return `${env.siteUrl()}/api/my/enter?c=${code}&l=${locale}&to=${encodeURIComponent(to)}`;
 }
 
+/**
+ * A queued «ваша цена есть на …» message (migration 0040), read again when it is sent: nothing goes out when the store's
+ * latest price is above the target or out of stock, or when Kaspi reached the target meanwhile (its own alert says so).
+ */
+async function storeMessage(q: { match_id: number | null; watcher_id: string; locale: "ru" | "kk"; title: string; target_price: number | null }, path: string): Promise<StoreTargetMessage> {
+  const info = q.match_id ? await storeTargetInfo(sql, q.match_id) : null;
+  const target = q.target_price;
+  if (!info || target === null || !info.inStock || info.price > target || info.kaspi === null || info.kaspi <= target) {
+    throw new DeliveryError("store target no longer met", true);
+  }
+  return { locale: q.locale, title: q.title, storeName: info.storeName, storePrice: info.price, observedAt: info.observedAt, target,
+    kaspi: info.kaspi, storeUrl: info.url, productUrl: await enterUrl(q.watcher_id, q.locale, path) };
+}
+
 async function sendTelegramQueued() {
   const token = env.telegramBotToken();
   if (!token) return;
-  const queued = await sql<{ id: number; type: "first_price" | "target_reached" | "bought_ask"; price: number; target_price: number | null; chat_id: string; locale: "ru" | "kk"; title: string; external_id: string; current: number | null; offer_count: number; bought_code: string | null; image: string | null; low30: number | null; seller: string | null; watcher_id: string }[]>`
-    select n.id, n.type, n.price, t.target_price, w.id as watcher_id, w.telegram_chat_id::text as chat_id, w.locale, p.title, p.external_id,
+  const queued = await sql<{ id: number; type: "first_price" | "target_reached" | "bought_ask" | "store_target"; match_id: number | null; price: number; target_price: number | null; chat_id: string; locale: "ru" | "kk"; title: string; external_id: string; current: number | null; offer_count: number; bought_code: string | null; image: string | null; low30: number | null; seller: string | null; watcher_id: string }[]>`
+    select n.id, n.type, n.match_id::int as match_id, n.price, t.target_price, w.id as watcher_id, w.telegram_chat_id::text as chat_id, w.locale, p.title, p.external_id,
            s.current_min_price as current, coalesce(s.offer_count, 0) as offer_count, t.bought_code,
            p.image_url as image, (select min(o.min_price)::int from price_observations o where o.product_id = p.id and o.min_price is not null
              and o.observed_at > now() - interval '30 days') as low30,
@@ -685,6 +702,14 @@ async function sendTelegramQueued() {
     where n.id = any(${sql.array(await claimNotifications(sql, "telegram"))}::bigint[])`;
   for (const q of queued) {
     const site = env.siteUrl();
+    if (q.type === "store_target") {
+      try {
+        const m = await storeMessage(q, `/${q.locale}/p/${q.external_id}?utm_source=tg_store`);
+        await startSend(sql, q.id);
+        await markSent(sql, q.id, String(await sendTelegram(token, q.chat_id, renderStoreTargetTelegram(m))));
+      } catch (e) { await deliveryFailed(q.id, e); }
+      continue;
+    }
     const msg = q.type === "bought_ask" ? renderTelegramBoughtAsk({ locale: q.locale, title: q.title, code: q.bought_code ?? "" }) : renderTelegramAlert({
       type: q.type, locale: q.locale, title: q.title,
       price: q.type === "first_price" ? q.current : q.price, target: q.target_price, offerCount: q.offer_count,
@@ -787,8 +812,8 @@ async function cleanUp() {
 async function sendEmailQueued() {
   const key = env.resendApiKey();
   if (!key) return;
-  const queued = await sql<{ id: number; key: string; type: "first_price" | "target_reached" | "bought_ask"; price: number; target_price: number | null; email: string; stop_code: string; locale: "ru" | "kk"; title: string; external_id: string; current: number | null; offer_count: number; bought_code: string | null; image: string | null; low30: number | null; seller: string | null; watcher_id: string }[]>`
-    select n.id, n.idempotency_key as key, n.type, n.price, t.target_price, w.id as watcher_id, w.email, w.email_stop_code as stop_code, w.locale, p.title, p.external_id,
+  const queued = await sql<{ id: number; key: string; type: "first_price" | "target_reached" | "bought_ask" | "store_target"; match_id: number | null; price: number; target_price: number | null; email: string; stop_code: string; locale: "ru" | "kk"; title: string; external_id: string; current: number | null; offer_count: number; bought_code: string | null; image: string | null; low30: number | null; seller: string | null; watcher_id: string }[]>`
+    select n.id, n.idempotency_key as key, n.type, n.match_id::int as match_id, n.price, t.target_price, w.id as watcher_id, w.email, w.email_stop_code as stop_code, w.locale, p.title, p.external_id,
            s.current_min_price as current, coalesce(s.offer_count, 0) as offer_count, t.bought_code,
            p.image_url as image, (select min(o.min_price)::int from price_observations o where o.product_id = p.id and o.min_price is not null
              and o.observed_at > now() - interval '30 days') as low30,
@@ -801,6 +826,17 @@ async function sendEmailQueued() {
     where n.id = any(${sql.array(await claimNotifications(sql, "email"))}::bigint[])`;
   for (const q of queued) {
     const site = env.siteUrl();
+    if (q.type === "store_target") {
+      try {
+        const m = await storeMessage(q, `/${q.locale}/p/${q.external_id}?utm_source=email_store`);
+        await startSend(sql, q.id);
+        const r = await sendViaResend(key, env.emailFrom(), q.email, renderStoreTargetEmail({ ...m, stopUrl: `${site}/${q.locale}/email?stop=${q.stop_code}` }),
+          `${site}/api/email/stop?c=${q.stop_code}`, q.key);
+        await markSent(sql, q.id, r.id);
+      } catch (e) { await deliveryFailed(q.id, e); }
+      await new Promise((r) => setTimeout(r, 600));
+      continue;
+    }
     const [top] = q.type === "target_reached" ? await sql<{ name: string }[]>`
       select se.name from offers_current o join sellers se on se.id = o.seller_id
       join products p on p.id = o.product_id where p.external_id = ${q.external_id} order by o.price limit 1` : [];
@@ -833,8 +869,8 @@ async function sendEmailQueued() {
 async function sendPushQueued() {
   const key = env.vapidPrivateKey();
   if (!key) return;
-  const queued = await sql<{ id: number; type: "first_price" | "target_reached" | "bought_ask"; price: number; target_price: number | null; watcher_id: string; locale: "ru" | "kk"; title: string; external_id: string; current: number | null }[]>`
-    select n.id, n.type, n.price, t.target_price, w.id as watcher_id, w.locale, p.title, p.external_id, s.current_min_price as current
+  const queued = await sql<{ id: number; type: "first_price" | "target_reached" | "bought_ask" | "store_target"; match_id: number | null; price: number; target_price: number | null; watcher_id: string; locale: "ru" | "kk"; title: string; external_id: string; current: number | null }[]>`
+    select n.id, n.type, n.match_id::int as match_id, n.price, t.target_price, w.id as watcher_id, w.locale, p.title, p.external_id, s.current_min_price as current
     from notifications n
     join trackings t on t.id = n.tracking_id
     join watchers w on w.id = t.watcher_id
@@ -845,7 +881,8 @@ async function sendPushQueued() {
     try {
       await startSend(sql, q.id);
       if (q.type === "bought_ask") throw new DeliveryError("no bought ask by push", true);
-      const msg = renderPushAlert({
+      const path = `/${q.locale}/p/${q.external_id}?utm_source=push_store`;
+      const msg = q.type === "store_target" ? renderStoreTargetPush({ ...(await storeMessage(q, path)), externalId: q.external_id, url: path }) : renderPushAlert({
         type: q.type, locale: q.locale, title: q.title, externalId: q.external_id,
         price: q.type === "first_price" ? q.current : q.price, target: q.target_price,
         url: `/${q.locale}/p/${q.external_id}?utm_source=push_alert`, // a path: the site that subscribed opens it

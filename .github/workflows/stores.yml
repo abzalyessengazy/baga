@@ -30,6 +30,18 @@ jobs:
           # Signs the list of product pages to rebuild (DECISIONS.md 2026-11-17 "Fewer cache writes").
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           SITE_URL: ${{ vars.SITE_URL || secrets.SITE_URL || 'https://bagaapp.com' }}
+      # «Ваша цена есть на Halyk Market / Technodom» queued by the run above (migration 0040): Telegram, email and browser
+      # notifications only, no Kaspi or store request.
+      - name: Send store price messages
+        if: ${{ !cancelled() }}
+        run: pnpm worker --send
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          SITE_URL: ${{ vars.SITE_URL || secrets.SITE_URL || 'https://bagaapp.com' }}
       # GitHub runs scheduled jobs hours late (14 Nov 2026: the 10:30 UTC note at 16:41), so the main run, started on time
       # by cron-job.org, starts the owner report and the 3-day note itself when it ends (DECISIONS.md, 2026-11-15
       # "Report and 3-day note right after the store run"). Both skip what is done: the report once a day, each note is

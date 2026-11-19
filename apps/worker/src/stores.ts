@@ -15,7 +15,7 @@ import postgres from "postgres";
 import { KASPI_VISIT_WINDOW_UTC, isInStoreWindow, bestCandidate, looseCandidates, mismatch, storeIndex, storeTokens, kaspiColour } from "@baga/core";
 import {
   connectionOptions, isSimilarReason, storeMarketplaceId, productsToMatch, productsSoldOnKaspiBy, productIdByExternal, exactTitleForSku, saveMatch, matchesToPrice, saveStorePrice,
-  setMatchStatus, startStoreRun, finishStoreRun, phonesToMatch, productsToMatchIn, rememberStoreItems, saveStoreCategories, storeCategories, ourLeafCategories, saveListingPage, storeItems, STORE_INDEX,
+  setMatchStatus, startStoreRun, finishStoreRun, phonesToMatch, productsToMatchIn, rememberStoreItems, saveStoreCategories, storeCategories, ourLeafCategories, saveListingPage, storeItems, STORE_INDEX, queueStoreTargets,
 } from "@baga/db";
 import {
   createTechnodomClient, TECHNODOM, TechnodomHttpError, TechnodomParseError, StoreRequestRefused, skuOf, type TechnodomProduct,
@@ -84,6 +84,9 @@ async function main() {
     // And «Чёрная пятница», once a day: its store and Kaspi prices are all in by now (it is cached for a day).
     const n = await refreshPages(env.siteUrl(), env.telegramBotToken(), ids.map((r) => r.external_id), fetch, ["black-friday"]);
     if (ids.length) console.log(`site refresh: ${n} of ${ids.length} product pages`);
+    // «Ваша цена есть на Halyk Market / Technodom» (migration 0040): queued here, sent by the next step (`pnpm worker --send`).
+    const queued = await queueStoreTargets(sql).catch((e) => { console.error(`store targets: ${e}`); return 0; });
+    console.log(JSON.stringify({ storeTargetMessages: queued }));
   }
 }
 
