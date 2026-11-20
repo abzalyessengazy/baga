@@ -11,7 +11,7 @@ type Locale = "ru" | "kk";
 const copy = {
   ru: {
     head: (t: string, s: string) => `${t}: ваша цена есть на ${s}`,
-    store: (s: string, p: string, at: string) => [`${s}: `, p, ` (проверено сегодня, ${at})`] as const,
+    store: (s: string, p: string, at: string, day: string | null) => [`${s}: `, p, ` (проверено ${day ?? "сегодня"}, ${at})`] as const,
     rest: (target: string, kaspi: string) => `Ваша цена: ${target} · Kaspi сейчас: ${kaspi}`,
     note: (s: string) => `Это цена на сайте ${s}, такой же товар; бонусы и рассрочка не учтены. На Kaspi продолжаем следить.`,
     openStore: (s: string) => `Открыть на ${s}`, open: "Открыть в BAĞA", stop: "Отписаться от писем",
@@ -19,7 +19,7 @@ const copy = {
   },
   kk: {
     head: (t: string, s: string) => `${t}: сіздің бағаңыз ${s} сайтында бар`,
-    store: (s: string, p: string, at: string) => [`${s}: `, p, ` (бүгін тексерілді, ${at})`] as const,
+    store: (s: string, p: string, at: string, day: string | null) => [`${s}: `, p, ` (${day ?? "бүгін"} тексерілді, ${at})`] as const,
     rest: (target: string, kaspi: string) => `Сіздің бағаңыз: ${target} · Kaspi-де қазір: ${kaspi}`,
     note: (s: string) => `Бұл ${s} сайтындағы баға, дәл сол тауар; бонустар мен бөліп төлеу есепке алынбаған. Kaspi-де бақылауды жалғастырамыз.`,
     openStore: (s: string) => `${s} сайтында ашу`, open: "BAĞA-да ашу", stop: "Хат жібермеу",
@@ -30,15 +30,19 @@ const copy = {
 export interface StoreTargetMessage {
   locale: Locale; title: string; storeName: string; storePrice: number; observedAt: Date; target: number; kaspi: number;
   storeUrl: string; productUrl: string;
+  /** When the message goes out (tests); a check of another Almaty day is dated, not «сегодня» (audit 20 Nov 2026). */
+  now?: Date;
 }
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[ch]!);
+const almatyDay = (d: Date) => new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "2-digit", timeZone: "Asia/Almaty" }).format(d);
 const hhmm = (d: Date) => new Intl.DateTimeFormat("ru-RU", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "Asia/Almaty" }).format(d);
 
 function lines(p: StoreTargetMessage, bold: (s: string) => string, e: (s: string) => string) {
   const c = copy[p.locale];
   const f = (n: number) => formatTenge(n, p.locale);
-  const [a, price, b] = c.store(e(p.storeName), f(p.storePrice), hhmm(p.observedAt));
+  const day = almatyDay(p.observedAt) === almatyDay(p.now ?? new Date()) ? null : almatyDay(p.observedAt);
+  const [a, price, b] = c.store(e(p.storeName), f(p.storePrice), hhmm(p.observedAt), day);
   return {
     head: `🎯 ${bold(e(c.head(p.title, p.storeName)))}`,
     store: `${a}${bold(price)}${b}`,

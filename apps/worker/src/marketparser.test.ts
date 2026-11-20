@@ -54,6 +54,12 @@ describe("snapshotOf", () => {
     expect(snapshotOf(product({ offers: [] }), "159681488", known)).toEqual({ skip: "no offers" });
     expect(snapshotOf(product({ offers: [{ shopName: "A", price: 100, currency: "RUB" }] }), "159681488", known)).toEqual({ skip: "no offers" });
   });
+  it("leaves out sellers marked out of stock", () => {
+    const r = snapshotOf(product({ offers: [{ shopName: "A", price: 100, inStock: false }, { shopName: "B", price: 200, inStock: true }, { shopName: "C", price: 300 }] }), "159681488", known);
+    if (!("snap" in r)) throw new Error(r.skip);
+    expect(r.snap.minPrice).toBe(200);
+    expect(r.snap.offerCount).toBe(2);
+  });
   it("keeps one offer per seller, the cheaper", () => {
     const r = snapshotOf(product({ offers: [{ shopName: "Dora", price: 500 }, { shopName: "Dora", price: 400 }] }), "159681488", known);
     if (!("snap" in r)) throw new Error(r.skip);

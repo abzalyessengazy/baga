@@ -103,10 +103,11 @@ export function isCalmPrice(lows: { p: number; ago: number }[]): boolean {
 export function intervalFor(priority: Priority, p: { calm: boolean; inStock: boolean; variant?: boolean; price?: number | null; steady?: boolean; storeMatched?: boolean }): number {
   const base = INTERVAL_MINUTES[priority];
   if (priority === "hot" || priority === "tracked") return base;
-  if (!p.inStock) return Math.max(base, OUT_OF_STOCK_INTERVAL_MINUTES);
   // Under AUTO_MIN_PRICE and nobody tracks it: no automatic checks (the owner, 15 Nov). A person opening it again
-  // still brings it to the next run (queueLane lane 1); tracking it puts it back on its tier.
+  // still brings it to the next run (queueLane lane 1); tracking it puts it back on its tier. Out of stock, `price` is
+  // the last one observed, so a cheap product does not come back every 3 days by going out of stock (audit 20 Nov 2026).
   if (p.price != null && p.price < AUTO_MIN_PRICE) return PARKED_MINUTES;
+  if (!p.inStock) return Math.max(base, OUT_OF_STOCK_INTERVAL_MINUTES);
   // Matched at Halyk Market or Technodom: daily whatever its price does (the owner, 20 Nov 2026): it is compared with
   // the store every day and shown on «Чёрная пятница», where a missing day shows. No steady, calm or variant stretch.
   if (p.storeMatched) return Math.min(base, INTERVAL_MINUTES.seed);

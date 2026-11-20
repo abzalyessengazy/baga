@@ -1,5 +1,6 @@
 import type postgres from "postgres";
 import { BLACK_FRIDAY, storeSaleCheck, type StoreDay, type StoreSaleCheck } from "@baga/core";
+import { STORE_PRICES } from "./stores";
 
 /**
  * The «Чёрная пятница» page (DECISIONS.md, 2026-11-15 "Black Friday: checking the discounts"): products we price both
@@ -7,16 +8,17 @@ import { BLACK_FRIDAY, storeSaleCheck, type StoreDay, type StoreSaleCheck } from
  * and track most first. For each store: its daily lows (with the crossed-out price it showed) from two weeks before
  * the sale, judged by storeSaleCheck; and Kaspi's price now and its lowest in the same two weeks. Read-only.
  */
-export interface BfStore { store: string; name: string; url: string; now: number | null; nowOld: number | null; checkedAt: Date | null; check: StoreSaleCheck }
+/** `stale`: the store's last price is older than STORE_PRICES.showMaxAgeHours, so no price is shown as "now" (audit 20 Nov 2026). */
+export interface BfStore { store: string; name: string; url: string; now: number | null; nowOld: number | null; checkedAt: Date | null; stale: boolean; check: StoreSaleCheck }
 export interface BfRow {
   externalId: string; title: string; titleKk: string | null; imageUrl: string | null;
-  kaspiNow: number; kaspiBeforeLow: number | null;
+  kaspiNow: number; kaspiCheckedAt: Date | null; kaspiBeforeLow: number | null;
   stores: BfStore[];
 }
 
 export async function blackFridayRows(sql: postgres.Sql, today: string, cfg = BLACK_FRIDAY): Promise<BfRow[]> {
   const from = new Date(Date.parse(`${cfg.start}T00:00:00Z`) - cfg.beforeDays * 86_400_000).toISOString().slice(0, 10);
-  const products = await sql<{ id: number; externalId: string; title: string; titleKk: string | null; imageUrl: string | null; kaspiNow: number; kaspiBeforeLow: number | null }[]>`
+  const products = await sql<{ id: number; externalId: string; title: string; titleKk: string | null; imageUrl: string | null; kaspiNow: number; kaspiCheckedAt: Date | null; kaspiBeforeLow: number | null }[]>`
     with cand as (
       select distinct p.id from store_matches m join products p on p.id = m.product_id join product_state s on s.product_id = p.id
       where m.status = 'confirmed' and p.status = 'active' and s.in_stock and s.current_min_price >= ${cfg.minPrice}
@@ -26,7 +28,7 @@ export async function blackFridayRows(sql: postgres.Sql, today: string, cfg = BL
       select external_id, count(distinct coalesce(vid, sid))::int as n from events
       where name = 'product_view' and at > now() - interval '30 days' and external_id is not null group by 1),
     tracks as (select product_id, count(*)::int as n from trackings where status <> 'removed' group by 1)
-    select p.id, p.external_id as "externalId", p.title, p.title_kk as "titleKk", p.image_url as "imageUrl", s.current_min_price as "kaspiNow",
+    select p.id, p.external_id as "externalId", p.title, p.title_kk as "titleKk", p.image_url as "imageUrl", s.current_min_price as "kaspiNow", s.last_checked_at as "kaspiCheckedAt",
       (select min(o.min_price) from price_observations o where o.product_id = p.id and o.min_price is not null
          and o.observed_at >= (${from}::date)::timestamp at time zone 'Asia/Almaty'
          and o.observed_at < (${cfg.start}::date)::timestamp at time zone 'Asia/Almaty')::int as "kaspiBeforeLow"
@@ -55,8 +57,9 @@ export async function blackFridayRows(sql: postgres.Sql, today: string, cfg = BL
       const rows = mine.filter((d) => d.store === store);
       const last = latest.find((l) => l.productId === p.id && l.store === store);
       const history: StoreDay[] = rows.map((r) => ({ day: r.day, price: r.price, oldPrice: r.oldPrice }));
-      return { store, name: rows[0]!.name, url: rows[0]!.url, now: last?.price ?? null, nowOld: last?.oldPrice ?? null, checkedAt: last?.at ?? null, check: storeSaleCheck(history, today, cfg) };
+      const stale = !last || Date.now() - last.at.getTime() > STORE_PRICES.showMaxAgeHours * 3_600_000;
+      return { store, name: rows[0]!.name, url: rows[0]!.url, now: stale ? null : last.price, nowOld: stale ? null : last.oldPrice, checkedAt: last?.at ?? null, stale, check: storeSaleCheck(history, today, cfg) };
     });
-    return { externalId: p.externalId, title: p.title, titleKk: p.titleKk, imageUrl: p.imageUrl, kaspiNow: p.kaspiNow, kaspiBeforeLow: p.kaspiBeforeLow, stores };
+    return { externalId: p.externalId, title: p.title, titleKk: p.titleKk, imageUrl: p.imageUrl, kaspiNow: p.kaspiNow, kaspiCheckedAt: p.kaspiCheckedAt, kaspiBeforeLow: p.kaspiBeforeLow, stores };
   }).filter((r) => r.stores.length > 0);
 }

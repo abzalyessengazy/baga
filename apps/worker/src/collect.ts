@@ -110,7 +110,9 @@ async function runManual() {
   let aborted: string | null = null;
   let idleSince = Date.now();
   const deadline = Date.now() + 20 * 60_000;
-  while (!aborted && Date.now() < deadline && isManualCheckTime(new Date(), WINDOW_MARGIN_MS)) {
+  // A batch can take up to 10 minutes to come back: none is submitted later than 11 minutes before the blackout
+  // (audit 20 Nov 2026), so its result is saved before 03:55 UTC.
+  while (!aborted && Date.now() < deadline && isManualCheckTime(new Date(), 11 * 60_000)) {
     const rows = await queuedManualChecks(sql, MANUAL_CHECKS.perDay);
     if (!rows.length) {
       if (Date.now() - idleSince > 90_000) break; // stay a little for requests made while this run started
@@ -206,6 +208,17 @@ async function main() {
     await new Promise((r) => setTimeout(r, wait));
   }
 
+  // A 403/429 stops the day, not only its run (rule 6; audit 20 Nov 2026): the backup triggers every 20 minutes
+  // started a fresh breaker. A run of today that was blocked: no Kaspi request until tomorrow's window.
+  const [blocked] = await sql<{ at: Date }[]>`select started_at as at from collection_runs
+    where runner <> 'manual' and aborted_reason like 'blocked%' and started_at >= date_trunc('day', now()) limit 1`;
+  if (blocked) {
+    console.log(JSON.stringify({ skipped: "Kaspi blocked an earlier run today: no request until tomorrow's window", blockedRunStarted: blocked.at }));
+    console.log("::warning::Kaspi blocked an earlier run today; this run sent no request");
+    await cleanUp();
+    await sendQueued(); // Telegram and email only, no Kaspi requests
+    return;
+  }
   const [run] = await sql<{ id: number }[]>`insert into collection_runs (runner) values (${env.runner()}) returning id`;
   await cleanUp();
   await sendQueued(); // the full round once at the start: retries and asks left from yesterday go out first
@@ -358,12 +371,17 @@ async function resolveLink(r: { code: string; path: string }): Promise<string | 
  * breaker and window as every request. Returns how many requests were sent.
  */
 let cityRequests = 0;
+const cityTried = new Set<string>();
 async function checkCities(runId: number, limit: number, onlyProduct?: number): Promise<number> {
   const room = Math.min(limit, CITY_CHECKS.maxPerRun - cityRequests);
   if (room <= 0) return 0;
   let sent = 0;
-  for (const r of await cityChecksDue(sql, room, onlyProduct)) {
+  // Each product and city at most once a run, also when the request failed (rule 7; audit 20 Nov 2026: a failure wrote
+  // nothing, so the same pair came back on every idle turn).
+  const due = (await cityChecksDue(sql, room + cityTried.size, onlyProduct)).filter((r) => !cityTried.has(`${r.productId}:${r.city}`)).slice(0, room);
+  for (const r of due) {
     if (breaker.openReason) break;
+    cityTried.add(`${r.productId}:${r.city}`);
     try {
       const offers = await kaspi.fetchOffers(r.externalId, 50, CITIES[r.city]);
       await saveCityPrice(sql, r.productId, r.city, offers, runId);
@@ -573,7 +591,10 @@ async function reschedule(productId: number, minPrice: number | null) {
   // A confirmed Halyk Market or Technodom match stays daily (20 Nov 2026).
   const [m] = await sql<{ n: number }[]>`select count(*)::int as n from store_matches sm join marketplaces k on k.id = sm.marketplace_id
     where sm.product_id = ${productId} and sm.status = 'confirmed' and k.code in ('halyk', 'technodom')`;
-  const minutes = intervalFor(priority, { calm: isCalmPrice(lows14), inStock: minPrice !== null, variant, price: minPrice, steady, storeMatched: (m?.n ?? 0) > 0 });
+  // Out of stock: the 50 000 ₸ rule still applies by its last observed price (audit 20 Nov 2026).
+  const [last] = minPrice !== null ? [{ p: minPrice }] : await sql<{ p: number }[]>`select min_price as p from price_observations
+    where product_id = ${productId} and min_price is not null order by observed_at desc limit 1`;
+  const minutes = intervalFor(priority, { calm: isCalmPrice(lows14), inStock: minPrice !== null, variant, price: last?.p ?? null, steady, storeMatched: (m?.n ?? 0) > 0 });
   await sql`update collection_schedule set priority = ${priority}, interval_minutes = ${minutes}, fail_count = 0,
     last_error = null, locked_until = null, next_check_at = now() + make_interval(mins => ${minutes})
     where product_id = ${productId}`;

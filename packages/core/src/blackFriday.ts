@@ -63,7 +63,9 @@ export function storeSaleCheck(history: StoreDay[], today: string, cfg = BLACK_F
   const claimedPct = during.oldPrice ? pctOf(during.low, during.oldPrice) : null;
   if (!before) return { kind: "noBaseline", before, during, pct: null, claimedPct };
   const pct = pctOf(during.low, before.low);
-  const kind: StoreSaleKind = pct <= -cfg.samePct ? "real" : pct >= cfg.samePct ? "pricier" : "same";
+  // Judged on the exact change, shown rounded: −2.6% is "the same price", not a 3% drop (audit 20 Nov 2026).
+  const exact = ((during.low - before.low) / before.low) * 100;
+  const kind: StoreSaleKind = exact <= -cfg.samePct ? "real" : exact >= cfg.samePct ? "pricier" : "same";
   return { kind, before, during, pct, claimedPct };
 }
 

@@ -138,6 +138,10 @@ describe("longer gaps where nothing happens (10 Nov 2026)", () => {
     expect(intervalFor("seed", { calm: true, inStock: true })).toBe(INTERVAL_MINUTES.seed); // opened lately: daily
     expect(intervalFor("seed", { calm: false, inStock: false })).toBe(3 * 24 * 60);
     expect(intervalFor("catalog", { calm: true, inStock: false })).toBe(3 * 24 * 60);
+    // Out of stock, judged by its last observed price: a cheap one stays parked (audit 20 Nov 2026).
+    expect(intervalFor("catalog", { calm: false, inStock: false, price: 12_000 })).toBe(PARKED_MINUTES);
+    expect(intervalFor("catalog", { calm: false, inStock: false, price: 120_000 })).toBe(3 * 24 * 60);
+    expect(intervalFor("tracked", { calm: false, inStock: false, price: 12_000 })).toBe(INTERVAL_MINUTES.tracked);
   });
   it("checks a later colour/memory variant every third day, unless someone tracks it", () => {
     expect(intervalFor("seed", { calm: false, inStock: true, variant: true })).toBe(3 * 24 * 60);

@@ -28,6 +28,11 @@ describe("storeSaleCheck", () => {
     expect(storeSaleCheck([...before, d("2026-11-27", 289_000, 390_000)], "2026-11-27")).toMatchObject({ kind: "same", claimedPct: -26 });
     expect(storeSaleCheck([...before, d("2026-11-28", 320_000, 400_000)], "2026-12-02").kind).toBe("pricier");
   });
+  it("judges the exact change, not the rounded one (−2.6% is the same price)", () => {
+    const c = storeSaleCheck([...before, d("2026-11-27", 282_460)], "2026-11-27"); // 290 000 → −2.6%
+    expect(c).toMatchObject({ kind: "same", pct: -3 });
+    expect(storeSaleCheck([...before, d("2026-11-27", 281_300)], "2026-11-27").kind).toBe("real"); // −3.0%
+  });
   it("no verdict without enough days before", () => {
     expect(storeSaleCheck([d("2026-11-26", 300_000), d("2026-11-27", 200_000)], "2026-11-27").kind).toBe("noBaseline");
   });

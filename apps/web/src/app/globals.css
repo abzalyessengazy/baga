@@ -1288,6 +1288,7 @@ span.ticker-thumb { background: var(--paper-shade); box-shadow: none; }
 .bf-store b { font: 700 1rem var(--font-ui); font-variant-numeric: tabular-nums; }
 .bf-old { color: var(--ink-faint); font-size: 0.8125rem; }
 .bf-out { color: var(--ink-faint); font-size: 0.8125rem; }
+.bf-at { flex-basis: 100%; color: var(--ink-faint); font: 400 0.75rem var(--font-receipt); }
 .bf-v { display: block; margin-top: 3px; font-size: 0.8125rem; line-height: 1.4; color: var(--ink-soft); }
 .bf-v.is-real { color: var(--stamp); font-weight: 600; }
 .bf-v.is-same, .bf-v.is-pricier { color: var(--stamp-red); font-weight: 600; }

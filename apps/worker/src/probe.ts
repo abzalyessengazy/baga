@@ -1,5 +1,5 @@
 /** Runs the real Kaspi client step by step for one product and prints timings, data or the full error. */
-import { createKaspiClient } from "@baga/kaspi";
+import { createKaspiClient, KaspiHttpError, KaspiRequestRefused } from "@baga/kaspi";
 import { isInVisitWindow, KASPI_CRAWL_DELAY_MS } from "@baga/core";
 
 // kaspi.kz/robots.txt: Visit-time 04:00-08:45 UTC. Debugging outside it needs an explicit --force.
@@ -9,7 +9,10 @@ if (!isInVisitWindow(new Date()) && !process.argv.includes("--force")) {
 }
 
 const id = process.argv.slice(2).find((a) => !a.startsWith("--")) ?? "177318181";
-const client = createKaspiClient({ timeoutMs: 30_000, minIntervalMs: KASPI_CRAWL_DELAY_MS });
+// The first 403/429 stops the probe (rule 6; audit 20 Nov 2026: the offers request went out after a blocked page).
+let blocked = false;
+const client = createKaspiClient({ timeoutMs: 30_000, minIntervalMs: KASPI_CRAWL_DELAY_MS,
+  beforeRequest: () => { if (blocked) throw new KaspiRequestRefused("Kaspi answered 403/429"); } });
 
 async function step<T>(name: string, run: () => Promise<T>): Promise<T | null> {
   const t0 = Date.now();
@@ -18,6 +21,7 @@ async function step<T>(name: string, run: () => Promise<T>): Promise<T | null> {
     console.log(`${name.padEnd(14)} OK      ${Date.now() - t0} ms`);
     return r;
   } catch (e) {
+    if (e instanceof KaspiHttpError && e.isBlocking) blocked = true;
     console.log(`${name.padEnd(14)} FAILED  ${Date.now() - t0} ms  ${e instanceof Error ? `${e.name}: ${e.message}` : String(e)}`);
     return null;
   }

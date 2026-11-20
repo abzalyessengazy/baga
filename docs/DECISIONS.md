@@ -557,3 +557,13 @@ A read-only security audit (a fresh session with docs/AUDIT_BRIEFS.md brief 1) f
 - **Public GitHub logs:** the owner report no longer writes the job summary; a CI nudge dry run prints counts only.
 - Row level security on `email_requests` and `reminders` (0041). Next.js 15.5.29 (3 moderate advisories).
 Not done: the human pass is not bound to an IP (phones change IP; the 40/day paid-check cap holds); narrowing the site role's write rights on price tables waits until after Black Friday. `.claude/launch.json` (a local admin token) is excluded locally; rotating ADMIN_TOKEN in Vercel is the owner's.
+
+## 2026-11-20 — Audit of our own rules: fixes
+The second read-only audit (docs/AUDIT_BRIEFS.md brief 2: hard rules 2, 3, 6, 6a, 7) found 1 high, 3 medium and 6 low issues; all checked against the code and real. Fixed:
+- **A 403/429 stops the day, not only the run** (high). The breaker lived in memory, and the backup triggers every 20 minutes (and the stores' backups) started a fresh one. Now the collector sends no Kaspi request after a run of the same day was blocked, and a store none after a blocked run in the same store window (`blockedThisWindow` in apps/worker/src/stores.ts). This was already the intent (DECISIONS 2026-11-13: "a block stops the day's collection"); CLAUDE.md rules 6 and 6a now say it.
+- **City requests at most once per product and city a run**, also when one fails (rule 7).
+- **«Чёрная пятница»**: every Kaspi and store price shows its check time, and a store price older than `STORE_PRICES.showMaxAgeHours` (48 h) is not shown as "now" («нет свежей цены»), as on the product page (rules 2, 6a; Sulpak's 17 Nov prices were shown next to today's Kaspi price).
+- **The 50 000 ₸ rule applies out of stock too**, by the last observed price (it used to fall through to the 3-day out-of-stock interval).
+- **Real drop / «дешевле» judged on the exact percentage**, shown rounded: −2.6% is the same price (blackFriday.ts, sales.ts).
+- «Ваша цена есть на …» says the check's date when it goes out on another day (not «сегодня»); MarketParser offers marked out of stock are left out; no manual batch is submitted later than 11 minutes before the 03:55 UTC blackout; the probe stops after a 403/429; CLAUDE.md 6a names Halyk Market's brand phone lists.
+Not done: a delayed target alert still has no check time in its text (a change to approved wording, and retries are rare); `discover` and `probe-scale --in-window` keep their looser guards (hand-run only).

@@ -94,7 +94,8 @@ export function snapshotOf(p: MpProduct, expectedId: string, known: Map<string, 
   if (p.searchResult !== "ONE_MODEL") return { skip: `search: ${p.searchResult}` };
   const card = cardOf(p.linkToOffers);
   if (!card || card.externalId !== expectedId) return { skip: `another card: ${card?.externalId ?? "no link"}` };
-  const priced = p.offers.filter((o) => Number.isInteger(o.price) && o.price > 0 && (!o.currency || o.currency === "KZT") && o.shopName?.trim());
+  // Sellers MarketParser marks out of stock are left out (audit 20 Nov 2026): their price is not one you can buy at.
+  const priced = p.offers.filter((o) => o.inStock !== false && Number.isInteger(o.price) && o.price > 0 && (!o.currency || o.currency === "KZT") && o.shopName?.trim());
   if (!priced.length) return { skip: "no offers" };
   const seen = new Set<string>();
   const offers: OfferSnapshot[] = [];

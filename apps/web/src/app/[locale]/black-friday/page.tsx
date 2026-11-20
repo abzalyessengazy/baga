@@ -21,6 +21,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 const dm = (iso: string) => `${iso.slice(8, 10)}.${iso.slice(5, 7)}`;
+/** A check time on the receipt, Almaty: «20.11, 15:18». */
+const at = (d: Date) => new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "Asia/Almaty" }).format(d);
 
 /**
  * «Чёрная пятница: проверяем скидки» (DECISIONS.md, 2026-11-15): products priced both on Kaspi and in Technodom or
@@ -72,6 +74,7 @@ export default async function BlackFridayPage({ params }: Props) {
                     <p className="bf-kaspi">
                       <span className="bf-label">Kaspi</span> <b>{f(r.kaspiNow)}</b>
                       {best < Infinity && r.kaspiNow < best && <span className="bf-tag is-kaspi">{t("kaspiCheaperBy", { amount: f(best - r.kaspiNow) })}</span>}
+                      {r.kaspiCheckedAt && <span className="bf-at">{t("checked", { time: at(r.kaspiCheckedAt) })}</span>}
                     </p>
                   </div>
                 </div>
@@ -80,10 +83,11 @@ export default async function BlackFridayPage({ params }: Props) {
                     <li key={s.store}>
                       <a href={s.url} target="_blank" rel="nofollow noopener noreferrer" className="bf-store">
                         <span className={`store-chip is-${s.store}`}>{s.name}</span>
-                        {s.now !== null ? <b>{f(s.now)}</b> : <span className="bf-out">{t("outOfStock")}</span>}
+                        {s.now !== null ? <b>{f(s.now)}</b> : <span className="bf-out">{t(s.stale ? "noFresh" : "outOfStock")}</span>}
                         {s.now !== null && s.nowOld !== null && s.nowOld > s.now && <s className="bf-old">{f(s.nowOld)}</s>}
                         {s.now !== null && s.now < r.kaspiNow && <span className="bf-tag is-store">{t("storeCheaperBy", { amount: f(r.kaspiNow - s.now) })}</span>}
                         <span aria-hidden>↗</span>
+                        {s.checkedAt && !s.stale && <span className="bf-at">{t("checked", { time: at(s.checkedAt) })}</span>}
                       </a>
                       {verdict(s.check)}
                     </li>

@@ -3,8 +3,8 @@ import type { BfRow } from "@baga/db";
 import { renderBfReminder } from "./remind-render";
 
 const row = (id: string, kaspi: number, kind: "real" | "same" | "pricier", pct: number): BfRow => ({
-  externalId: id, title: `Телевизор Samsung QE${id} <черный>`, titleKk: null, imageUrl: null, kaspiNow: kaspi, kaspiBeforeLow: kaspi,
-  stores: [{ store: "technodom", name: "Technodom", url: "https://x", now: 500_000, nowOld: 700_000, checkedAt: null,
+  externalId: id, title: `Телевизор Samsung QE${id} <черный>`, titleKk: null, imageUrl: null, kaspiNow: kaspi, kaspiCheckedAt: null, kaspiBeforeLow: kaspi,
+  stores: [{ store: "technodom", name: "Technodom", url: "https://x", now: 500_000, nowOld: 700_000, checkedAt: null, stale: false,
     check: { kind, pct, claimedPct: -29, before: { low: 550_000, days: 10 }, during: { low: 500_000, oldPrice: 700_000 } } }],
 });
 

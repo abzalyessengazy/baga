@@ -12,7 +12,7 @@
  * By hand: `pnpm --filter @baga/worker stores --now` (any time outside Kaspi's Visit-time).
  */
 import postgres from "postgres";
-import { SULPAK_PAUSED_UNTIL, KASPI_VISIT_WINDOW_UTC, isInStoreWindow, bestCandidate, looseCandidates, mismatch, storeIndex, storeTokens, kaspiColour } from "@baga/core";
+import { SULPAK_PAUSED_UNTIL, KASPI_VISIT_WINDOW_UTC, STORE_WINDOW_UTC, isInStoreWindow, bestCandidate, looseCandidates, mismatch, storeIndex, storeTokens, kaspiColour } from "@baga/core";
 import {
   connectionOptions, isSimilarReason, storeMarketplaceId, productsToMatch, productsSoldOnKaspiBy, productIdByExternal, exactTitleForSku, saveMatch, matchesToPrice, saveStorePrice,
   setMatchStatus, startStoreRun, finishStoreRun, phonesToMatch, productsToMatchIn, rememberStoreItems, saveStoreCategories, storeCategories, ourLeafCategories, saveListingPage, storeItems, STORE_INDEX, queueStoreTargets,
@@ -72,11 +72,11 @@ async function main() {
     // `--only halyk` (or technodom, sulpak): one store's run, e.g. a first run by hand.
     const only = process.argv[process.argv.indexOf("--only") + 1];
     const want = (code: string) => !process.argv.includes("--only") || only === code;
-    if (want("technodom")) await runTechnodom();
+    if (want("technodom") && !(await blockedThisWindow(TECHNODOM.code))) await runTechnodom();
     const almatyToday = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Almaty" }).format(new Date());
     if (want("sulpak") && almatyToday < STORE_RUN.sulpakPausedUntil) console.log(JSON.stringify({ sulpak: `paused until ${STORE_RUN.sulpakPausedUntil}` }));
-    else if (want("sulpak") && inWindow()) await runSulpak();
-    if (want("halyk") && inWindow()) await runHalyk();
+    else if (want("sulpak") && inWindow() && !(await blockedThisWindow(SULPAK.code))) await runSulpak();
+    if (want("halyk") && inWindow() && !(await blockedThisWindow(HALYK.code))) await runHalyk();
   } finally {
     // Product pages are cached for a day: the ones with a new store price are rebuilt on their next visit.
     const ids = await sql<{ external_id: string }[]>`select distinct p.external_id from store_prices sp
@@ -88,6 +88,20 @@ async function main() {
     const queued = await queueStoreTargets(sql).catch((e) => { console.error(`store targets: ${e}`); return 0; });
     console.log(JSON.stringify({ storeTargetMessages: queued }));
   }
+}
+
+/**
+ * A 403/429 stops the store until its next day's window, not only its run (rule 6a; audit 20 Nov 2026: the backup
+ * triggers started a fresh breaker). The store day starts at STORE_WINDOW_UTC.startMinute and crosses midnight.
+ */
+async function blockedThisWindow(code: string): Promise<boolean> {
+  const now = new Date();
+  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) + STORE_WINDOW_UTC.startMinute * 60_000);
+  if (start > now) start.setUTCDate(start.getUTCDate() - 1);
+  const [r] = await sql`select 1 from store_runs r join marketplaces mk on mk.id = r.marketplace_id
+    where mk.code = ${code} and r.aborted_reason like 'blocked%' and r.started_at >= ${start} limit 1`;
+  if (r) console.log(JSON.stringify({ [code]: "blocked earlier in this store window: no request until the next one" }));
+  return !!r;
 }
 
 /** Waits while a manual Kaspi check runs (rule 6a: never in parallel with a Kaspi request), then the store's own checks. */

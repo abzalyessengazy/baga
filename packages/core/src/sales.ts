@@ -42,7 +42,7 @@ const pct = (a: number, b: number) => Math.round(((a - b) / b) * 100);
 
 /**
  * What our own observations say about a sale: the lowest price during it, against the lowest price in the two
- * weeks before (only when we watched at least 3 of those days), and the latest price after it. Describes the
+ * weeks before (only when we watched at least SALE_CONFIG.minBeforeDays of those days), and the latest price after it. Describes the
  * past only. Null when we saw no price during the sale, or the sale is too far away.
  */
 export function saleCheck(history: DailyLow[], sale: SaleEvent, today: string, cfg = SALE_CONFIG): SaleCheck | null {
@@ -55,8 +55,10 @@ export function saleCheck(history: DailyLow[], sale: SaleEvent, today: string, c
   const beforeDays = history.filter((d) => d.day >= addDays(sale.start, -cfg.beforeDays) && d.day < sale.start);
   const before = beforeDays.length >= cfg.minBeforeDays ? { low: Math.min(...beforeDays.map((d) => d.price)), days: beforeDays.length } : null;
   const beforePct = before ? pct(duringLow, before.low) : null;
-  const kind: SaleKind = beforePct === null ? "noBaseline"
-    : beforePct <= -cfg.samePct ? "cheaper" : beforePct >= cfg.samePct ? "pricier" : "same";
+  // Judged on the exact change, shown rounded: −2.6% is "the same price" (audit 20 Nov 2026).
+  const exact = before ? ((duringLow - before.low) / before.low) * 100 : null;
+  const kind: SaleKind = exact === null ? "noBaseline"
+    : exact <= -cfg.samePct ? "cheaper" : exact >= cfg.samePct ? "pricier" : "same";
   const ongoing = sale.end === null || today <= sale.end;
   const afterDays = ongoing ? [] : history.filter((d) => d.day > end && d.day <= addDays(end, cfg.afterDays));
   const last = afterDays.at(-1);
