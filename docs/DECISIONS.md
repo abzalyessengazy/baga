@@ -598,3 +598,12 @@ The fifth read-only audit (docs/AUDIT_BRIEFS.md brief 5) found 3 medium and 5 lo
 - **Home queries read recent data only**: the last run (3 days), the 14-day series (21 days read), Rule L (90 days; STATS.md says so).
 - `vercel.json`'s `ignoreCommand` also watches `tsconfig.base.json`.
 Not done: **pages for unknown product numbers are still cached for a day** (one cache write per made-up number). Rendering that branch per request (`connection()`) made Next.js answer 500 on a local production build (DYNAMIC_SERVER_USAGE in an ISR page), so it was reverted; it needs another design (e.g. sending unknown numbers to /wait before the cached page), after Black Friday. Also later: the backup drill (restore the R2 copy, compare within one snapshot), `/drops` and the sitemap refreshed less often, retries that wait for the next job.
+
+## 2026-11-20 — Website audit: fixes
+The sixth read-only audit (docs/AUDIT_BRIEFS.md brief 6) found 3 medium and 2 low issues; all real. Fixed:
+- **Contrast (WCAG AA):** `--ink-faint` #8b8f96 → #5f636a (4.6:1 on the counter, 5.8:1 on paper); Kaspi red #f14635 → #d9362a and Halyk green #008a52 → #007f4b (white text 4.7:1 and 5.1:1); Technodom's chip keeps its orange with ink text (5.7:1; white was 2.9:1); the focus ring is #9d90ff on the dark counter (6:1; was 2.6:1). Checked on «Чёрная пятница» at 375 px and a product page at 1440 px.
+- **Tap targets:** the home receipt tabs, the chart's 30/90/all, the city picker, ru/kk and «Мои товары» get an invisible 44 px tall tap area, as `.pick-dot` has; nothing moves.
+- **Empty product pages** (no price, under two observed days) are `noindex` and left out of the sitemap.
+- **CLAUDE.md "Design language"** now says what the colours are really used for: stamp red also for form errors and a «discount» that is not one; drop green also for «Поймали снижение» (the owner, 20 Nov); Kaspi red also for Kaspi's name label beside other stores' chips; AA and 44 px as rules.
+- **«Чёрная пятница» rebuilt at 00:05 Almaty on 27 Nov–1 Dec** (workflow bf-refresh.yml, `pnpm --filter @baga/worker refresh-pages black-friday`), so the first sale morning never says «до распродажи».
+Not done: `--ink-faint` text sitting on the dark counter in dark mode (where the audit measured 2.45:1) keeps its colour.

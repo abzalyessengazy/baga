@@ -1,0 +1,25 @@
+name: Black Friday page at midnight
+on:
+  # «Чёрная пятница» is cached for a day and works out the sale phase when it renders (website audit 20 Nov 2026): rebuild
+  # it at 00:05 Almaty (19:05 UTC the day before) on 27 Nov–1 Dec, so the first sale morning never says «до распродажи».
+  # No Kaspi or store request; only the site's signed page refresh.
+  schedule:
+    - cron: "5 19 26-30 11 *"
+  workflow_dispatch:
+concurrency: { group: bf-refresh, cancel-in-progress: false }
+permissions:
+  contents: read
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @baga/worker refresh-pages black-friday
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          SITE_URL: ${{ vars.SITE_URL || secrets.SITE_URL || 'https://bagaapp.com' }}

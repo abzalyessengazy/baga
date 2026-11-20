@@ -22,6 +22,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   if (sql) {
     const rows = await sql<{ external_id: string }[]>`select p.external_id from products p where p.status = 'active'
       and (p.last_viewed_at > now() - interval '60 days' or exists (select 1 from trackings t where t.product_id = p.id and t.status = 'active'))
+      -- Only pages with something to show: a price now, or two observed days (website audit 20 Nov 2026).
+      and (exists (select 1 from product_state s where s.product_id = p.id and s.current_min_price is not null)
+        or (select count(*) from price_observations o where o.product_id = p.id and o.min_price is not null) >= 2)
       order by p.last_viewed_at desc nulls last limit 2000`;
     for (const r of rows) for (const l of ["ru", "kk"]) pages.push({ url: `${base}/${l}/p/${r.external_id}`, changeFrequency: "daily" });
   }

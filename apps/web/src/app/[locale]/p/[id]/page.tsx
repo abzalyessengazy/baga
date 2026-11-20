@@ -41,11 +41,14 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const r = await getProductView(id);
   // Lookup and error screens are not product pages: keep them out of search results.
   if (!r.ok) return { title: t("title"), robots: { index: false, follow: false } };
+  // No price and under two observed days: nothing to show yet, so not for search results (website audit 20 Nov 2026).
+  const empty = r.view.minPrice === null && r.view.history.length < 2;
   const price = r.view.minPrice ? formatTenge(r.view.minPrice, locale as "ru" | "kk") : "—";
   const title = t("productTitle", { title: r.view.title });
   const description = t("productDescription", { price });
   return {
     title, description,
+    ...(empty ? { robots: { index: false, follow: true } } : {}),
     // Shared links show the product, not the site (opengraph-image.tsx draws the picture).
     openGraph: { title, description, type: "website", url: `/${locale}/p/${id}`, siteName: "BAĞA", locale: locale === "kk" ? "kk_KZ" : "ru_KZ" },
     twitter: { card: "summary_large_image", title, description },
