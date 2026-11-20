@@ -100,13 +100,16 @@ export function isCalmPrice(lows: { p: number; ago: number }[]): boolean {
  * The check interval for a product's tier, stretched for calm catalog products, untracked ones out of stock, and
  * later colour/memory variants of a device nobody tracks or opened lately (`variant`, 14 Nov 2026: every third day).
  */
-export function intervalFor(priority: Priority, p: { calm: boolean; inStock: boolean; variant?: boolean; price?: number | null; steady?: boolean }): number {
+export function intervalFor(priority: Priority, p: { calm: boolean; inStock: boolean; variant?: boolean; price?: number | null; steady?: boolean; storeMatched?: boolean }): number {
   const base = INTERVAL_MINUTES[priority];
   if (priority === "hot" || priority === "tracked") return base;
   if (!p.inStock) return Math.max(base, OUT_OF_STOCK_INTERVAL_MINUTES);
   // Under AUTO_MIN_PRICE and nobody tracks it: no automatic checks (the owner, 15 Nov). A person opening it again
   // still brings it to the next run (queueLane lane 1); tracking it puts it back on its tier.
   if (p.price != null && p.price < AUTO_MIN_PRICE) return PARKED_MINUTES;
+  // Matched at Halyk Market or Technodom: daily whatever its price does (the owner, 20 Nov 2026): it is compared with
+  // the store every day and shown on «Чёрная пятница», where a missing day shows. No steady, calm or variant stretch.
+  if (p.storeMatched) return Math.min(base, INTERVAL_MINUTES.seed);
   const calm = priority === "catalog" && p.calm ? Math.max(base, CALM.intervalMinutes)
     : priority === "seed" && p.steady ? Math.max(base, STEADY.intervalMinutes) : base;
   return p.variant ? Math.max(calm, VARIANT_INTERVAL_MINUTES) : calm;

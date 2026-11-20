@@ -188,3 +188,15 @@ describe("mayExplore", () => {
     expect(mayExplore(10, EXPLORE.maxDueNextDay)).toBe(false);
   });
 });
+
+describe("intervalFor with a store match", () => {
+  it("keeps a Halyk or Technodom match daily however steady, calm or variant, but not out of stock or under 50 000 ₸", () => {
+    const daily = INTERVAL_MINUTES.seed;
+    expect(intervalFor("seed", { calm: false, inStock: true, price: 988_492, steady: true, storeMatched: true })).toBe(daily);
+    expect(intervalFor("catalog", { calm: true, inStock: true, price: 988_492, variant: true, storeMatched: true })).toBe(daily);
+    expect(intervalFor("cold", { calm: false, inStock: true, price: 988_492, storeMatched: true })).toBe(daily);
+    expect(intervalFor("seed", { calm: false, inStock: true, price: 988_492, steady: true })).toBe(STEADY.intervalMinutes);
+    expect(intervalFor("seed", { calm: false, inStock: false, price: null, storeMatched: true })).toBeGreaterThan(daily);
+    expect(intervalFor("seed", { calm: false, inStock: true, price: 20_000, storeMatched: true })).toBe(PARKED_MINUTES);
+  });
+});

@@ -562,7 +562,10 @@ async function reschedule(productId: number, minPrice: number | null) {
   const variant = variants.has(productId) && !(p?.viewed_days !== null && p?.viewed_days !== undefined && p.viewed_days <= 14);
   // Steady for STEADY.days (16 Nov 2026): a daily product nobody tracks is then checked every second day.
   const steady = isSteadyPrice(lows14.filter((r) => r.ago < STEADY.days).map((r) => r.p));
-  const minutes = intervalFor(priority, { calm: isCalmPrice(lows14), inStock: minPrice !== null, variant, price: minPrice, steady });
+  // A confirmed Halyk Market or Technodom match stays daily (20 Nov 2026).
+  const [m] = await sql<{ n: number }[]>`select count(*)::int as n from store_matches sm join marketplaces k on k.id = sm.marketplace_id
+    where sm.product_id = ${productId} and sm.status = 'confirmed' and k.code in ('halyk', 'technodom')`;
+  const minutes = intervalFor(priority, { calm: isCalmPrice(lows14), inStock: minPrice !== null, variant, price: minPrice, steady, storeMatched: (m?.n ?? 0) > 0 });
   await sql`update collection_schedule set priority = ${priority}, interval_minutes = ${minutes}, fail_count = 0,
     last_error = null, locked_until = null, next_check_at = now() + make_interval(mins => ${minutes})
     where product_id = ${productId}`;
