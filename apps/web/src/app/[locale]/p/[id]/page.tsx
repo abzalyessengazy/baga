@@ -3,7 +3,6 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import type { Metadata } from "next";
 import { isCityDependent, REFERENCE_CITY, CITY_LIST, type City, priceNotes, computeVerdict, formatTenge, moveDirection, MOVE_MIN_PCT } from "@baga/core";
 import { getProductView } from "@/lib/product";
-import { ToWait } from "@/components/ProductReady";
 import { alreadyTracked } from "@/lib/catalog";
 import { Related } from "@/components/Related";
 import { PriceChart } from "@/components/PriceChart";
@@ -65,10 +64,9 @@ export default async function ProductPage({ params }: Props) {
   const td = tdates as unknown as DatesT;
   const r = await getProductView(id);
   // No price yet (DECISIONS.md, 2026-11-16 "Cached product pages"): this page is cached, so the lookup and the queue,
-  // which change by the minute, live on /p/<id>/wait (rendered per request); the browser goes there at once.
-  if (!r.ok && (r.reason === "unknown" || r.reason === "queued")) {
-    return <main className="wrap untracked"><ToWait id={id} /></main>;
-  }
+  // which change by the minute, live on /p/<id>/wait (rendered per request). Thrown, not rendered (audit 20 Nov 2026):
+  // an error is never stored, so a made-up product number costs no cache write; error.tsx sends the browser to /wait.
+  if (!r.ok && (r.reason === "unknown" || r.reason === "queued")) throw new Error(`product ${id} has no page yet`);
   // A database hiccup must not be cached for an hour: an error is not stored, the next visit tries again.
   if (!r.ok && r.reason === "unavailable") throw new Error(`product ${id} unavailable`);
   if (!r.ok) {

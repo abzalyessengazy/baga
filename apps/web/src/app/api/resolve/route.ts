@@ -27,12 +27,12 @@ export async function POST(req: Request) {
   let parsed = parseKaspiUrl(input);
   // A check passed here gives the visitor the 30-minute pass (lib/humanPass.ts).
   let passed = false;
-  const out = (r: NextResponse) => (passed ? withPass(r, true) : r);
+  const out = (r: NextResponse) => (passed ? withPass(r, true, ip) : r);
   if (!parsed.ok && parsed.reason === "short_link") {
     const link = shortLinkCode(input);
     if (!link) return NextResponse.json({ error: "short_link" }, { status: 400 });
     const check = await verifyHuman(req, body.token, ip, "resolve");
-    if (!check.ok) return withPass(NextResponse.json({ error: "check_failed" }, { status: 403 }), false);
+    if (!check.ok) return withPass(NextResponse.json({ error: "check_failed" }, { status: 403 }), false, ip);
     passed = check.fresh;
     const target = await resolveSpaced(link.path);
     if (target) {
@@ -48,7 +48,7 @@ export async function POST(req: Request) {
     if (variant) {
       // Queuing makes the collector send a request, so it takes the same bot check as a short link.
       const check = await verifyHuman(req, body.token, ip, "resolve");
-      if (!check.ok) return withPass(NextResponse.json({ error: "check_failed" }, { status: 403 }), false);
+      if (!check.ok) return withPass(NextResponse.json({ error: "check_failed" }, { status: 403 }), false, ip);
       passed = check.fresh;
       return out(await queued(variant.code, variant.path, ip));
     }

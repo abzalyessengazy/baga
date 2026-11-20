@@ -20,7 +20,7 @@ import { appendFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { KASPI_VISIT_WINDOW_UTC, collectEndMinute } from "@baga/core";
-import { getSql } from "@baga/db";
+import { getSql, kaspiBusy } from "@baga/db";
 import { parseOffers } from "@baga/kaspi";
 
 const CITY = "750000000";
@@ -57,6 +57,14 @@ if (process.argv.includes("--wait") && minuteNow() < startMinute && startMinute 
 if (minuteNow() < startMinute || minuteNow() >= LAST_START_MINUTE) {
   console.log(`Run between UTC minute ${startMinute} and ${LAST_START_MINUTE} (after the collector, inside Kaspi's Visit-time).`);
   process.exit(0);
+}
+// One Kaspi client at a time, nothing after today's 403/429 (rule 6; audit 20 Nov 2026): a late collector run still open
+// or a block today stops the probe before its first request.
+{
+  const db = getSql();
+  if (!db) { console.log("DATABASE_URL is not set: cannot check that the collector is idle. No requests."); process.exit(0); }
+  const busy = await kaspiBusy(db);
+  if (busy) { console.log(`Not now: ${busy}. No requests.`); process.exit(0); }
 }
 
 let last = 0;

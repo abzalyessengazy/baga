@@ -24,8 +24,8 @@ export async function POST(req: Request) {
   const sql = getSql();
   if (!sql || (process.env.NODE_ENV === "production" && !resendKey())) return NextResponse.json({ code: "not_ready" }, { status: 503 });
   const check = await verifyHuman(req, b.token, ip, "email");
-  if (!check.ok) return withPass(NextResponse.json({ code: "check_failed" }, { status: 403 }), false);
-  const out = (r: NextResponse) => (check.fresh ? withPass(r, true) : r);
+  if (!check.ok) return withPass(NextResponse.json({ code: "check_failed" }, { status: 403 }), false, ip);
+  const out = (r: NextResponse) => (check.fresh ? withPass(r, true, ip) : r);
 
   const watcher = await ensureWatcher(locale);
   if (!watcher) return out(NextResponse.json({ code: "not_ready" }, { status: 503 }));

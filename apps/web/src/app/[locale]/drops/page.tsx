@@ -4,8 +4,9 @@ import { getSql, weekMovers, type Mover } from "@baga/db";
 import { MoversList } from "@/components/MoversList";
 
 type Props = { params: Promise<{ locale: string }> };
-// New prices arrive once a day; an hour of caching is plenty and keeps the database quiet.
-export const revalidate = 3600;
+// New prices arrive in the morning run: the collector asks for a rebuild every hour while it runs and when it ends
+// (api/revalidate-products, `pages: ["drops"]`), so a day of caching otherwise (audit 20 Nov 2026: 48 writes a day before).
+export const revalidate = 86400;
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { locale } = await params;

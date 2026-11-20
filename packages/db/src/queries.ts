@@ -187,6 +187,19 @@ export async function getShortLink(sql: postgres.Sql, code: string): Promise<Sho
 }
 
 /** True while a collector run has started and not finished (runs last at most the 4 h 45 min window). */
+/**
+ * Why a hand-run Kaspi tool (discover, probe, probe-scale) must not send a request now, or null (rule 6: one Kaspi client
+ * at a time, nothing after a 403/429 the same day). Manual runs do not count: they send no Kaspi request.
+ */
+export async function kaspiBusy(sql: postgres.Sql): Promise<string | null> {
+  const [r] = await sql<{ running: boolean; blocked: boolean }[]>`select
+    exists (select 1 from collection_runs where finished_at is null and runner <> 'manual' and started_at > now() - interval '6 hours') as running,
+    exists (select 1 from collection_runs where runner <> 'manual' and aborted_reason like 'blocked%' and started_at >= date_trunc('day', now())) as blocked`;
+  if (r?.blocked) return "Kaspi answered 403/429 today: no more requests until tomorrow";
+  if (r?.running) return "the collector is running: two Kaspi clients at once would break the 10 s pace";
+  return null;
+}
+
 export async function isCollectorRunning(sql: postgres.Sql): Promise<boolean> {
   const rows = await sql`select 1 from collection_runs where finished_at is null and started_at > now() - interval '6 hours' limit 1`;
   return rows.length > 0;

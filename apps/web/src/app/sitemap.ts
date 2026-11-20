@@ -2,6 +2,7 @@ import type { MetadataRoute } from "next";
 import { getSql } from "@baga/db";
 import { siteUrl } from "@/lib/site";
 import { GUIDE_SLUGS } from "@/lib/guides";
+import { cachedDaily } from "@/lib/dailyCache";
 
 // Rendered per request: the product list grows between deploys, and builds must not depend on the database.
 // Only products people opened in the last 60 days or track (the owner, 16 Nov: crawlers walking all ~3 000 products
@@ -20,13 +21,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   ]);
   const sql = getSql();
   if (sql) {
-    const rows = await sql<{ external_id: string }[]>`select p.external_id from products p where p.status = 'active'
+    // The product list is read once a day (cachedDaily, until the day's collection completes): crawlers fetching the
+    // sitemap no longer run this query each time (audit 20 Nov 2026).
+    const ids = await cachedDaily(["sitemap-products"], async () => (await sql<{ external_id: string }[]>`select p.external_id from products p where p.status = 'active'
       and (p.last_viewed_at > now() - interval '60 days' or exists (select 1 from trackings t where t.product_id = p.id and t.status = 'active'))
       -- Only pages with something to show: a price now, or two observed days (website audit 20 Nov 2026).
       and (exists (select 1 from product_state s where s.product_id = p.id and s.current_min_price is not null)
-        or (select count(*) from price_observations o where o.product_id = p.id and o.min_price is not null) >= 2)
-      order by p.last_viewed_at desc nulls last limit 2000`;
-    for (const r of rows) for (const l of ["ru", "kk"]) pages.push({ url: `${base}/${l}/p/${r.external_id}`, changeFrequency: "daily" });
+        or (select count(distinct (o.observed_at at time zone 'Asia/Almaty')::date) from price_observations o
+              where o.product_id = p.id and o.min_price is not null) >= 2)
+      order by p.last_viewed_at desc nulls last limit 2000`).map((r) => r.external_id));
+    for (const id of ids) for (const l of ["ru", "kk"]) pages.push({ url: `${base}/${l}/p/${id}`, changeFrequency: "daily" });
   }
   return pages;
 }

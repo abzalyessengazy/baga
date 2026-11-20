@@ -568,5 +568,11 @@ describe.skipIf(!url)("database (disposable Postgres)", () => {
       await expect(sql.begin(async (tx) => { await tx`set local role baga_web`; await tx`create table web_cannot (x int)`; })).rejects.toThrow();
       await expect(sql.begin(async (tx) => { await tx`set local role anon`; await tx`select 1 from watchers limit 1`; })).rejects.toThrow();
     });
+    it("baga_web only reads the collector's tables (migration 0044): no price history can be written from the site", async () => {
+      await sql.begin(async (tx) => { await tx`set local role baga_web`; await tx`select 1 from price_observations limit 1`; });
+      for (const t of ["price_observations", "offers_current", "product_state", "store_prices", "city_prices", "caught_drops", "_migrations"]) {
+        await expect(sql.begin(async (tx) => { await tx`set local role baga_web`; await tx.unsafe(`delete from ${t}`); }), t).rejects.toThrow(/permission denied/);
+      }
+    });
   });
 });

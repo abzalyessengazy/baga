@@ -20,7 +20,7 @@ import { writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { KASPI_CRAWL_DELAY_MS } from "@baga/core";
-import { getSql } from "@baga/db";
+import { getSql, kaspiBusy } from "@baga/db";
 
 const CITY = "750000000";
 const A = "177318181"; // Apple iPhone 18 Pro, already collected daily
@@ -384,9 +384,20 @@ if (process.argv.includes("--wait") && utcMinute() > 8 * 60 + 32) {
   process.exit(0);
 }
 const minutes = utcMinute();
-if ((minutes < 8 * 60 + 31 || minutes > 8 * 60 + 43) && !process.argv.includes("--in-window")) {
-  console.log("Run between 08:31 and 08:43 UTC (13:31-13:43 Almaty), after the collector's last request and inside Kaspi's Visit-time. --list shows the experiments.");
+// `--in-window`: earlier inside Kaspi's Visit-time (04:01–08:43 UTC), never outside it (audit 20 Nov 2026: the flag used
+// to switch every time check off).
+const inVisitTime = (m: number) => m >= 4 * 60 + 1 && m <= 8 * 60 + 43;
+const startOk = process.argv.includes("--in-window") ? inVisitTime(minutes) : minutes >= 8 * 60 + 31 && minutes <= 8 * 60 + 43;
+if (!startOk) {
+  console.log("Run between 08:31 and 08:43 UTC (13:31-13:43 Almaty), after the collector's last request and inside Kaspi's Visit-time; with --in-window, anywhere in 04:01-08:43 UTC while the collector is idle. --list shows the experiments.");
   process.exit(0);
+}
+// One Kaspi client at a time, nothing after today's 403/429 (rule 6): the database says whether the collector runs.
+{
+  const db = getSql();
+  if (!db) { console.log("DATABASE_URL is not set: cannot check that the collector is idle. No requests."); process.exit(0); }
+  const busy = await kaspiBusy(db);
+  if (busy) { console.log(`Not now: ${busy}. No requests.`); process.exit(0); }
 }
 
 const only = process.argv[process.argv.indexOf("--only") + 1]?.split(",");
@@ -404,7 +415,7 @@ for (const e of run) {
   const wait = last + KASPI_CRAWL_DELAY_MS - Date.now();
   if (wait > 0) await new Promise((r) => setTimeout(r, wait));
   // Never past 08:43 UTC: Kaspi's Visit-time ends at 08:45.
-  if (utcMinute() > 8 * 60 + 43 && !process.argv.includes("--in-window")) { console.log(`\nStopped at ${e.id}: 08:43 UTC reached.`); break; }
+  if (!inVisitTime(utcMinute())) { console.log(`\nStopped at ${e.id}: outside Kaspi's Visit-time (08:43 UTC reached).`); break; }
   const { url, init } = e.request();
   const t0 = Date.now();
   last = t0;

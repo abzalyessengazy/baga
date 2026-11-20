@@ -66,12 +66,16 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 // Product pages are cached for a day (DECISIONS.md 2026-11-17 "Fewer cache writes"): every few minutes, and at the
 // end of a run, the site hears which products were checked, so their pages show the new check on the next visit.
 let refreshedUpTo = new Date();
+// /drops is cached for a day: rebuilt once an hour while products are checked, and when the run ends (audit 20 Nov 2026).
+let dropsRefreshedAt = 0;
 async function refreshSite(force = false) {
   if (!force && Date.now() - refreshedUpTo.getTime() < 5 * 60_000) return;
   const from = refreshedUpTo;
   refreshedUpTo = new Date();
   const ids = await checkedSince(sql, new Date(from.getTime() - 60_000)).catch(() => []);
-  const n = await refreshPages(env.siteUrl(), env.telegramBotToken(), ids);
+  const drops = !MANUAL && (force || (ids.length > 0 && Date.now() - dropsRefreshedAt >= 60 * 60_000));
+  if (drops) dropsRefreshedAt = Date.now();
+  const n = await refreshPages(env.siteUrl(), env.telegramBotToken(), ids, fetch, drops ? ["drops"] : []);
   if (ids.length) console.log(`site refresh: ${n} of ${ids.length} product pages`);
 }
 
@@ -94,7 +98,13 @@ async function runManual() {
       return;
     }
   }
-  if (!(await queuedManualChecks(sql, 1)).length) { console.log(JSON.stringify({ manual: "nothing queued" })); return; }
+  if (!(await queuedManualChecks(sql, 1)).length) {
+    // Every 30 minutes outside the window (manual.yml's schedule): messages whose retry is due go out now, not with the
+    // next morning's run (audit 20 Nov 2026). Telegram, email and push only; no Kaspi request.
+    await sendQueued();
+    console.log(JSON.stringify({ manual: "nothing queued" }));
+    return;
+  }
   const mpKey = process.env.MARKETPARSER_API_KEY?.trim();
   const mpCampaign = process.env.MARKETPARSER_CAMPAIGN_ID?.trim();
   if (!mpKey || !mpCampaign) {
@@ -922,8 +932,9 @@ async function sendEmailQueued() {
 async function sendPushQueued() {
   const key = env.vapidPrivateKey();
   if (!key) return;
-  const queued = await sql<{ id: number; type: "first_price" | "target_reached" | "bought_ask" | "store_target"; match_id: number | null; price: number; target_price: number | null; watcher_id: string; locale: "ru" | "kk"; title: string; external_id: string; current: number | null }[]>`
-    select n.id, n.type, n.match_id::int as match_id, n.price, t.target_price, w.id as watcher_id, w.locale, p.title, p.external_id, case when coalesce(t.city, 'almaty') <> 'almaty' then n.price else s.current_min_price end as current
+  const queued = await sql<{ id: number; type: "first_price" | "target_reached" | "bought_ask" | "store_target"; match_id: number | null; price: number; target_price: number | null; watcher_id: string; locale: "ru" | "kk"; title: string; external_id: string; current: number | null; push_done: string[] }[]>`
+    select n.id, n.type, n.match_id::int as match_id, n.price, t.target_price, w.id as watcher_id, w.locale, p.title, p.external_id, case when coalesce(t.city, 'almaty') <> 'almaty' then n.price else s.current_min_price end as current,
+           n.push_done::text[] as push_done
     from notifications n
     join trackings t on t.id = n.tracking_id
     join watchers w on w.id = t.watcher_id
@@ -940,16 +951,25 @@ async function sendPushQueued() {
         price: q.type === "first_price" ? q.current : q.price, target: q.target_price,
         url: `/${q.locale}/p/${q.external_id}?utm_source=push_alert`, // a path: the site that subscribed opens it
       });
-      let delivered = 0, gone = 0, lastError: unknown = null;
+      // Per browser (migration 0044): a browser that took it is recorded at once, so a retry (one browser failed for a
+      // while) or a re-send after a crash goes only to the browsers that have not had it.
+      const done = new Set(q.push_done.map(Number));
+      let delivered = done.size, gone = 0, lastError: unknown = null;
       const subs = await pushSubscriptionsOf(sql, q.watcher_id);
       for (const sub of subs) {
+        if (done.has(sub.id)) continue;
         try {
-          if ((await sendPush(sub, msg, key, env.siteUrl())) === "ok") { delivered++; await pushWorked(sql, sub.id); }
-          else { gone++; await dropPushSubscription(sql, sub.id); }
+          if ((await sendPush(sub, msg, key, env.siteUrl())) === "ok") {
+            delivered++;
+            await sql`update notifications set push_done = array_append(push_done, ${sub.id}::bigint) where id = ${q.id}`;
+            await pushWorked(sql, sub.id);
+          } else { gone++; await dropPushSubscription(sql, sub.id); }
         } catch (e) { lastError = e; }
       }
+      // A browser that failed for a while is tried again (its retry skips the ones that have it); the others are done.
+      if (lastError) throw new DeliveryError(String(lastError), false);
       if (delivered) await markSent(sql, q.id, `push:${delivered}`);
-      else throw new DeliveryError(lastError ? String(lastError) : `no browser took it (${gone} gone)`, !lastError);
+      else throw new DeliveryError(`no browser took it (${gone} gone)`, true);
     } catch (e) {
       await deliveryFailed(q.id, e);
     }

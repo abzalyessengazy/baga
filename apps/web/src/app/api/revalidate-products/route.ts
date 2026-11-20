@@ -6,7 +6,8 @@ import { NextResponse } from "next/server";
  * The workers say which products they just checked (DECISIONS.md 2026-11-17 "Fewer cache writes"): product pages are
  * cached for a day, and these are rebuilt on their next visit. Signed with a key derived from TELEGRAM_BOT_TOKEN
  * (apps/worker/src/siteRefresh.ts); at most 200 ids, at most 10 minutes old. Nothing is rebuilt until visited.
- * `pages`: whole pages from a fixed list, once a day when the store run ends (18 Nov: «Чёрная пятница»).
+ * `pages`: whole pages from a fixed list: «Чёрная пятница» when the store run ends (18 Nov), /drops hourly while the
+ * collector runs and when it ends (20 Nov).
  */
 export async function POST(req: Request) {
   const token = process.env.TELEGRAM_BOT_TOKEN?.trim();
@@ -21,7 +22,7 @@ export async function POST(req: Request) {
   if (typeof b.ts !== "number" || Math.abs(Date.now() - b.ts) > 10 * 60_000) return NextResponse.json({ ok: false }, { status: 401 });
   const ids = Array.isArray(b.ids) ? b.ids.filter((x): x is string => typeof x === "string" && /^\d{5,12}$/.test(x)).slice(0, 200) : [];
   for (const id of ids) for (const l of ["ru", "kk"]) revalidatePath(`/${l}/p/${id}`);
-  const pages = Array.isArray(b.pages) ? b.pages.filter((p): p is string => p === "black-friday") : [];
+  const pages = Array.isArray(b.pages) ? b.pages.filter((p): p is string => p === "black-friday" || p === "drops") : [];
   for (const p of pages) for (const l of ["ru", "kk"]) revalidatePath(`/${l}/${p}`);
   return NextResponse.json({ ok: true, n: ids.length });
 }

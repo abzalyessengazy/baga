@@ -20,13 +20,14 @@ for (const file of readdirSync(dir).filter((f) => f.endsWith(".sql")).sort()) {
   });
 }
 // The website's role (migration 0034) reaches every table, including ones added after it: a new table has row level
-// security on and would otherwise lock the site out of it.
+// security on and would otherwise lock the site out of it. Only the policy is added here: the table rights come from
+// 0034's default privileges, so a revoke in a migration (0044: the collector's tables are read-only for the site)
+// is never undone by a later run.
 await sql`do $$ declare t record; begin
   if exists (select 1 from pg_roles where rolname = 'baga_web') then
     for t in select tablename from pg_tables p where schemaname = 'public'
       and not exists (select 1 from pg_policies where schemaname = 'public' and tablename = p.tablename and policyname = 'web_all') loop
       execute format('create policy web_all on public.%I for all to baga_web using (true) with check (true)', t.tablename);
-      execute format('grant select, insert, update, delete on public.%I to baga_web', t.tablename);
     end loop;
   end if;
 end $$`;

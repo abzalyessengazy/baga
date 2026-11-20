@@ -12,7 +12,7 @@ export function refreshSignature(botToken: string, body: string): string {
   return createHmac("sha256", key).update(body).digest("hex");
 }
 
-/** `pages`: whole pages to rebuild as well (the site accepts only "black-friday"), sent with the first batch. */
+/** `pages`: whole pages to rebuild as well (the site accepts "black-friday" and "drops"), sent with the first batch. */
 export async function refreshPages(siteUrl: string, botToken: string | null, ids: string[], fetchImpl: typeof fetch = fetch, pages: string[] = []): Promise<number> {
   if (!botToken || (!ids.length && !pages.length)) return 0;
   let sent = 0;

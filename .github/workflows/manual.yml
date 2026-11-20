@@ -3,7 +3,7 @@ on:
   # A visitor's own product, checked on request outside the collector's window (DECISIONS.md 2026-11-09, 2026-11-17;
   # CLAUDE.md rule 6): the website starts this when a visitor asks (at most 40 a day, 3 per visitor; manual_checks).
   # Since 17 Nov 2026 MarketParser checks the products; this job sends no Kaspi request. The schedule is a backup for a
-  # start that failed (a run with nothing queued ends in seconds).
+  # start that failed, and it sends messages whose retry is due (a run with nothing queued ends in seconds).
   workflow_dispatch:
   schedule:
     - cron: "15,45 0-3,9-23 * * *"

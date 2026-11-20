@@ -7,7 +7,7 @@
 import { refreshPages } from "./siteRefresh";
 import { env } from "./env";
 
-const pages = process.argv.slice(2).filter((a) => a === "black-friday");
-if (!pages.length) { console.log("usage: refresh-pages black-friday"); process.exit(0); }
+const pages = process.argv.slice(2).filter((a) => a === "black-friday" || a === "drops");
+if (!pages.length) { console.log("usage: refresh-pages black-friday|drops"); process.exit(0); }
 const n = await refreshPages(env.siteUrl(), env.telegramBotToken(), [], fetch, pages);
 console.log(JSON.stringify({ refreshed: pages, productPages: n }));

@@ -46,13 +46,28 @@ jobs:
           echo "PG_MAJOR=$major" >> "$GITHUB_ENV"
           echo "/usr/lib/postgresql/$major/bin" >> "$GITHUB_PATH"
 
-      - name: Dump our schema
+      # One snapshot for the dump and the row counts the drill compares against (audit 20 Nov 2026: counts taken after
+      # the dump could differ by a visitor's beacon and fail the drill for nothing). A read-only transaction exports its
+      # snapshot, pg_dump reads exactly that, and the counts are taken in the same transaction before it ends.
+      - name: Dump our schema and count its rows (one snapshot)
         if: steps.cfg.outputs.skip != '1'
         run: |
+          set -euo pipefail
           file="baga-$(date -u +%F).dump"
-          pg_dump "$SESSION_URL" --schema=public --no-owner --no-privileges --format=custom --file="$file"
+          coproc SNAP { psql "$SESSION_URL" -qAt -v ON_ERROR_STOP=1; }
+          echo "begin isolation level repeatable read read only; select pg_export_snapshot();" >&"${SNAP[1]}"
+          read -r -t 60 snap <&"${SNAP[0]}"
+          pg_dump "$SESSION_URL" --snapshot="$snap" --schema=public --no-owner --no-privileges --format=custom --file="$file"
+          echo "select string_agg(format('select %L, count(*) from public.%I', tablename, tablename), ' union all ' order by tablename) from pg_tables where schemaname = 'public';" >&"${SNAP[1]}"
+          read -r -t 60 q <&"${SNAP[0]}"
+          echo "$q; select '__end__', 0;" >&"${SNAP[1]}"
+          : > counts.txt
+          while read -r -t 300 line <&"${SNAP[0]}"; do [ "$line" = "__end__|0" ] && break; echo "$line" >> counts.txt; done
+          printf 'commit;\n\\q\n' >&"${SNAP[1]}"
+          wait || true
+          [ -s counts.txt ] || { echo "::error::No row counts from the dump's snapshot"; exit 1; }
           echo "DUMP=$file" >> "$GITHUB_ENV"
-          ls -l "$file"
+          ls -l "$file"; wc -l counts.txt
 
       - name: Upload to Cloudflare R2
         if: steps.cfg.outputs.skip != '1'
@@ -68,9 +83,12 @@ jobs:
               if [[ "$f" < "$cutoff" ]]; then aws s3 rm "s3://$R2_BUCKET/daily/$f" --endpoint-url "$R2_ENDPOINT" --only-show-errors && echo "deleted $f"; fi
             done
 
-      - name: Restore drill (scratch Postgres, compare row counts)
+      # The drill restores the copy in R2, downloaded again, not the local file: what a real restore would use.
+      - name: Restore drill (the R2 copy into scratch Postgres, compare row counts)
         if: steps.cfg.outputs.skip != '1'
         run: |
+          set -euo pipefail
+          aws s3 cp "s3://$R2_BUCKET/daily/$DUMP" "restored-$DUMP" --endpoint-url "$R2_ENDPOINT" --only-show-errors
           docker run -d --name drill -e POSTGRES_PASSWORD=drill -p 5433:5432 "postgres:$PG_MAJOR" > /dev/null
           for i in $(seq 1 60); do pg_isready -h localhost -p 5433 -q && break; sleep 1; done
           scratch="postgresql://postgres:drill@localhost:5433/postgres"
@@ -80,14 +98,13 @@ jobs:
             -c "create function auth.uid() returns uuid language sql stable as 'select null::uuid'" \
             -c "create role anon" -c "create role authenticated" -c "create role service_role" \
             -c "create role baga_reporter" -c "create role baga_web" # migrations 0024, 0034: their policies name these roles
-          if pg_restore -l "$DUMP" | grep -qE 'SCHEMA - public( |$)'; then psql "$scratch" -q -c "drop schema public cascade"; fi
-          pg_restore --no-owner --no-privileges --exit-on-error -d "$scratch" "$DUMP"
+          if pg_restore -l "restored-$DUMP" | grep -qE 'SCHEMA - public( |$)'; then psql "$scratch" -q -c "drop schema public cascade"; fi
+          pg_restore --no-owner --no-privileges --exit-on-error -d "$scratch" "restored-$DUMP"
           bad=0
-          for t in $(psql "$SESSION_URL" -Atc "select tablename from pg_tables where schemaname = 'public' order by 1"); do
-            a=$(psql "$SESSION_URL" -Atc "select count(*) from public.\"$t\"")
+          while IFS='|' read -r t a; do
             b=$(psql "$scratch" -Atc "select count(*) from public.\"$t\"" 2>/dev/null || echo missing)
-            printf '%-22s source %9s   restored %9s\n' "$t" "$a" "$b"
+            printf '%-22s snapshot %9s   restored %9s\n' "$t" "$a" "$b"
             [ "$a" = "$b" ] || bad=1
-          done
-          [ "$bad" = 0 ] || { echo "::error::Restored backup does not match the database"; exit 1; }
-          echo "Restore drill passed: $DUMP restores with identical row counts."
+          done < counts.txt
+          [ "$bad" = 0 ] || { echo "::error::The R2 copy does not restore to the dumped rows"; exit 1; }
+          echo "Restore drill passed: the R2 copy of $DUMP restores with the snapshot's row counts in every table."

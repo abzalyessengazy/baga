@@ -305,7 +305,7 @@ a { color: inherit; }
 .how-art { background: var(--paper); color: var(--ink); box-shadow: var(--paper-shadow); border-radius: 6px; height: 168px; padding: 18px; position: relative; overflow: hidden;
   display: flex; flex-direction: column; justify-content: center; gap: 12px; font: 500 0.8125rem/1.2 var(--font-receipt); }
 .how-caption { display: grid; grid-template-columns: auto 1fr; gap: 14px; align-items: baseline; }
-.how-num { font: 800 var(--step-1)/1 var(--font-receipt); color: var(--stamp); }
+.how-num { font: 800 var(--step-1)/1 var(--font-receipt); color: var(--stamp-on-counter); } /* on the counter: AA in dark mode too */
 .how-caption p { margin: 0; font-size: var(--step-0); line-height: 1.45; max-width: 32ch; }
 
 .how-link { position: relative; padding: 10px 12px; border: 1.5px solid var(--rule); border-radius: 6px; }
@@ -353,6 +353,9 @@ a { color: inherit; }
 .feedback-actions { display: flex; align-items: center; gap: 16px; margin-top: 12px; }
 .feedback-thanks { margin: 0 0 10px; font-weight: 600; }
 .feedback .link-btn { color: var(--stamp); }
+/* The footer's «Написать нам» sits on the counter, not on paper: the counter's violet (AA in dark mode; audit 20 Nov 2026). */
+.site-footer .link-btn { color: var(--stamp-on-counter); }
+.site-footer .feedback .link-btn { color: var(--stamp); }
 .hp { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
 
 /* privacy policy and terms */
@@ -636,6 +639,9 @@ a { color: inherit; }
 .untracked h2 { font-size: var(--step-0); font-weight: 600; margin: 32px 0 8px; color: var(--ink-on-counter, var(--ink)); }
 .untracked .side-panel { margin-top: 24px; }
 .untracked .track-card h2 { margin: 0 0 14px; font-size: var(--step-1); color: var(--ink); }
+/* Headings on paper inside an .untracked page (guides, legal pages) keep ink: the counter colour above is for the
+   counter only (dark mode: they were light on paper, 1.1:1; audit 20 Nov 2026). */
+.untracked .receipt h2 { color: var(--ink); }
 .untracked .catalog-list { background: var(--paper); border-radius: 10px; box-shadow: var(--paper-shadow); padding: 4px 8px; }
 
 /* Home: "Мои товары" for a returning visitor, a strip of receipt paper under the paste form. */
@@ -812,6 +818,8 @@ span.z-thumb { display: block; background: var(--paper-shade); box-shadow: none;
 .city-note { margin: 0 0 8px; }
 .shop-kicker { margin: 0 0 4px; color: var(--ink-soft); }
 .shop .receipt { margin-bottom: 24px; }
+/* The shop page's kicker and notes sit on the counter: in dark mode the counter's soft grey (7:1; were 2.6:1). */
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .shop-kicker, :root:not([data-theme="light"]) .shop > .note { color: #a9adb4; } }
 .shop-facts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 0 0 10px; }
 .shop-facts div { min-width: 0; }
 .shop-facts dt { font-size: 0.75rem; color: var(--ink-soft); }
@@ -863,6 +871,8 @@ p.chips { margin: 6px 0 0; }
 .shop-item-name { grid-area: name; font-weight: 600; overflow-wrap: anywhere; color: var(--ink-on-counter, var(--ink)); }
 .shop-item .chips { grid-area: chips; margin: 0; }
 .shop-item-n { grid-area: n; font-size: 0.8125rem; color: var(--ink-faint); white-space: nowrap; }
+/* The shop list sits on the counter: in dark mode its counts take the counter's soft grey (7:1; was 2.6:1). */
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .shop-item-n { color: #a9adb4; } }
 .shops .chip-legend { color: var(--ink-on-counter, var(--ink-soft)); }
 /* The shop chips under the sellers count make that cell taller: every number starts right under its label (not
    pushed to the bottom of the row), and the 'Факт' stamp gets its own room under the grid. Phones (two columns,
@@ -1274,7 +1284,7 @@ span.ticker-thumb { background: var(--paper-shade); box-shadow: none; }
 .bf-list { list-style: none; margin: 18px 0 0; padding: 0; display: grid; gap: 12px; }
 /* «Показать все N товаров» (18 Nov): the pairs after the first 50, one tap away. */
 .bf-more { margin-top: 14px; }
-.bf-more > summary { list-style: none; display: block; width: 100%; text-align: center; cursor: pointer; }
+.bf-more > summary { list-style: none; display: block; width: 100%; text-align: center; cursor: pointer; color: var(--ink-on-counter, var(--ink)); } /* on the counter */
 .bf-more > summary::-webkit-details-marker { display: none; }
 .bf-more[open] > summary { display: none; }
 .bf-row { padding: 16px; }
@@ -1284,7 +1294,7 @@ span.ticker-thumb { background: var(--paper-shade); box-shadow: none; }
 .bf-name { color: var(--ink); font-size: 0.875rem; line-height: 1.4; text-decoration: none; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .bf-kaspi { margin: 4px 0 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
 .bf-kaspi b { font: 700 1.0625rem var(--font-ui); font-variant-numeric: tabular-nums; }
-.bf-label { font: 700 0.6875rem var(--font-ui); color: var(--paper); background: var(--kaspi); border-radius: 999px; padding: 2px 7px; }
+.bf-label { font: 700 0.6875rem var(--font-ui); color: #fff; background: var(--kaspi); border-radius: 999px; padding: 2px 7px; }
 .bf-tag { font-size: 0.75rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
 .bf-tag.is-kaspi { color: var(--stamp); background: color-mix(in srgb, var(--stamp) 10%, transparent); }
 .bf-stores { list-style: none; margin: 12px 0 0; padding: 10px 0 0 36px; border-top: 1px dashed var(--rule); display: grid; gap: 10px; }
@@ -1382,4 +1392,5 @@ span.ticker-thumb { background: var(--paper-shade); box-shadow: none; }
 .guide ol li, .guide ul li { margin: 4px 0; }
 .guide a.guide-cta { display: inline-block; margin-top: 8px; text-decoration: none; color: var(--paper); white-space: normal; }
 .guide-more { margin-top: 18px; }
+.guide-more .receipt-caption { color: var(--ink-on-counter, var(--ink-soft)); } /* on the counter, not paper */
 .guide-more ul { list-style: none; padding: 0; margin: 6px 0 0; display: grid; gap: 6px; }

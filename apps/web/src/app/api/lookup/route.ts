@@ -25,9 +25,9 @@ export async function POST(req: Request) {
   const check = await verifyHuman(req, body.token, ip, "lookup");
   if (!check.ok) {
     if (check.reason === "no_secret") console.error("[turnstile] TURNSTILE_SECRET_KEY is not set; refusing lookups");
-    return withPass(NextResponse.json({ error: check.reason === "no_secret" ? "generic" : "check_failed" }, { status: check.reason === "no_secret" ? 503 : 403 }), false);
+    return withPass(NextResponse.json({ error: check.reason === "no_secret" ? "generic" : "check_failed" }, { status: check.reason === "no_secret" ? 503 : 403 }), false, ip);
   }
-  const out = (r: NextResponse) => (check.fresh ? withPass(r, true) : r);
+  const out = (r: NextResponse) => (check.fresh ? withPass(r, true, ip) : r);
 
   const r = await queueProductRequest(id, typeof body.slug === "string" && isValidSlug(body.slug) ? body.slug : null);
   if (r === "queued") await requestManual({ externalId: id }, ip).catch((e) => console.error(`[manual] ${e}`));

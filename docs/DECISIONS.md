@@ -607,3 +607,13 @@ The sixth read-only audit (docs/AUDIT_BRIEFS.md brief 6) found 3 medium and 2 lo
 - **CLAUDE.md "Design language"** now says what the colours are really used for: stamp red also for form errors and a «discount» that is not one; drop green also for «Поймали снижение» (the owner, 20 Nov); Kaspi red also for Kaspi's name label beside other stores' chips; AA and 44 px as rules.
 - **«Чёрная пятница» rebuilt at 00:05 Almaty on 27 Nov–1 Dec** (workflow bf-refresh.yml, `pnpm --filter @baga/worker refresh-pages black-friday`), so the first sale morning never says «до распродажи».
 Not done: `--ink-faint` text sitting on the dark counter in dark mode (where the audit measured 2.45:1) keeps its colour.
+
+## 2026-11-20 — Audit leftovers fixed
+The owner asked for every open audit point to be fixed now (20 Nov):
+- **Security:** the 30-minute human pass is signed for the visitor's IP (a copied cookie no longer works elsewhere). Migration 0044: the site role only reads the collector's tables (prices, sellers, city and store prices, runs, caught drops, `_migrations`); `migrate.ts` adds only the policy to new tables, so a revoke is never undone.
+- **Rule 6:** `discover`, `probe`, `probe-pairs` and `probe-scale` refuse while a collector run is open or after a block today (`kaspiBusy`), check the window before every request; `probe --force` and `probe-scale --in-window` no longer step outside Kaspi's Visit-time.
+- **Push per browser** (0044 `notifications.push_done`): a retry or a re-send after a crash goes only to browsers that have not had it.
+- **Cost:** a product number with no page yet is thrown, not rendered, so it is never cached (checked on a production build: 500 `no-store` twice, real products cached); `error.tsx` sends the browser to /wait once a minute at most. `/drops` cached a day, rebuilt hourly by the collector and when it ends; the sitemap's product list read once a day; idle manual runs send due retries every 30 min.
+- **Backup drill:** dump and row counts from one exported snapshot; the drill restores the copy downloaded back from R2.
+- **Dark mode:** a contrast scan of every main page in both themes and locales at 390 and 1440 px found and fixed light-on-paper guide headings (1.1:1), the «Как это работает» numbers and footer link, shop counts and notes, the «Чёрная пятница» show-more button and Kaspi label.
+Still the owner's: rotate ADMIN_TOKEN in Vercel; run `pnpm db:migrate` (0041–0044) before this is pushed.

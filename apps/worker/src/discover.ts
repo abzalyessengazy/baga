@@ -25,7 +25,9 @@
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { createKaspiClient, parseKaspiUrl, KASPI_SITEMAP_URL, KaspiHttpError, canonicalProductUrl, type Sitemap } from "@baga/kaspi";
+import postgres from "postgres";
+import { createKaspiClient, parseKaspiUrl, KASPI_SITEMAP_URL, KaspiHttpError, KaspiRequestRefused, canonicalProductUrl, type Sitemap } from "@baga/kaspi";
+import { connectionOptions, kaspiBusy } from "@baga/db";
 import { isInVisitWindow, KASPI_CRAWL_DELAY_MS, pickSeedProducts, pickRareProducts, pickBreadth, SEED_CATEGORIES, RARE_CATEGORIES, SEED_MIN_PRICE } from "@baga/core";
 
 const arg = (name: string, dflt: number) => {
@@ -55,8 +57,21 @@ if (!fromFile && !isInVisitWindow(new Date())) {
   console.error("Outside the collection window (04:01–08:42 UTC = 09:01–13:42 Almaty, inside kaspi.kz robots.txt 04:00–08:45). No requests made.");
   process.exit(1);
 }
+// One Kaspi client at a time, and nothing after today's 403/429 (rule 6; audit 20 Nov 2026): the database says whether
+// the collector is running or was blocked today. Without it, no request.
+if (!fromFile) {
+  const url = process.env.DATABASE_URL;
+  if (!url) { console.error("DATABASE_URL is not set: cannot check that the collector is idle. No requests made."); process.exit(1); }
+  const db = postgres(url, { max: 1, ...connectionOptions(url) });
+  const busy = await kaspiBusy(db).finally(() => db.end());
+  if (busy) { console.error(`Not now: ${busy}. No requests made.`); process.exit(1); }
+}
 
-const kaspi = createKaspiClient({ minIntervalMs: KASPI_CRAWL_DELAY_MS, jitterMs: 2000 });
+// Every request checks the window again (a run started at 08:41 must not go past 08:42 UTC).
+const kaspi = createKaspiClient({
+  minIntervalMs: KASPI_CRAWL_DELAY_MS, jitterMs: 2000,
+  beforeRequest: () => { if (!isInVisitWindow(new Date())) throw new KaspiRequestRefused("the collection window closed"); },
+});
 let requests = 0;
 async function get(url: string): Promise<Sitemap | null> {
   if (requests >= maxRequests) return null;
@@ -69,6 +84,7 @@ async function get(url: string): Promise<Sitemap | null> {
   } catch (e) {
     console.error(`  ${url} → ${String(e)}`);
     if (e instanceof KaspiHttpError && e.isBlocking) { console.error("Kaspi asked us to stop (403/429). Stopping."); finish(); }
+    if (e instanceof KaspiRequestRefused) { console.error("The collection window closed. Stopping."); finish(); }
     return null;
   }
 }

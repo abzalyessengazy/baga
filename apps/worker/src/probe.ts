@@ -1,18 +1,29 @@
 /** Runs the real Kaspi client step by step for one product and prints timings, data or the full error. */
 import { createKaspiClient, KaspiHttpError, KaspiRequestRefused } from "@baga/kaspi";
 import { isInVisitWindow, KASPI_CRAWL_DELAY_MS } from "@baga/core";
+import { getSql, kaspiBusy } from "@baga/db";
 
-// kaspi.kz/robots.txt: Visit-time 04:00-08:45 UTC. Debugging outside it needs an explicit --force.
-if (!isInVisitWindow(new Date()) && !process.argv.includes("--force")) {
-  console.log("Outside the collection window (04:01-08:42 UTC = 09:01-13:42 Almaty, inside Kaspi's robots.txt 04:00-08:45). Re-run with --force to probe anyway.");
+// kaspi.kz/robots.txt: Visit-time 04:00-08:45 UTC, always (audit 20 Nov 2026: `--force` used to skip it).
+if (!isInVisitWindow(new Date())) {
+  console.log("Outside the collection window (04:01-08:42 UTC = 09:01-13:42 Almaty, inside Kaspi's robots.txt 04:00-08:45). No requests.");
   process.exit(0);
+}
+// One Kaspi client at a time, nothing after today's 403/429 (rule 6).
+{
+  const db = getSql();
+  if (!db) { console.log("DATABASE_URL is not set: cannot check that the collector is idle. No requests."); process.exit(0); }
+  const busy = await kaspiBusy(db).finally(() => db.end({ timeout: 5 }));
+  if (busy) { console.log(`Not now: ${busy}. No requests.`); process.exit(0); }
 }
 
 const id = process.argv.slice(2).find((a) => !a.startsWith("--")) ?? "177318181";
 // The first 403/429 stops the probe (rule 6; audit 20 Nov 2026: the offers request went out after a blocked page).
 let blocked = false;
 const client = createKaspiClient({ timeoutMs: 30_000, minIntervalMs: KASPI_CRAWL_DELAY_MS,
-  beforeRequest: () => { if (blocked) throw new KaspiRequestRefused("Kaspi answered 403/429"); } });
+  beforeRequest: () => {
+    if (blocked) throw new KaspiRequestRefused("Kaspi answered 403/429");
+    if (!isInVisitWindow(new Date())) throw new KaspiRequestRefused("the collection window closed");
+  } });
 
 async function step<T>(name: string, run: () => Promise<T>): Promise<T | null> {
   const t0 = Date.now();
