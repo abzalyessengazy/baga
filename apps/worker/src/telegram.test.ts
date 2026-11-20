@@ -77,3 +77,11 @@ describe("a send that timed out", () => {
     vi.unstubAllGlobals();
   });
 });
+
+describe("a late alert", () => {
+  const hit = { ...base, type: "target_reached" as const, locale: "ru" as const, price: 590_000, checkedAt: new Date("2026-11-19T09:12:00Z") };
+  it("says when the price was seen when it goes out on a later day, and nothing on the same day", () => {
+    expect(renderTelegramAlert({ ...hit, now: new Date("2026-11-20T05:00:00Z") }).html).toContain("🕒 Проверено: 19.11, 14:12");
+    expect(renderTelegramAlert({ ...hit, now: new Date("2026-11-19T12:00:00Z") }).html).not.toContain("🕒");
+  });
+});

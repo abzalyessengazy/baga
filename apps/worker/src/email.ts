@@ -1,4 +1,5 @@
 import { formatTenge, isPermanentHttpStatus } from "@baga/core";
+import { lateCheck } from "./lateCheck";
 import { DeliveryError } from "./telegram";
 
 /** Email alert texts (like telegram.ts, the worker's copy lives next to its sender). */
@@ -13,6 +14,7 @@ const copy = {
     low30: "Самая низкая за 30 дней",
     my: "🧾 Мои товары",
     checkNote: "Цены на Kaspi меняются быстро: проверьте перед покупкой.",
+    checked: "Проверено",
     targetLead: "Цена опустилась до вашей.",
     waitNote: "Напишем, как только цена опустится до вашей.",
     hitNote: "Цена уже не выше вашей.",
@@ -41,6 +43,7 @@ const copy = {
     low30: "30 күндегі ең төмен баға",
     my: "🧾 Менің тауарларым",
     checkNote: "Kaspi-дегі баға тез өзгереді: сатып алар алдында тексеріңіз.",
+    checked: "Тексерілді",
     targetLead: "Баға сіз белгілеген деңгейге түсті.",
     waitNote: "Баға сіздің бағаңызға дейін түскен бойда жазамыз.",
     hitNote: "Баға сіздің бағаңыздан жоғары емес.",
@@ -67,6 +70,8 @@ export interface AlertEmail {
   seller: string | null; offerCount: number; productUrl: string; kaspiUrl: string; stopUrl: string;
   /** Card extras (16 Nov): the lowest daily price of the last 30 days, the product photo, «Мои товары». */
   low30?: number | null; imageUrl?: string | null; myUrl?: string;
+  /** When the alert's price was seen, and when it goes out (lateCheck: dated only on a later day). */
+  checkedAt?: Date | null; now?: Date;
 }
 
 /**
@@ -89,7 +94,9 @@ export function renderAlertEmail(p: AlertEmail) {
       ? { label: c.gap, value: `${f(p.price - p.target)} (−${Math.max(1, Math.round(((p.price - p.target) / p.price) * 100))}%)`, color: "#5d6168", bg: "#eef0f2" }
       : { label: c.below, value: f(p.target - p.price), color: "#5b47e0", bg: "#ecebfc" }
     : null;
+  const late = first ? null : lateCheck(p.checkedAt, p.now);
   const rows: [string, string][] = [
+    ...(late ? [[`🕒 ${c.checked}`, late] as [string, string]] : []),
     ...(p.target !== null ? [[`🎯 ${c.target}`, f(p.target)] as [string, string]] : []),
     ...(p.low30 && p.price !== null && p.low30 < p.price ? [[`📉 ${c.low30}`, f(p.low30)] as [string, string]] : []),
     ...(p.seller && !first ? [[`🏪 ${c.seller}`, escapeHtml(p.seller)] as [string, string]] : []),

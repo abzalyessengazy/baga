@@ -17,10 +17,15 @@ export interface TrackingAlertState {
   aboveSince: Date | null; // when the price first went above the re-arm line while triggered
 }
 
+/**
+ * 20 h above and 48 h between alerts (the owner, 20 Nov 2026, after the alerts audit): products are checked about once
+ * a day, a few minutes under 24 h apart, so 24 h above in practice took three checks (~48 h) and a 72 h gap could
+ * swallow a drop on day 3.
+ */
 export const ALERT_CONFIG = {
   rearmMargin: 0.03,
-  rearmAfterHours: 24,
-  minHoursBetweenAlerts: 72,
+  rearmAfterHours: 20,
+  minHoursBetweenAlerts: 48,
 } as const;
 
 export type AlertDecision =

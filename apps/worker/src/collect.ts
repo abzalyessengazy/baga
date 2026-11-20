@@ -728,8 +728,8 @@ async function storeMessage(q: { match_id: number | null; watcher_id: string; lo
 async function sendTelegramQueued() {
   const token = env.telegramBotToken();
   if (!token) return;
-  const queued = await sql<{ id: number; type: "first_price" | "target_reached" | "bought_ask" | "store_target"; match_id: number | null; price: number; target_price: number | null; chat_id: string; locale: "ru" | "kk"; title: string; external_id: string; current: number | null; offer_count: number; bought_code: string | null; image: string | null; low30: number | null; seller: string | null; watcher_id: string }[]>`
-    select n.id, n.type, n.match_id::int as match_id, n.price, t.target_price, w.id as watcher_id, w.telegram_chat_id::text as chat_id, w.locale, p.title, p.external_id,
+  const queued = await sql<{ id: number; type: "first_price" | "target_reached" | "bought_ask" | "store_target"; match_id: number | null; price: number; created_at: Date; target_price: number | null; chat_id: string; locale: "ru" | "kk"; title: string; external_id: string; current: number | null; offer_count: number; bought_code: string | null; image: string | null; low30: number | null; seller: string | null; watcher_id: string }[]>`
+    select n.id, n.type, n.match_id::int as match_id, n.price, n.created_at, t.target_price, w.id as watcher_id, w.telegram_chat_id::text as chat_id, w.locale, p.title, p.external_id,
            -- A tracking in another city (migration 0028) gets that city's price, the one stored with its message, and none of
            -- Almaty's extras (seller count, 30-day low, cheapest seller; audit 20 Nov 2026).
            case when coalesce(t.city, 'almaty') <> 'almaty' then n.price else s.current_min_price end as current,
@@ -758,6 +758,7 @@ async function sendTelegramQueued() {
       price: q.type === "first_price" ? q.current : q.price, target: q.target_price, offerCount: q.offer_count,
       productUrl: await enterUrl(q.watcher_id, q.locale, `/${q.locale}/p/${q.external_id}?utm_source=tg_alert`), kaspiUrl: `${site}/go/${q.external_id}?n=${q.id}`,
       myUrl: await enterUrl(q.watcher_id, q.locale, `/${q.locale}/my?utm_source=tg_alert`), low30: q.low30, seller: q.seller, imageUrl: q.image,
+      checkedAt: q.created_at, // queued right after the check that saw this price
     });
     try {
       await startSend(sql, q.id);
@@ -861,8 +862,8 @@ async function cleanUp() {
 async function sendEmailQueued() {
   const key = env.resendApiKey();
   if (!key) return;
-  const queued = await sql<{ id: number; key: string; type: "first_price" | "target_reached" | "bought_ask" | "store_target"; match_id: number | null; price: number; target_price: number | null; email: string; stop_code: string; locale: "ru" | "kk"; title: string; external_id: string; current: number | null; offer_count: number; bought_code: string | null; image: string | null; low30: number | null; seller: string | null; watcher_id: string }[]>`
-    select n.id, n.idempotency_key as key, n.type, n.match_id::int as match_id, n.price, t.target_price, w.id as watcher_id, w.email, w.email_stop_code as stop_code, w.locale, p.title, p.external_id,
+  const queued = await sql<{ id: number; key: string; type: "first_price" | "target_reached" | "bought_ask" | "store_target"; match_id: number | null; price: number; created_at: Date; target_price: number | null; email: string; stop_code: string; locale: "ru" | "kk"; title: string; external_id: string; current: number | null; offer_count: number; bought_code: string | null; image: string | null; low30: number | null; seller: string | null; watcher_id: string }[]>`
+    select n.id, n.idempotency_key as key, n.type, n.match_id::int as match_id, n.price, n.created_at, t.target_price, w.id as watcher_id, w.email, w.email_stop_code as stop_code, w.locale, p.title, p.external_id,
            -- A tracking in another city (migration 0028) gets that city's price, the one stored with its message, and none of
            -- Almaty's extras (seller count, 30-day low, cheapest seller; audit 20 Nov 2026).
            case when coalesce(t.city, 'almaty') <> 'almaty' then n.price else s.current_min_price end as current,
@@ -889,9 +890,6 @@ async function sendEmailQueued() {
       await new Promise((r) => setTimeout(r, 600));
       continue;
     }
-    const [top] = q.type === "target_reached" ? await sql<{ name: string }[]>`
-      select se.name from offers_current o join sellers se on se.id = o.seller_id
-      join products p on p.id = o.product_id where p.external_id = ${q.external_id} order by o.price limit 1` : [];
     const stopUrl = `${site}/${q.locale}/email?stop=${q.stop_code}`;
     const msg = q.type === "bought_ask" ? renderBoughtEmail({
       locale: q.locale, title: q.title, stopUrl,
@@ -899,9 +897,10 @@ async function sendEmailQueued() {
     }) : renderAlertEmail({
       type: q.type, locale: q.locale, title: q.title,
       price: q.type === "first_price" ? q.current : q.price, target: q.target_price,
-      seller: top?.name ?? null, offerCount: q.offer_count,
+      seller: q.type === "target_reached" ? q.seller : null, offerCount: q.offer_count, // the query leaves it out for another city
       productUrl: await enterUrl(q.watcher_id, q.locale, `/${q.locale}/p/${q.external_id}?utm_source=email_alert`), kaspiUrl: `${site}/go/${q.external_id}?n=${q.id}`,
       stopUrl, myUrl: await enterUrl(q.watcher_id, q.locale, `/${q.locale}/my?utm_source=email_alert`), low30: q.low30, imageUrl: q.image,
+      checkedAt: q.created_at,
     });
     try {
       await startSend(sql, q.id);

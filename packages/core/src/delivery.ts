@@ -10,6 +10,17 @@
  */
 export const DELIVERY = { retryMinutes: [5, 30, 120, 360], maxAttempts: 5, maxAgeHours: 48, staleClaimMinutes: 15 } as const;
 
+/**
+ * Quiet hours, Almaty (the owner, 20 Nov 2026, after the alerts audit): messages nobody is waiting for («Вы купили?»)
+ * wait from `from`:00 to `to`:00. Price alerts and the first price, the answer to a person's own request, go at once.
+ */
+export const QUIET_HOURS_ALMATY = { from: 22, to: 8 } as const;
+export const QUIET_TYPES = ["bought_ask"] as const;
+export function isQuietHour(now: Date, q = QUIET_HOURS_ALMATY): boolean {
+  const h = (now.getUTCHours() + 5) % 24; // Asia/Almaty is UTC+5 all year
+  return q.from > q.to ? h >= q.from || h < q.to : h >= q.from && h < q.to;
+}
+
 export type DeliveryOutcome = { status: "queued"; retryInMinutes: number } | { status: "failed" };
 
 /** What happens after a failed attempt; `attempts` counts the one that just failed. */

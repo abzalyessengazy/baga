@@ -1,4 +1,5 @@
 import { formatTenge, isPermanentHttpStatus } from "@baga/core";
+import { lateCheck } from "./lateCheck";
 
 /** Telegram alert texts (like email.ts, the worker's copy lives next to its sender). Sent as Telegram HTML. */
 type Locale = "ru" | "kk";
@@ -16,6 +17,7 @@ const copy = {
     waitNote: "Напишем, как только цена опустится до вашей.",
     hitNote: "Цена уже не выше вашей.",
     checkNote: "Цены на Kaspi меняются быстро: проверьте перед покупкой.",
+    checked: "Проверено",
     open: "📈 История цены в BAĞA",
     buy: "🛒 Открыть на Kaspi",
     my: "🧾 Мои товары",
@@ -40,6 +42,7 @@ const copy = {
     waitNote: "Баға сіздің бағаңызға дейін түскен бойда жазамыз.",
     hitNote: "Баға сіздің бағаңыздан жоғары емес.",
     checkNote: "Kaspi-дегі баға тез өзгереді: сатып алар алдында тексеріңіз.",
+    checked: "Тексерілді",
     open: "📈 BAĞA-дағы баға тарихы",
     buy: "🛒 Kaspi-де ашу",
     my: "🧾 Менің тауарларым",
@@ -70,6 +73,8 @@ export function renderTelegramAlert(p: {
   offerCount: number; productUrl: string; kaspiUrl: string;
   /** Optional extras for the card: the 30-day low, the cheapest seller now, «Мои товары», the product photo. */
   low30?: number | null; seller?: string | null; myUrl?: string; imageUrl?: string | null;
+  /** When the alert's price was seen, and when it goes out (lateCheck: dated only on a later day). */
+  checkedAt?: Date | null; now?: Date;
 }): { html: string; buttons: TelegramButton[]; photo: string | null } {
   const c = copy[p.locale];
   const f = (n: number) => formatTenge(n, p.locale);
@@ -78,6 +83,8 @@ export function renderTelegramAlert(p: {
     ? `<b>${f(p.price)}</b>${p.offerCount ? ` · ${c.sellers(p.offerCount)}` : ""}`
     : c.noOffers;
   const lines: string[] = [`💰 ${c.now}: ${now}`];
+  const late = p.type === "target_reached" ? lateCheck(p.checkedAt, p.now) : null;
+  if (late) lines.push(`🕒 ${c.checked}: ${late}`);
   if (p.target !== null) lines.push(`🎯 ${c.yours}: ${f(p.target)}`);
   if (p.price !== null && p.target !== null) {
     if (p.price > p.target) lines.push(`📏 ${c.gap(f(p.price - p.target), Math.max(1, Math.round(((p.price - p.target) / p.price) * 100)))}`);

@@ -81,8 +81,12 @@ export async function getPlatformStats(sql: postgres.Sql, dayCount = 14, listCou
     select (select count(*)::int from products where status = 'active') as products,
            (select count(distinct o.seller_id)::int from offers_current o join products p on p.id = o.product_id
             where p.status = 'active') as sellers,
-           (select count(*)::int from notifications where status = 'sent') as alerts,
-           (select count(distinct watcher_id)::int from trackings where watcher_id is not null) as watchers`;
+           -- Price alerts sent, each once however many channels carried it, the team's own left out (the owner, 20 Nov
+           -- 2026, after the alerts audit: it counted every Telegram, email and push row, «Вы купили?» and the team).
+           (select count(distinct regexp_replace(n.idempotency_key, ':(email|push)$', ''))::int from notifications n
+              join trackings t on t.id = n.tracking_id join watchers w on w.id = t.watcher_id
+              where n.status = 'sent' and n.type in ('target_reached', 'store_target') and not w.internal) as alerts,
+           (select count(distinct t.watcher_id)::int from trackings t join watchers w on w.id = t.watcher_id where not w.internal) as watchers`;
   const day = await dayMoves(sql);
   // The run of the latest observation, from its start to its latest check so far: the numbers move while a run
   // is still going, and a cancelled run counts too (collection_runs.checked is only written when a run ends).

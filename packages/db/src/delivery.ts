@@ -1,5 +1,5 @@
 import type postgres from "postgres";
-import { DELIVERY, afterFailedDelivery, type DeliveryOutcome } from "@baga/core";
+import { DELIVERY, QUIET_TYPES, afterFailedDelivery, isQuietHour, type DeliveryOutcome } from "@baga/core";
 
 /**
  * Notification delivery state (migration 0015; rules in packages/core/src/delivery.ts, DECISIONS.md 2026-11-05
@@ -22,6 +22,7 @@ export async function claimNotifications(sql: postgres.Sql, channel: DeliveryCha
       select n.id from notifications n join trackings t on t.id = n.tracking_id join watchers w on w.id = t.watcher_id
       where n.status = 'queued' and n.channel = ${channel} and n.next_attempt_at <= now() and ${reachable} and t.status <> 'removed'
         and n.created_at > now() - make_interval(hours => ${DELIVERY.maxAgeHours})
+        ${isQuietHour(new Date()) ? sql`and n.type <> all(${sql.array([...QUIET_TYPES])}::text[])` : sql``}
       order by n.created_at limit ${limit} for update of n skip locked)
     returning id`;
   return rows.map((r) => Number(r.id)).sort((a, b) => a - b);

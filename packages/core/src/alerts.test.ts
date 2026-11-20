@@ -31,11 +31,12 @@ describe("alert state machine", () => {
     // 1020 is within the 3% re-arm margin
     expect(run([[0, 990], [10, 1020], [40, 990], [100, 1020], [200, 995]]).sent).toEqual(["t1:1"]);
   });
-  it("re-arms after 24h clearly above, then alerts on a real re-dip after the 72h gap", () => {
-    const r = run([[0, 990], [10, 1100], [40, 1100], [50, 990], [80, 980]]);
-    // at 50h: re-armed (above since 10h, 30h >= 24h) but only 50h since last alert -> blocked by 72h gap
-    // at 80h: 80h since alert -> sends episode 2
-    expect(r.sent).toEqual(["t1:1", "t1:2"]);
+  it("re-arms after 20h clearly above, then alerts on a real re-dip after the 48h gap", () => {
+    // at 40h: re-armed (above since 10h); at 45h only 45h since the alert -> held by the 48h gap; at 50h: episode 2
+    expect(run([[0, 990], [10, 1100], [40, 1100], [45, 990], [50, 990]]).sent).toEqual(["t1:1", "t1:2"]);
+  });
+  it("catches a drop on day 3 with daily checks a few minutes under 24h apart (audit 20 Nov 2026)", () => {
+    expect(run([[0, 990], [23.97, 1200], [47.93, 1250], [71.9, 900]]).sent).toEqual(["t1:1", "t1:2"]);
   });
   it("brief spikes above do not re-arm", () => {
     expect(run([[0, 990], [10, 1100], [20, 990], [30, 1100], [100, 990]]).sent).toEqual(["t1:1"]);
