@@ -26,7 +26,7 @@ jobs:
         id: cfg
         run: |
           for v in DATABASE_URL R2_BUCKET R2_ENDPOINT AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY; do
-            if [ -z "${!v}" ]; then echo "::warning::Backup skipped: secret for $v is not set."; echo "skip=1" >> "$GITHUB_OUTPUT"; exit 0; fi
+            if [ -z "${!v}" ]; then echo "::error::Backup not made: secret for $v is not set."; exit 1; fi
           done
           # pg_dump needs a session connection; Supabase's session pooler is the same host on port 5432.
           session_url="${DATABASE_URL/:6543\//:5432/}"

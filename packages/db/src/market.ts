@@ -179,7 +179,9 @@ export async function getMarket(sql: postgres.Sql, now = new Date()): Promise<Ma
     with d as (
       select o.product_id, (o.observed_at at time zone 'Asia/Almaty')::date as day, min(o.min_price) as low
       from price_observations o join products p on p.id = o.product_id
-      where p.status = 'active' and o.min_price is not null group by 1, 2),
+      -- The last 90 days are enough for every product's latest two observed days (weekly at most; parked ones count once
+      -- opened again), and keep the query off all history (cost audit 20 Nov 2026).
+      where p.status = 'active' and o.min_price is not null and o.observed_at > now() - interval '90 days' group by 1, 2),
     r as (select product_id, low, row_number() over (partition by product_id order by day desc) as n from d),
     x as (select a.low as now, b.low as was from r a join r b on b.product_id = a.product_id and b.n = 2 where a.n = 1)
     select count(*)::int as compared,

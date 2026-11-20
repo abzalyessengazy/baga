@@ -70,6 +70,7 @@ async function main() {
     await sleep(150);
   }
   console.log(`[nudge] due ${due.length}, sent ${sent}, failed ${failed}, skipped ${skipped}${dry ? " (dry run: nothing sent)" : ""}`);
+  if (failed) process.exitCode = 1; // a red run makes GitHub tell the owner (cost audit 20 Nov 2026)
 }
 
 main().catch((e) => { console.error(e); process.exitCode = 1; }).finally(() => sql.end());

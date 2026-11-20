@@ -589,3 +589,12 @@ The fourth read-only audit (docs/AUDIT_BRIEFS.md brief 4: every number shown to 
 - **The verdict leaves listing errors out**: daily lows over 5× or under 0.2× today's price; fewer than 3 days left = «Мало данных». The chart still draws them (observed).
 - **Rule L («ЦЕНЫ KASPI»)** no longer counts listing errors as ↓/↑, like rules D and W.
 - Sums in tenge as float8, not int4 («Хотят сэкономить» would fail the home receipt past 2.1 bn ₸); alertStats counts a trigger once also with push; STATS.md documents listing errors, the `MAX_DROP_PCT` cut in «Хотят сэкономить», the new «Поймали снижение» and the report's «price changes».
+
+## 2026-11-20 — Cost and reliability audit: fixes
+The fifth read-only audit (docs/AUDIT_BRIEFS.md brief 5) found 3 medium and 5 low issues; all real. Fixed:
+- **The store run has its own 170-minute limit** (`RUN_DEADLINE`), so the page refresh, the «ваша цена есть на …» queue and the workflow's message step always run; the job timeout is 240 minutes (was 200, which a full run with Sulpak back could pass).
+- **Real failures turn a run red**, so GitHub emails the owner (the daily report is off since 18 Nov): a store that answered 403/429, MarketParser down in a manual run, failed 3-day notes or Black Friday reminders, and backup secrets missing (the backup used to skip with a warning and stay green). A store run stopped by its failure share, not a block, stays green.
+- **Indexes** on `notifications(tracking_id)`, `events(sid, at)` and `events(external_id, name)` (migration 0043).
+- **Home queries read recent data only**: the last run (3 days), the 14-day series (21 days read), Rule L (90 days; STATS.md says so).
+- `vercel.json`'s `ignoreCommand` also watches `tsconfig.base.json`.
+Not done: **pages for unknown product numbers are still cached for a day** (one cache write per made-up number). Rendering that branch per request (`connection()`) made Next.js answer 500 on a local production build (DYNAMIC_SERVER_USAGE in an ISR page), so it was reverted; it needs another design (e.g. sending unknown numbers to /wait before the cached page), after Black Friday. Also later: the backup drill (restore the R2 copy, compare within one snapshot), `/drops` and the sitemap refreshed less often, retries that wait for the next job.

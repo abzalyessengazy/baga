@@ -93,6 +93,8 @@ export async function getPlatformStats(sql: postgres.Sql, dayCount = 14, listCou
   const [last] = await sql<{ started_at: Date; finished_at: Date }[]>`
     select r.started_at, max(o.observed_at) as finished_at
     from price_observations o join collection_runs r on r.id = o.run_id
+    -- The latest run is within the last days; no scan of all history (cost audit 20 Nov 2026).
+    where o.observed_at > now() - interval '3 days'
     group by r.id order by max(o.observed_at) desc limit 1`;
   const [shift] = day.day ? await sql<{ started_at: Date | null; finished_at: Date | null }[]>`
     select min(r.started_at) as started_at, max(o.observed_at) as finished_at
@@ -101,10 +103,11 @@ export async function getPlatformStats(sql: postgres.Sql, dayCount = 14, listCou
   const days = await sql<{ day: string; checks: number; drops: number }[]>`
     with r as (
       select ((observed_at at time zone 'Asia/Almaty')::date) as day, count(*)::int as checks
-      from price_observations group by 1),
+      from price_observations where observed_at > now() - make_interval(days => ${dayCount + 1}) group by 1),
+    -- A week more of history than shown, so the first day shown still has each product's check before it.
     o as (
       select observed_at, min_price, lag(min_price) over (partition by product_id order by observed_at) as prev
-      from price_observations),
+      from price_observations where observed_at > now() - make_interval(days => ${dayCount + 8})),
     d as (
       select ((observed_at at time zone 'Asia/Almaty')::date) as day, count(*)::int as drops
       from o where min_price < prev group by 1)

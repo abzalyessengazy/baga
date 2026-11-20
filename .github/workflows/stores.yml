@@ -17,7 +17,7 @@ permissions:
 jobs:
   stores:
     runs-on: ubuntu-latest
-    timeout-minutes: 200
+    timeout-minutes: 240 # the worker stops sending at 170 min (RUN_DEADLINE), then refreshes and queues messages
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

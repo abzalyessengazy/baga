@@ -87,6 +87,11 @@ async function main() {
     // «Ваша цена есть на Halyk Market / Technodom» (migration 0040): queued here, sent by the next step (`pnpm worker --send`).
     const queued = await queueStoreTargets(sql).catch((e) => { console.error(`store targets: ${e}`); return 0; });
     console.log(JSON.stringify({ storeTargetMessages: queued }));
+    // A store that refused us (403/429) turns the run red, so GitHub tells the owner (cost audit 20 Nov 2026); the
+    // workflow's next steps still run (`!cancelled()`).
+    const blocked = await sql<{ code: string }[]>`select mk.code from store_runs r join marketplaces mk on mk.id = r.marketplace_id
+      where r.started_at >= ${started} and r.aborted_reason like 'blocked%'`.catch(() => []);
+    if (blocked.length) { console.log(`::error::blocked by ${blocked.map((b) => b.code).join(", ")} (403/429)`); process.exitCode = 2; }
   }
 }
 
@@ -105,6 +110,10 @@ async function blockedThisWindow(code: string): Promise<boolean> {
 }
 
 /** Waits while a manual Kaspi check runs (rule 6a: never in parallel with a Kaspi request), then the store's own checks. */
+// The run's own limit (cost audit 20 Nov 2026): no new request after this, so `finally` (page refresh, «ваша цена есть
+// на …» queue) and the workflow's next steps always run before the job's timeout.
+const RUN_DEADLINE = Date.now() + 170 * 60_000;
+
 async function gate(breaker: CircuitBreaker) {
   for (let waited = 0; await manualRunOpen(); waited += 10_000) {
     if (waited > 25 * 60_000) throw new StoreRequestRefused("a manual Kaspi check kept running");
@@ -112,6 +121,7 @@ async function gate(breaker: CircuitBreaker) {
   }
   if (breaker.openReason) throw new StoreRequestRefused(breaker.openReason);
   if (!inWindow()) throw new StoreRequestRefused("outside the store window");
+  if (Date.now() > RUN_DEADLINE) throw new StoreRequestRefused("the run's 170 minutes are over");
 }
 
 async function runTechnodom() {

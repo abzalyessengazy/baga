@@ -189,7 +189,7 @@ async function runManual() {
   await refreshSite(true);
   const left = await mp.remainingUnits().catch(() => null);
   console.log(JSON.stringify({ manual: true, source: "marketparser", runId, done, waiting, failed, aborted, marketParserChecksLeft: left }));
-  if (aborted) console.log(`::warning::manual checks via MarketParser stopped: ${aborted}`);
+  if (aborted) { console.log(`::error::manual checks via MarketParser stopped: ${aborted}`); process.exitCode = 1; }
 }
 
 async function main() {

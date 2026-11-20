@@ -35,6 +35,7 @@ async function main() {
     await new Promise((r) => setTimeout(r, 100));
   }
   console.log(`[remind] due ${due.length}, sent ${sent}, failed ${failed}`);
+  if (failed) process.exitCode = 1;
 }
 
 main().catch((e) => { console.error(e); process.exitCode = 1; }).finally(() => sql.end());
