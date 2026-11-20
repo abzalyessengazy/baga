@@ -63,6 +63,8 @@ export function MarketReceipt() {
                   <div><dt><StatIcon name="people" />{t("valPeople")}</dt><dd><CountUp value={m!.people} format={count} duration={1.2} /></dd></div>
                   <div><dt><StatIcon name="eye" />{t("valWatched")}</dt><dd><CountUp value={m!.watched?.products ?? 0} format={count} duration={1.2} /></dd></div>
                   <div><dt><StatIcon name="down" />{t("valWant")}</dt><dd className="is-want">{millions(m!.watched?.want ?? 0, t("mln"))}</dd></div>
+                  {/* What alerts already caught (the owner, 20 Nov): drops to people's own price, never shrinks when a tracking ends. */}
+                  <div><dt><StatIcon name="check" />{t("valCaught")}</dt><dd className="is-caught">{millions(m!.caught?.amount ?? 0, t("mln"))}</dd></div>
                 </dl>
                 <p className="mk-catalog">{t("catalogLine", { products: m!.catalog.products, sellers: m!.catalog.sellers })}</p>
                 {/* The other stores we compare with (the owner, 15 Nov): their name chips, never their logos (CLAUDE.md design). */}

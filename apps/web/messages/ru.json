@@ -727,6 +727,7 @@
     "valPeople": "Людей с BAĞA",
     "valWatched": "Товаров под наблюдением",
     "valWant": "Хотят сэкономить",
+    "valCaught": "Поймали снижение",
     "mln": "млн ₸",
     "catalogLine": "{products, plural, one {# товар} few {# товара} many {# товаров} other {# товара}} · {sellers, plural, one {# продавец} few {# продавца} many {# продавцов} other {# продавца}}",
     "compareWith": "Сверяем цены с"

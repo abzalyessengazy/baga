@@ -414,11 +414,12 @@ a { color: inherit; }
 .market-brand { font-size: 1.125rem; font-weight: 800; letter-spacing: 0.3em; }
 .market-day { color: var(--ink-soft); font-size: 0.75rem; letter-spacing: 0.06em; text-transform: uppercase; }
 /* Analytics speak in the UI type, larger and with air; the receipt frame and labels stay mono. */
-.mk-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 4px 0 0; }
+.mk-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 12px; margin: 4px 0 0; }
 .mk-stats dt { color: var(--ink-soft); font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
 .mk-stats dd { margin: 6px 0 0; font-family: var(--font-ui); font-size: clamp(1.5rem, 7vw, 2.25rem); white-space: nowrap; font-weight: 800; letter-spacing: -0.03em; line-height: 1; font-variant-numeric: tabular-nums; }
 .mk-stats .is-down dd { color: var(--stamp); }
 .mk-stats dd.is-want { color: var(--stamp); }
+.mk-stats dd.is-caught { color: var(--drop); }
 .mk-stores { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 10px 0 0; font-family: var(--font-receipt); font-size: 0.75rem; letter-spacing: 0.02em; color: var(--ink-soft); }
 .mk-unit { font-size: 0.45em; font-weight: 700; letter-spacing: 0; }
 .mk-catalog { margin: 12px 0 0; font-family: var(--font-receipt); font-size: 0.75rem; letter-spacing: 0.02em; color: var(--ink-soft); }

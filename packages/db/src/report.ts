@@ -2,6 +2,7 @@ import type postgres from "postgres";
 import { personReliable } from "@baga/core";
 import { alertStats, type AlertStats } from "./alertStats";
 import { SIMILAR_REASONS } from "./stores";
+import { caughtSavings } from "./savings";
 
 /**
  * The daily owner report (DECISIONS.md, 2026-11-11 "Daily owner report"): numbers read from the database only,
@@ -193,24 +194,7 @@ export async function ownerReport(sql: postgres.Sql): Promise<OwnerReport> {
       (select count(*) from trackings where bought is not null and not exists (select 1 from watchers tw where tw.id = trackings.watcher_id and tw.internal))::int as "boughtAnswered"
     from notifications`;
 
-  // Start price: the lowest price we had observed when the tracking began (else the first one after it);
-  // alert price: the lowest price a target alert reported. Only positive differences count.
-  const [savings] = await sql<OwnerReport["savings"][]>`
-    with hit as (
-      select n.tracking_id, min(n.price) as alert_price from notifications n
-      where n.type = 'target_reached' and n.status = 'sent' group by n.tracking_id
-    ), d as (
-      select t.bought, coalesce(
-        (select o.min_price from price_observations o where o.product_id = t.product_id and o.observed_at <= t.created_at
-           and o.min_price is not null order by o.observed_at desc limit 1),
-        (select o.min_price from price_observations o where o.product_id = t.product_id and o.observed_at > t.created_at
-           and o.min_price is not null order by o.observed_at limit 1)) - h.alert_price as drop
-      from hit h join trackings t on t.id = h.tracking_id where not exists (select 1 from watchers tw where tw.id = t.watcher_id and tw.internal)
-    )
-    select coalesce(sum(drop) filter (where bought = 'yes'), 0)::int as confirmed,
-      count(*) filter (where bought = 'yes' and drop > 0)::int as "confirmedCount",
-      coalesce(sum(drop), 0)::int as "dropsCaught", count(*)::int as "dropsCaughtCount"
-    from d where drop > 0`;
+  const savings = await caughtSavings(sql);
 
   return {
     day, funnel, funnelWeek, utmVisits: utm?.n ?? 0, sources,

@@ -59,7 +59,7 @@ products one run checks, so a slower pace does not shrink it. The receipt says �
 ## Home receipt top row (`getMarket` `people`, `watched`; owner, 15 Nov 2026)
 «Людей с BAĞA»: distinct browsers ever (events.vid, since 11 Nov 2026; the team's removed). «Товаров под наблюдением»:
 products with an active tracking, the team's left out. «Хотят сэкономить»: each active tracking's current price above
-its target, summed (the leaderboard's sum): what people want to save, not money saved. The catalog (products,
+its target, summed (the leaderboard's sum): what people want to save, not money saved. «Поймали снижение» (20 Nov 2026, the owner): for every tracking whose target alert went out, the price when it began minus the price the alert reported, summed (`caughtSavings`, the owner report's «Drops caught»); a tracking removed or bought later still counts, so it never shrinks. A drop we told people about, not a confirmed purchase. The catalog (products,
 sellers) is one small line under them.
 
 ## Rule W: now against the previous 7 days (`weekMovers`, `packages/db/src/movers.ts`)

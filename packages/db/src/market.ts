@@ -1,6 +1,7 @@
 import type postgres from "postgres";
 import { computeVerdict, liveShiftDay, MAX_DROP_PCT, MOVE_MIN_PCT, pickOrder, priceNote, sellerLabel, KASPI_VISIT_WINDOW_UTC, SELLER_RULES, type PriceNote, type SellerLabel } from "@baga/core";
 import { getDailyLows } from "./queries";
+import { caughtSavings } from "./savings";
 import { dayMoves, stillMoving, weekMovers, type Mover } from "./movers";
 
 /** One product where sellers ask very different prices right now (offers of its latest check). */
@@ -50,6 +51,8 @@ export interface Market {
    * own sum). What people want to save, not money saved.
    */
   watched: { products: number; want: number };
+  /** «Поймали снижение» (the owner, 20 Nov 2026): price drops our target alerts caught, summed (caughtSavings), and on how many products. */
+  caught: { amount: number; products: number };
   /** Products seen in stock on the latest shift and on MARKET_CONFIG.lowsMinDays or more days, whose latest daily low is below every earlier one. */
   newLows: number;
   spread: { products: number; over10: number; over25: number; medianPct: number | null; top: MarketSpread[] };
@@ -189,6 +192,7 @@ export async function getMarket(sql: postgres.Sql, now = new Date()): Promise<Ma
     from trackings t left join product_state s on s.product_id = t.product_id
     where t.status = 'active' and t.watcher_id is not null
       and not exists (select 1 from watchers w where w.id = t.watcher_id and w.internal)`;
+  const caught = await caughtSavings(sql);
   const deals = await weekMovers(sql, "down", c.deals);
   const picks = await picksOfDay(sql, moves, deals);
   const pick = picks[0] ?? null;
@@ -200,6 +204,7 @@ export async function getMarket(sql: postgres.Sql, now = new Date()): Promise<Ma
     latest: latest ?? { compared: 0, down: 0, up: 0 },
     people: people?.n ?? 0,
     watched: watched ?? { products: 0, want: 0 },
+    caught: { amount: caught.dropsCaught, products: caught.dropsCaughtProducts },
     newLows: lows?.n ?? 0,
     spread: { products: spread?.products ?? 0, over10: spread?.over10 ?? 0, over25: spread?.over25 ?? 0, medianPct: spread?.median ?? null, top },
     categories, deals, pick, picks, shops,
