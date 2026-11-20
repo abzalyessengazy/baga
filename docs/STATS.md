@@ -42,6 +42,10 @@ change as today's drop; such a change cannot be dated, so it appears only in the
 - **Checked**: active products with a check on the shift day (in stock or not).
 - **Compared**: of those, products with a daily low on the shift and on the day before.
 - **Cheaper / dearer**: compared products whose change is a Change down / up. **Same** = compared − cheaper − dearer.
+- **Listing errors** (`plausibleMove`, `PLAUSIBLE_RATIO` = (100 − `MAX_DROP_PCT`) / 100 = 0.2): a move to under 20% or over
+  5× of the day before is one seller's absurd listing (1 450 000 ₸ boots, 17 Nov 2026), not a price move: it is neither
+  cheaper nor dearer, here and in rules L and W, and the verdict leaves such days out (it then says «Мало данных» if
+  fewer than 3 days remain); the chart still draws them, as observed.
 - **Live day** (`liveDayMoves`): each product checked today and in stock now, at its **current** lowest price (what its
   page shows) against its daily low of yesterday (its chart's last point), so a product listed as cheaper can never show
   a higher price on its page. Checked so far 845, compared 786 at 12:47 on 12 Nov; 24 of 24 listed rows matched their pages.
@@ -52,14 +56,15 @@ of them cheaper) and the Z-report "День" lists (biggest percent first).
 ## Rule L: every product's latest move (`getMarket` `latest`, `packages/db/src/market.ts`)
 The home receipt «ЦЕНЫ KASPI» (owner, 15 Nov 2026): for every active product priced so far, its latest observed day's
 low against the observed day before it, whenever those were (daily products: yesterday; products checked every few
-days or only when opened: their previous check). ↓/↑ when it moved by `MOVE_MIN_PCT`. It does not depend on how many
+days or only when opened: their previous check). ↓/↑ when it moved by `MOVE_MIN_PCT` and is not a listing error. It does not depend on how many
 products one run checks, so a slower pace does not shrink it. The receipt says «По последней проверке». The «BAĞA в
 цифрах» lists and /explore keep Rules D and W.
 
 ## Home receipt top row (`getMarket` `people`, `watched`; owner, 15 Nov 2026)
 «Людей с BAĞA»: distinct browsers ever (events.vid, since 11 Nov 2026; the team's removed). «Товаров под наблюдением»:
 products with an active tracking, the team's left out. «Хотят сэкономить»: each active tracking's current price above
-its target, summed (the leaderboard's sum): what people want to save, not money saved. «Поймали снижение» (20 Nov 2026, the owner): for every tracking whose target alert went out, the price when it began minus the price the alert reported, summed (`caughtSavings`, the owner report's «Drops caught»); a tracking removed or bought later still counts, so it never shrinks. A drop we told people about, not a confirmed purchase. The catalog (products,
+its target, summed (the leaderboard's sum): what people want to save, not money saved; a target more than `MAX_DROP_PCT`
+below today's price is left out (the 6 ₸ target). «Поймали снижение» (20 Nov 2026, the owner): for every tracking whose target alert went out, the price when it began (a city tracking: that city's) minus the lowest price an alert reported, summed, plausible drops only (the alert at least `PLAUSIBLE_RATIO` of the start price) (view `caught_live`, `caughtSavings`, the owner report's «Drops caught»). It never shrinks: each caught drop is kept in the `caught_drops` ledger (migration 0042), so a tracking removed or bought, or a person deleting their data, still counts. A drop we told people about, not a confirmed purchase. The catalog (products,
 sellers) is one small line under them.
 
 ## Rule W: now against the previous 7 days (`weekMovers`, `packages/db/src/movers.ts`)
@@ -79,7 +84,11 @@ Used by: `/drops`, `/explore` drops and rises, the Z-report "Неделя" lists
 first drop) and the Telegram channel (which posts only drops of 5% or more, its own bar for a post worth sending).
 
 Day lists ("День"): a product whose later check has undone its move is not listed (`stillMoving`); the day's counts
-keep every move.
+keep every move except listing errors.
+
+Owner report «price changes» (`collector.changed`, `packages/db/src/report.ts`): products whose lowest price today
+differs from their previous observation by any amount: what the collector saw change, not a Rule D move (no daily
+lows, no 1% bar).
 
 ## Find of the day (`packages/core/src/pick.ts`)
 

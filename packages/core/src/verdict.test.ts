@@ -25,6 +25,12 @@ describe("computeVerdict", () => {
     expect(computeVerdict(series([160_000, 160_000, 165_000, 200_000]), 200_000).kind).toBe("high");
   });
 
+  it("leaves a seller's listing error out (the 1 450 000 ₸ boots, audit 20 Nov 2026)", () => {
+    const v = computeVerdict(series([1_450_000, 1_450_000, 85_000]), 85_000);
+    expect(v).toMatchObject({ kind: "insufficient", observedDays: 1, min: 85_000 });
+    expect(computeVerdict(series([1_450_000, 85_000, 86_000, 85_000]), 85_000).max).toBe(86_000);
+  });
+
   it("calls a price stable when every day stays within 2%", () => {
     expect(computeVerdict(series([69_890, 69_990, 70_500, 69_890, 70_000]), 70_100).kind).toBe("stable");
     expect(computeVerdict(series([69_890, 69_990, 75_000]), 70_100).kind).not.toBe("stable");

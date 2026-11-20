@@ -72,17 +72,10 @@ async function boardRows(sql: postgres.Sql): Promise<(BoardRow & { id: string })
       select watcher_id, count(*)::int as tracked, coalesce(sum(now), 0)::int as total,
              coalesce(sum(case when target * 100 >= now * (100 - ${MAX_DROP_PCT}) then greatest(now - target, 0) else 0 end), 0)::int as potential
       from t group by 1),
-    hit as (
-      select n.tracking_id, min(n.price) as alert from notifications n
-      where n.type = 'target_reached' and n.status = 'sent' group by 1),
+    -- «Сэкономил(а)»: the caught drops (view caught_live, migration 0042: plausible, city-aware) the person bought at.
     saved as (
-      select t.watcher_id, sum(greatest(st.start - h.alert, 0))::int as saved
-      from hit h join trackings t on t.id = h.tracking_id and t.bought = 'yes' and t.watcher_id is not null
-      cross join lateral (select coalesce(
-        (select o.min_price from price_observations o where o.product_id = t.product_id and o.observed_at <= t.created_at
-           and o.min_price is not null order by o.observed_at desc limit 1),
-        (select o.min_price from price_observations o where o.product_id = t.product_id and o.observed_at > t.created_at
-           and o.min_price is not null order by o.observed_at limit 1)) as start) st
+      select t.watcher_id, sum(c.start_price - c.alert_price)::int as saved
+      from caught_live c join trackings t on t.id = c.tracking_id where c.bought = 'yes'
       group by 1)
     select w.id, substr(md5(w.id::text), 1, 6) as tag, w.nickname, w.avatar, a.tracked, a.total, a.potential,
            coalesce(sv.saved, 0)::int as saved,

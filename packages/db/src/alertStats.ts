@@ -29,7 +29,7 @@ export async function alertStats(sql: postgres.Sql, window?: { from: Date; to: D
     select
       count(distinct t.product_id) filter (where n.type = 'target_reached' and n.status = 'sent')::int as products,
       count(distinct t.watcher_id) filter (where n.type = 'target_reached' and n.status = 'sent')::int as people,
-      count(distinct regexp_replace(n.idempotency_key, ':email$', '')) filter (where n.type = 'target_reached' and n.status = 'sent')::int as triggers,
+      count(distinct regexp_replace(n.idempotency_key, ':(email|push)$', '')) filter (where n.type = 'target_reached' and n.status = 'sent')::int as triggers,
       count(*) filter (where n.type = 'target_reached' and n.status = 'sent')::int as "targetMessages",
       json_build_object(
         'sent', count(*) filter (where n.status = 'sent'),

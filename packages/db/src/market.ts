@@ -2,7 +2,7 @@ import type postgres from "postgres";
 import { computeVerdict, liveShiftDay, MAX_DROP_PCT, MOVE_MIN_PCT, pickOrder, priceNote, sellerLabel, KASPI_VISIT_WINDOW_UTC, SELLER_RULES, type PriceNote, type SellerLabel } from "@baga/core";
 import { getDailyLows } from "./queries";
 import { caughtSavings } from "./savings";
-import { dayMoves, stillMoving, weekMovers, type Mover } from "./movers";
+import { dayMoves, PLAUSIBLE_RATIO, stillMoving, weekMovers, type Mover } from "./movers";
 
 /** One product where sellers ask very different prices right now (offers of its latest check). */
 export interface MarketSpread { externalId: string; title: string; titleKk: string | null; imageUrl: string | null; lo: number; hi: number; sellers: number }
@@ -183,12 +183,13 @@ export async function getMarket(sql: postgres.Sql, now = new Date()): Promise<Ma
     r as (select product_id, low, row_number() over (partition by product_id order by day desc) as n from d),
     x as (select a.low as now, b.low as was from r a join r b on b.product_id = a.product_id and b.n = 2 where a.n = 1)
     select count(*)::int as compared,
-      count(*) filter (where abs(now - was) * 100 >= ${MOVE_MIN_PCT} * was and now < was)::int as down,
-      count(*) filter (where abs(now - was) * 100 >= ${MOVE_MIN_PCT} * was and now > was)::int as up
+      -- A listing error is not a move (plausibleMove, as rules D and W; numbers audit 20 Nov 2026).
+      count(*) filter (where abs(now - was) * 100 >= ${MOVE_MIN_PCT} * was and now < was and now >= was * ${PLAUSIBLE_RATIO}::numeric)::int as down,
+      count(*) filter (where abs(now - was) * 100 >= ${MOVE_MIN_PCT} * was and now > was and now <= was / ${PLAUSIBLE_RATIO}::numeric)::int as up
     from x`;
   const [people] = await sql<{ n: number }[]>`select count(distinct vid)::int as n from events where vid is not null`;
   const [watched] = await sql<{ products: number; want: number }[]>`
-    select count(distinct t.product_id)::int as products, coalesce(sum(case when t.target_price * 100 >= s.current_min_price * (100 - ${MAX_DROP_PCT}) then greatest(s.current_min_price - t.target_price, 0) else 0 end), 0)::int as want
+    select count(distinct t.product_id)::int as products, coalesce(sum(case when t.target_price * 100 >= s.current_min_price * (100 - ${MAX_DROP_PCT}) then greatest(s.current_min_price - t.target_price, 0) else 0 end), 0)::float8 as want -- float8: int4 overflows past 2.1 bn ₸
     from trackings t left join product_state s on s.product_id = t.product_id
     where t.status = 'active' and t.watcher_id is not null
       and not exists (select 1 from watchers w where w.id = t.watcher_id and w.internal)`;

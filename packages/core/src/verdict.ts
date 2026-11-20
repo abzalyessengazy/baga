@@ -58,6 +58,12 @@ export const VERDICT_CONFIG = {
   lowMaxAboveMinPct: 10,
   /** The window's lowest this far below today is said on the page («Было дешевле»). */
   wasCheaperPct: 10,
+  /**
+   * Days whose low is more than 1/plausibleRatio times today's price, or under plausibleRatio of it, are a seller's
+   * listing error, not a price (the numbers audit, 20 Nov 2026: 1 450 000 ₸ boots for two days made the usual 85 000 ₸
+   * «Хорошая цена»). The same line as the day and week moves (plausibleMove, MAX_DROP_PCT 80). The chart still shows them.
+   */
+  plausibleRatio: 0.2,
 } as const;
 
 export function percentile(sorted: number[], p: number): number {
@@ -75,7 +81,8 @@ export function percentile(sorted: number[], p: number): number {
  * It never predicts future prices.
  */
 export function computeVerdict(history: DailyLow[], current: Tenge, cfg = VERDICT_CONFIG): Verdict {
-  const days = [...history].sort((a, b) => a.day.localeCompare(b.day));
+  const days = [...history].sort((a, b) => a.day.localeCompare(b.day))
+    .filter((d) => d.price >= current * cfg.plausibleRatio && d.price * cfg.plausibleRatio <= current);
   const window = days.slice(-cfg.windowDays);
   const base: Verdict = {
     kind: "insufficient",

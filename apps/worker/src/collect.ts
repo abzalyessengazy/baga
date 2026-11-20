@@ -9,7 +9,7 @@ import { queuedManualChecks, finishManualCheck, MANUAL_CHECKS, cityChecksDue, sa
 import { createMarketParser, snapshotOf, MarketParserError } from "./marketparser";
 import { refreshPages, checkedSince } from "./siteRefresh";
 import { renderStoreTargetTelegram, renderStoreTargetEmail, renderStoreTargetPush, type StoreTargetMessage } from "./storeTarget";
-import { pushSubscriptionsOf, pushWorked, dropPushSubscription, storeTargetInfo } from "@baga/db";
+import { pushSubscriptionsOf, pushWorked, dropPushSubscription, storeTargetInfo, recordCaughtDrops } from "@baga/db";
 import { accessCodeFor, dropUnusedKeys, saveSnapshot, claimNotifications, startSend, markSent, markFailed, tidyDeliveries, connectionOptions, requestProduct, attachShortLinkTrackings, weekMovers } from "@baga/db";
 import {
   evaluateAlert, priorityFor, newProductTurn, isStablePrice, isCalmPrice, isSteadyPrice, intervalFor, laterVariants, CALM, STABLE, STEADY, INTERVAL_MINUTES, PRIORITY_ORDER, USER_INTEREST, CATALOG, SEED_MIN_PRICE, backoffMinutes, isSuspiciousJump, type TrackingAlertState,
@@ -802,6 +802,8 @@ async function sendQueued(full = true) {
   await sendTelegramQueued();
   await sendEmailQueued();
   await sendPushQueued();
+  // «Поймали снижение» never shrinks: what the alerts caught goes into the ledger (migration 0042).
+  if (full) await recordCaughtDrops(sql).catch((e) => console.error(`caught drops: ${e}`));
 }
 async function sendAfterCheck() {
   if (Date.now() - lastFullSend >= FULL_SEND_EVERY_MS) await sendQueued(true);
