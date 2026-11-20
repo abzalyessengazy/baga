@@ -418,9 +418,9 @@ a { color: inherit; }
 .mk-stats dt { color: var(--ink-soft); font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
 .mk-stats dd { margin: 6px 0 0; font-family: var(--font-ui); font-size: clamp(1.5rem, 7vw, 2.25rem); white-space: nowrap; font-weight: 800; letter-spacing: -0.03em; line-height: 1; font-variant-numeric: tabular-nums; }
 .mk-stats .is-down dd { color: var(--stamp); }
-.mk-stats dd.is-want { color: var(--stamp); }
 .mk-stats dd.is-caught { color: var(--drop); }
-.mk-stores { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 10px 0 0; font-family: var(--font-receipt); font-size: 0.75rem; letter-spacing: 0.02em; color: var(--ink-soft); }
+.mk-stores { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 12px 0 0; font-family: var(--font-receipt); font-size: 0.75rem; letter-spacing: 0.02em; color: var(--ink-soft); }
+.mk-stores .store-chip[class] { font-size: 0.75rem; padding: 2px 8px; }
 .mk-unit { font-size: 0.45em; font-weight: 700; letter-spacing: 0; }
 .mk-catalog { margin: 12px 0 0; font-family: var(--font-receipt); font-size: 0.75rem; letter-spacing: 0.02em; color: var(--ink-soft); }
 .mk-stats .is-up dd { color: var(--stamp-red); }

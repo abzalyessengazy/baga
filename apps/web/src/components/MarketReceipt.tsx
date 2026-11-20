@@ -1,5 +1,5 @@
 "use client";
-import { formatCount } from "@baga/core";
+import { formatCount, SULPAK_PAUSED_UNTIL } from "@baga/core";
 import { CountChip } from "@/components/SellerChips";
 import { motion, useInView, useReducedMotion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
@@ -13,6 +13,8 @@ import { PickSlider } from "./PickSlider";
 import { CountUp } from "./Motion";
 
 const count = (n: number) => formatCount(n);
+/** Sulpak is listed only while we check it (paused after its 403/429, the owner, 20 Nov). */
+const sulpakOn = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Almaty" }).format(new Date()) >= SULPAK_PAUSED_UNTIL;
 /** «2,3 млн ₸» (one decimal, comma) with the unit set small so it fits its column; under a million the full sum. */
 const millions = (n: number, mln: string) => n >= 1_000_000
   ? <>{(Math.floor(n / 100_000) / 10).toFixed(1).replace(".", ",").replace(",0", "")}<small className="mk-unit"> {mln}</small></>
@@ -62,13 +64,13 @@ export function MarketReceipt() {
                 <dl className="mk-stats">
                   <div><dt><StatIcon name="people" />{t("valPeople")}</dt><dd><CountUp value={m!.people} format={count} duration={1.2} /></dd></div>
                   <div><dt><StatIcon name="eye" />{t("valWatched")}</dt><dd><CountUp value={m!.watched?.products ?? 0} format={count} duration={1.2} /></dd></div>
-                  <div><dt><StatIcon name="down" />{t("valWant")}</dt><dd className="is-want">{millions(m!.watched?.want ?? 0, t("mln"))}</dd></div>
+                  <div><dt><StatIcon name="down" />{t("valWant")}</dt><dd>{millions(m!.watched?.want ?? 0, t("mln"))}</dd></div>
                   {/* What alerts already caught (the owner, 20 Nov): drops to people's own price, never shrinks when a tracking ends. */}
                   <div><dt><StatIcon name="check" />{t("valCaught")}</dt><dd className="is-caught">{millions(m!.caught?.amount ?? 0, t("mln"))}</dd></div>
                 </dl>
                 <p className="mk-catalog">{t("catalogLine", { products: m!.catalog.products, sellers: m!.catalog.sellers })}</p>
                 {/* The other stores we compare with (the owner, 15 Nov): their name chips, never their logos (CLAUDE.md design). */}
-                <p className="mk-stores">{t("compareWith")} <span className="store-chip is-halyk">Halyk Market</span> <span className="store-chip is-technodom">Technodom</span> <span className="store-chip is-sulpak">Sulpak</span></p>
+                <p className="mk-stores">{t("compareWith")} <span className="store-chip is-halyk">Halyk Market</span> <span className="store-chip is-technodom">Technodom</span>{sulpakOn() && <> <span className="store-chip is-sulpak">Sulpak</span></>}</p>
                 {/* Every product's latest check against the one before it (Rule L, docs/STATS.md; the owner, 15 Nov): not
                     one day's checks, so the arrows do not shrink on a day the collector checks fewer products. */}
                 {m!.latest?.compared ? (

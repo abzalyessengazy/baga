@@ -12,7 +12,7 @@
  * By hand: `pnpm --filter @baga/worker stores --now` (any time outside Kaspi's Visit-time).
  */
 import postgres from "postgres";
-import { KASPI_VISIT_WINDOW_UTC, isInStoreWindow, bestCandidate, looseCandidates, mismatch, storeIndex, storeTokens, kaspiColour } from "@baga/core";
+import { SULPAK_PAUSED_UNTIL, KASPI_VISIT_WINDOW_UTC, isInStoreWindow, bestCandidate, looseCandidates, mismatch, storeIndex, storeTokens, kaspiColour } from "@baga/core";
 import {
   connectionOptions, isSimilarReason, storeMarketplaceId, productsToMatch, productsSoldOnKaspiBy, productIdByExternal, exactTitleForSku, saveMatch, matchesToPrice, saveStorePrice,
   setMatchStatus, startStoreRun, finishStoreRun, phonesToMatch, productsToMatchIn, rememberStoreItems, saveStoreCategories, storeCategories, ourLeafCategories, saveListingPage, storeItems, STORE_INDEX, queueStoreTargets,
@@ -48,7 +48,7 @@ export const STORE_RUN = {
    * Sulpak request until this Almaty day (the owner's go, DECISIONS 2026-11-18 "Sulpak paused"). Then one run, whose
    * breaker stops at the first refusal again. Its last prices stay on the site with their check date.
    */
-  sulpakPausedUntil: "2026-11-25",
+  sulpakPausedUntil: SULPAK_PAUSED_UNTIL,
 } as const;
 
 const minute = (d = new Date()) => d.getUTCHours() * 60 + d.getUTCMinutes() + d.getUTCSeconds() / 60;

@@ -127,3 +127,9 @@ export function isInStoreWindow(now: Date, marginMs = 0): boolean {
   const inside = (x: number) => x >= STORE_WINDOW_UTC.startMinute || x < STORE_WINDOW_UTC.endMinute;
   return inside(m(now)) && inside(m(new Date(now.getTime() + marginMs)));
 }
+
+/**
+ * Sulpak's checks are paused until this Almaty day (403/429 on 18 Nov 2026; DECISIONS.md 2026-11-18): the store run
+ * skips it and the home page does not list it among the stores we compare with.
+ */
+export const SULPAK_PAUSED_UNTIL = "2026-11-25";
