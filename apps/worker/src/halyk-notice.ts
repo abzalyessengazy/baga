@@ -69,6 +69,8 @@ async function main() {
 
   const site = env.siteUrl(), token = env.telegramBotToken(), key = env.resendApiKey();
   const log = process.env.HALYK_NOTICE_LOG;
+  // The log is the only memory of the Telegram messages already sent: no Telegram send without it (audit 20 Nov 2026).
+  if (send && only !== "email" && !log) throw new Error("set HALYK_NOTICE_LOG (a file) before sending by Telegram: nothing sent");
   const sent = new Set(log && existsSync(log) ? readFileSync(log, "utf8").split("\n").filter(Boolean) : []);
   for (const r of list) {
     const c = copy[r.locale];

@@ -5,7 +5,7 @@ import { almatyDay, DIGEST } from "@baga/core";
 import { env } from "./env";
 import { sendViaResend } from "./email";
 import { renderEmailDigest, renderTelegramDigest } from "./nudge-render";
-import { sendTelegram, sendTelegramPhotos } from "./telegram";
+import { chatGone, sendTelegram, sendTelegramPhotos } from "./telegram";
 
 /**
  * The 3-day note to people who track something (DECISIONS.md, 2026-11-13 "Profiles, leaderboard and the 3-day note";
@@ -64,6 +64,8 @@ async function main() {
     } catch (e) {
       failed++;
       console.error(`[nudge] ${channel} failed: ${e}`);
+      // A chat that blocked the bot is unlinked: the next note goes by email, if confirmed (audit 20 Nov 2026).
+      if (channel === "telegram" && chatGone(e)) await sql`update watchers set telegram_chat_id = null where telegram_chat_id = ${d.chatId!}`.catch(() => undefined);
     }
     await sleep(150);
   }

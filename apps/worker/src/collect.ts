@@ -20,7 +20,7 @@ import { randomBytes } from "node:crypto";
 import { env } from "./env";
 import { CircuitBreaker } from "./breaker";
 import { renderAlertEmail, renderBoughtEmail, sendViaResend } from "./email";
-import { renderTelegramAlert, renderTelegramBoughtAsk, sendTelegram, sendTelegramCard, DeliveryError, type TelegramButton } from "./telegram";
+import { renderTelegramAlert, renderTelegramBoughtAsk, sendTelegram, sendTelegramCard, DeliveryError, chatGone, type TelegramButton } from "./telegram";
 import { renderChannelPost } from "./channel";
 import { renderPushAlert, sendPush } from "./push";
 
@@ -632,6 +632,10 @@ async function afterSave(productId: number, externalId: string, price: number | 
           and (w.telegram_chat_id is not null or w.email_confirmed_at is not null or exists (select 1 from push_subscriptions ps where ps.watcher_id = w.id))
         returning t.id, w.telegram_chat_id is not null as tg, w.email_confirmed_at is not null as mail, exists (select 1 from push_subscriptions ps where ps.watcher_id = w.id) as push`;
       for (const w of waiting) await queueNotification(tx, w, "first_price", price, `${w.id}:first`);
+      // Its target already met: the first-price card says so («✅ Цена уже не выше вашей»), so no second alert for the
+      // same check a minute later (audit 20 Nov 2026). The tracking counts as alerted; it re-arms as usual.
+      if (waiting.length) await tx`update trackings set alert_state = 'triggered', last_triggered_at = now(), above_since = null
+        where id = any(${tx.array(waiting.map((w) => w.id))}::uuid[]) and alert_state = 'armed' and target_price is not null and target_price >= ${price}`;
     });
   }
   if (price !== null) await evaluateTrackings(productId, externalId, price, seller, city);
@@ -726,10 +730,13 @@ async function sendTelegramQueued() {
   if (!token) return;
   const queued = await sql<{ id: number; type: "first_price" | "target_reached" | "bought_ask" | "store_target"; match_id: number | null; price: number; target_price: number | null; chat_id: string; locale: "ru" | "kk"; title: string; external_id: string; current: number | null; offer_count: number; bought_code: string | null; image: string | null; low30: number | null; seller: string | null; watcher_id: string }[]>`
     select n.id, n.type, n.match_id::int as match_id, n.price, t.target_price, w.id as watcher_id, w.telegram_chat_id::text as chat_id, w.locale, p.title, p.external_id,
-           s.current_min_price as current, coalesce(s.offer_count, 0) as offer_count, t.bought_code,
-           p.image_url as image, (select min(o.min_price)::int from price_observations o where o.product_id = p.id and o.min_price is not null
-             and o.observed_at > now() - interval '30 days') as low30,
-           (select se.name from offers_current oc join sellers se on se.id = oc.seller_id where oc.product_id = p.id order by oc.price limit 1) as seller
+           -- A tracking in another city (migration 0028) gets that city's price, the one stored with its message, and none of
+           -- Almaty's extras (seller count, 30-day low, cheapest seller; audit 20 Nov 2026).
+           case when coalesce(t.city, 'almaty') <> 'almaty' then n.price else s.current_min_price end as current,
+           case when coalesce(t.city, 'almaty') <> 'almaty' then 0 else coalesce(s.offer_count, 0) end as offer_count, t.bought_code,
+           p.image_url as image, case when coalesce(t.city, 'almaty') <> 'almaty' then null else (select min(o.min_price)::int from price_observations o where o.product_id = p.id and o.min_price is not null
+             and o.observed_at > now() - interval '30 days') end as low30,
+           case when coalesce(t.city, 'almaty') <> 'almaty' then null else (select se.name from offers_current oc join sellers se on se.id = oc.seller_id where oc.product_id = p.id order by oc.price limit 1) end as seller
     from notifications n
     join trackings t on t.id = n.tracking_id
     join watchers w on w.id = t.watcher_id
@@ -743,7 +750,7 @@ async function sendTelegramQueued() {
         const m = await storeMessage(q, `/${q.locale}/p/${q.external_id}?utm_source=tg_store`);
         await startSend(sql, q.id);
         await markSent(sql, q.id, String(await sendTelegram(token, q.chat_id, renderStoreTargetTelegram(m))));
-      } catch (e) { await deliveryFailed(q.id, e); }
+      } catch (e) { await telegramFailed(q.id, q.chat_id, e); }
       continue;
     }
     const msg = q.type === "bought_ask" ? renderTelegramBoughtAsk({ locale: q.locale, title: q.title, code: q.bought_code ?? "" }) : renderTelegramAlert({
@@ -758,9 +765,15 @@ async function sendTelegramQueued() {
       const messageId = "photo" in msg ? await sendTelegramCard(token, q.chat_id, msg as { html: string; buttons: TelegramButton[]; photo: string | null }) : await sendTelegram(token, q.chat_id, msg);
       await markSent(sql, q.id, String(messageId));
     } catch (e) {
-      await deliveryFailed(q.id, e);
+      await telegramFailed(q.id, q.chat_id, e);
     }
   }
+}
+
+/** A failed Telegram send; a chat that blocked the bot is unlinked (chatGone). */
+async function telegramFailed(id: number, chatId: string, e: unknown) {
+  await deliveryFailed(id, e);
+  if (chatGone(e)) await sql`update watchers set telegram_chat_id = null where telegram_chat_id = ${chatId}`.catch((x) => console.error(`unlink ${x}`));
 }
 
 /** A failed send, recorded with its retry (markFailed in packages/db/src/delivery.ts). */
@@ -850,10 +863,13 @@ async function sendEmailQueued() {
   if (!key) return;
   const queued = await sql<{ id: number; key: string; type: "first_price" | "target_reached" | "bought_ask" | "store_target"; match_id: number | null; price: number; target_price: number | null; email: string; stop_code: string; locale: "ru" | "kk"; title: string; external_id: string; current: number | null; offer_count: number; bought_code: string | null; image: string | null; low30: number | null; seller: string | null; watcher_id: string }[]>`
     select n.id, n.idempotency_key as key, n.type, n.match_id::int as match_id, n.price, t.target_price, w.id as watcher_id, w.email, w.email_stop_code as stop_code, w.locale, p.title, p.external_id,
-           s.current_min_price as current, coalesce(s.offer_count, 0) as offer_count, t.bought_code,
-           p.image_url as image, (select min(o.min_price)::int from price_observations o where o.product_id = p.id and o.min_price is not null
-             and o.observed_at > now() - interval '30 days') as low30,
-           (select se.name from offers_current oc join sellers se on se.id = oc.seller_id where oc.product_id = p.id order by oc.price limit 1) as seller
+           -- A tracking in another city (migration 0028) gets that city's price, the one stored with its message, and none of
+           -- Almaty's extras (seller count, 30-day low, cheapest seller; audit 20 Nov 2026).
+           case when coalesce(t.city, 'almaty') <> 'almaty' then n.price else s.current_min_price end as current,
+           case when coalesce(t.city, 'almaty') <> 'almaty' then 0 else coalesce(s.offer_count, 0) end as offer_count, t.bought_code,
+           p.image_url as image, case when coalesce(t.city, 'almaty') <> 'almaty' then null else (select min(o.min_price)::int from price_observations o where o.product_id = p.id and o.min_price is not null
+             and o.observed_at > now() - interval '30 days') end as low30,
+           case when coalesce(t.city, 'almaty') <> 'almaty' then null else (select se.name from offers_current oc join sellers se on se.id = oc.seller_id where oc.product_id = p.id order by oc.price limit 1) end as seller
     from notifications n
     join trackings t on t.id = n.tracking_id
     join watchers w on w.id = t.watcher_id
@@ -906,7 +922,7 @@ async function sendPushQueued() {
   const key = env.vapidPrivateKey();
   if (!key) return;
   const queued = await sql<{ id: number; type: "first_price" | "target_reached" | "bought_ask" | "store_target"; match_id: number | null; price: number; target_price: number | null; watcher_id: string; locale: "ru" | "kk"; title: string; external_id: string; current: number | null }[]>`
-    select n.id, n.type, n.match_id::int as match_id, n.price, t.target_price, w.id as watcher_id, w.locale, p.title, p.external_id, s.current_min_price as current
+    select n.id, n.type, n.match_id::int as match_id, n.price, t.target_price, w.id as watcher_id, w.locale, p.title, p.external_id, case when coalesce(t.city, 'almaty') <> 'almaty' then n.price else s.current_min_price end as current
     from notifications n
     join trackings t on t.id = n.tracking_id
     join watchers w on w.id = t.watcher_id

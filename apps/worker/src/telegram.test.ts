@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { renderTelegramAlert, renderTelegramBoughtAsk } from "./telegram";
+import { describe, expect, it, vi } from "vitest";
+import { renderTelegramAlert, renderTelegramBoughtAsk, sendTelegram, sendTelegramCard } from "./telegram";
 
 const base = { title: "Apple iPhone 18 Pro <256Gb>", target: 600_000, offerCount: 12, productUrl: "https://bagaapp.com/ru/p/1", kaspiUrl: "https://bagaapp.com/go/1?n=5" };
 
@@ -57,5 +57,23 @@ describe("renderTelegramBoughtAsk", () => {
     const m = renderTelegramBoughtAsk({ locale: "kk", title: "X", code });
     expect(m.html).toContain("Сатып алдыңыз ба?");
     expect(m.buttons[0]!.text).toBe("Иә, сатып алдым");
+  });
+});
+
+describe("a send that timed out", () => {
+  const timeout = () => Object.assign(new Error("The operation was aborted due to timeout"), { name: "TimeoutError" });
+  it("is given up (it may have arrived), while no connection at all is retried", async () => {
+    vi.stubGlobal("fetch", async () => { throw timeout(); });
+    await expect(sendTelegram("t", "1", { html: "x", buttons: [] })).rejects.toMatchObject({ name: "DeliveryError", permanent: true });
+    vi.stubGlobal("fetch", async () => { throw new TypeError("fetch failed"); });
+    await expect(sendTelegram("t", "1", { html: "x", buttons: [] })).rejects.toThrow("fetch failed");
+    vi.unstubAllGlobals();
+  });
+  it("sends no text copy after a photo card that timed out", async () => {
+    let calls = 0;
+    vi.stubGlobal("fetch", async () => { calls++; throw timeout(); });
+    await expect(sendTelegramCard("t", "1", { html: "x", buttons: [], photo: "https://img" })).rejects.toMatchObject({ permanent: true });
+    expect(calls).toBe(1);
+    vi.unstubAllGlobals();
   });
 });

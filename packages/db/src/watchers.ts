@@ -168,6 +168,8 @@ export async function upsertWatcherTracking(sql: postgres.Sql, watcherId: string
       null, ${city})
     on conflict (watcher_id, external_id) where watcher_id is not null do update
       set target_price = excluded.target_price, target_drop_pct = excluded.target_drop_pct, status = 'active', alert_state = 'armed', above_since = null, removed_at = null,
+          -- A new target lifts the 72 h pause after the last alert (audit 20 Nov 2026: a lowered target met the next day was silent).
+          last_triggered_at = case when trackings.target_price is distinct from excluded.target_price then null else trackings.last_triggered_at end,
           city = excluded.city,
           -- A new target (or tracking again after "bought") may be asked "Вы купили?" again (migration 0011).
           bought = null, bought_at = null, bought_asked_at = null, bought_code = null

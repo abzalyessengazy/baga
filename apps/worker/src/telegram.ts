@@ -123,6 +123,12 @@ export class DeliveryError extends Error {
   }
 }
 
+/**
+ * Telegram says this chat can never be written to again (the person blocked the bot or deleted the account): the
+ * watcher's Telegram link is removed, so they no longer count as reachable and email takes over (audit 20 Nov 2026).
+ */
+export const chatGone = (e: unknown) => e instanceof DeliveryError && e.permanent && /blocked by the user|user is deactivated|chat not found/i.test(e.message);
+
 /** `previewUrl` shows that link's preview card under the message (the 3-day note); without it no preview is shown. */
 /**
  * Product photos ahead of a note: one photo, or an album of 2–10 (sendMediaGroup). Telegram's servers fetch the
@@ -144,6 +150,17 @@ export async function sendTelegramPhotos(token: string, chatId: string, urls: st
   if (!res.ok || !body.ok) throw new DeliveryError(`telegram photos ${res.status}: ${body.description ?? ""}`.slice(0, 300), isPermanentHttpStatus(res.status));
 }
 
+/**
+ * A request that timed out may still have been delivered (Telegram answered late): giving the message up is safer
+ * than sending it twice (audit 20 Nov 2026), as for a send a crash interrupted (tidyDeliveries). A failure before
+ * anything was sent (no connection) stays temporary and is retried.
+ */
+const timedOut = (e: unknown) => e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError");
+const sentMaybe = (what: string, e: unknown): never => {
+  if (timedOut(e)) throw new DeliveryError(`${what}: no answer in time, given up (it may have arrived)`, true);
+  throw e;
+};
+
 export async function sendTelegram(token: string, chatId: string, msg: { html: string; buttons: TelegramButton[]; previewUrl?: string | null }): Promise<number> {
   const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
     method: "POST",
@@ -154,7 +171,7 @@ export async function sendTelegram(token: string, chatId: string, msg: { html: s
       reply_markup: { inline_keyboard: msg.buttons.map((b) => [b]) },
     }),
     signal: AbortSignal.timeout(10_000),
-  });
+  }).catch((e) => sentMaybe("telegram", e));
   const body = (await res.json().catch(() => ({}))) as { ok?: boolean; result?: { message_id?: number }; description?: string };
   if (!res.ok || !body.ok) {
     throw new DeliveryError(`telegram ${res.status}: ${body.description ?? ""}`.slice(0, 300), isPermanentHttpStatus(res.status));
@@ -174,7 +191,7 @@ export async function sendTelegramCard(token: string, chatId: string, msg: { htm
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ chat_id: chatId, photo: msg.photo, caption: msg.html, parse_mode: "HTML", reply_markup: { inline_keyboard: msg.buttons.map((b) => [b]) } }),
       signal: AbortSignal.timeout(20_000),
-    }).catch(() => null);
+    }).catch((e) => (timedOut(e) ? sentMaybe("telegram photo", e) : null)); // a late card may have arrived: no text copy
     const body = (await res?.json().catch(() => ({}))) as { ok?: boolean; result?: { message_id?: number }; description?: string } | undefined;
     if (res?.ok && body?.ok) return body.result?.message_id ?? 0;
     // A chat that blocked the bot fails the same way as text would: say so instead of trying again.

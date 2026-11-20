@@ -181,13 +181,20 @@ export async function digestDue(sql: postgres.Sql, limit = 200, opts: { team?: b
     externalId: string; title: string; titleKk: string | null; imageUrl: string | null; now: number; was: number | null; target: number | null }[]>`
     select w.id as "watcherId", w.locale, w.telegram_chat_id::text as "chatId",
            case when w.email_confirmed_at is not null then w.email end as email, w.email_stop_code as "stopCode", w.nickname,
-           p.external_id as "externalId", p.title, p.title_kk as "titleKk", p.image_url as "imageUrl", s.current_min_price as now, t.target_price as target,
-           (select o.min_price from price_observations o where o.product_id = p.id and o.min_price is not null
-              and o.observed_at <= now() - make_interval(days => ${DIGEST.everyDays}) order by o.observed_at desc limit 1) as was
+           p.external_id as "externalId", p.title, p.title_kk as "titleKk", p.image_url as "imageUrl", pn.now, t.target_price as target, pn.was
     from watchers w join trackings t on t.watcher_id = w.id and t.status = 'active'
     join products p on p.id = t.product_id join product_state s on s.product_id = p.id
+    -- A tracking in another city (migration 0028) is told that city's prices (audit 20 Nov 2026).
+    cross join lateral (select
+      case when coalesce(t.city, 'almaty') = 'almaty' then s.current_min_price
+        else (select cp.min_price from city_prices cp where cp.product_id = p.id and cp.city = t.city order by cp.observed_at desc limit 1) end as now,
+      case when coalesce(t.city, 'almaty') = 'almaty' then
+          (select o.min_price from price_observations o where o.product_id = p.id and o.min_price is not null
+             and o.observed_at <= now() - make_interval(days => ${DIGEST.everyDays}) order by o.observed_at desc limit 1)
+        else (select cp.min_price from city_prices cp where cp.product_id = p.id and cp.city = t.city and cp.min_price is not null
+             and cp.observed_at <= now() - make_interval(days => ${DIGEST.everyDays}) order by cp.observed_at desc limit 1) end as was) pn
     where w.digest and (w.telegram_chat_id is not null or w.email_confirmed_at is not null)
-      and s.current_min_price is not null
+      and pn.now is not null
       and (${team} or coalesce(w.digest_sent_at, w.created_at) < now() - make_interval(hours => ${DIGEST.dueHours}))
       and (not ${team} or w.internal)
     order by w.created_at, t.created_at

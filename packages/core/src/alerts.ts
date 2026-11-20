@@ -61,7 +61,7 @@ export function evaluateAlert(
   return { action: "none", next: { ...s, aboveSince } };
 }
 
-/** When a user changes the target, the tracking re-arms immediately. */
+/** When a user changes the target, the tracking re-arms immediately, without the pause after the last alert. */
 export function changeTarget(s: TrackingAlertState, targetPrice: Tenge): TrackingAlertState {
-  return { ...s, targetPrice, state: "armed", aboveSince: null };
+  return { ...s, targetPrice, state: "armed", aboveSince: null, lastTriggeredAt: targetPrice === s.targetPrice ? s.lastTriggeredAt : null };
 }

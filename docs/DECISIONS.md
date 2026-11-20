@@ -567,3 +567,13 @@ The second read-only audit (docs/AUDIT_BRIEFS.md brief 2: hard rules 2, 3, 6, 6a
 - **Real drop / «дешевле» judged on the exact percentage**, shown rounded: −2.6% is the same price (blackFriday.ts, sales.ts).
 - «Ваша цена есть на …» says the check's date when it goes out on another day (not «сегодня»); MarketParser offers marked out of stock are left out; no manual batch is submitted later than 11 minutes before the 03:55 UTC blackout; the probe stops after a 403/429; CLAUDE.md 6a names Halyk Market's brand phone lists.
 Not done: a delayed target alert still has no check time in its text (a change to approved wording, and retries are rare); `discover` and `probe-scale --in-window` keep their looser guards (hand-run only).
+
+## 2026-11-20 — Alerts audit: fixes
+The third read-only audit (docs/AUDIT_BRIEFS.md brief 3: wrong, duplicate, late or missing messages) found 5 medium and 6 low issues; all checked against the code and real. Fixed:
+- **No second copy after a Telegram timeout.** A send that got no answer in time may have arrived, so it is given up (as after a crash mid-send), not retried; a photo card that timed out gets no text copy. A failure before anything was sent is still retried.
+- **A new target lifts the 72 h pause** after the last alert (`last_triggered_at` cleared when the target changes; `changeTarget` in core).
+- **City trackings are told their city's price** (migration 0028): the first-price message uses the price stored with it, without Almaty's seller count, 30-day low and cheapest seller; the 3-day note reads `city_prices`.
+- **One message, not two, when a new tracking's target is already met:** the first-price card says «✅ Цена уже не выше вашей», and the tracking is marked alerted instead of getting a target alert a minute later.
+- **A chat that blocked the bot is unlinked** (Telegram «blocked by the user», «user is deactivated», «chat not found»), so the person is no longer counted as reachable and the 3-day note can go by email.
+- `halyk-notice --send` refuses Telegram without `HALYK_NOTICE_LOG`.
+Waiting for the owner: the re-arm time (a second drop is missed unless the price stays above for ~48 h), quiet hours, the home page's alert and watcher counts (team and per-channel rows included), a check time in late alerts. Not done: push re-sent after a crash, and a second browser after the first accepted (low; `tag` replaces it).

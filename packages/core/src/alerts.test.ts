@@ -44,4 +44,11 @@ describe("alert state machine", () => {
     const { s } = run([[0, 990]]);
     expect(changeTarget(s, 900).state).toBe("armed");
   });
+  it("a new target is not held back by the pause after the last alert", () => {
+    const { s } = run([[0, 990]]);
+    const lowered = changeTarget(s, 900);
+    expect(lowered.lastTriggeredAt).toBeNull();
+    expect(evaluateAlert(lowered, 890, new Date(s.lastTriggeredAt!.getTime() + 24 * 3_600_000), true).action).toBe("send");
+    expect(changeTarget(s, s.targetPrice).lastTriggeredAt).toEqual(s.lastTriggeredAt);
+  });
 });
