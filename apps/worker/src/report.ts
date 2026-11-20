@@ -1,5 +1,4 @@
 import { execFileSync } from "node:child_process";
-import { appendFileSync } from "node:fs";
 import postgres from "postgres";
 import { connectionOptions, ownerReport, type OwnerReport } from "@baga/db";
 import { PERSON_METRICS_FROM, TARGETS } from "@baga/core";
@@ -62,8 +61,7 @@ try {
   const cto = await ctoNote(ctoInput(report, now, failures, log), process.env.ANTHROPIC_API_KEY?.trim());
   let html = renderOwnerReport(report, log, now, { failures, cto });
   if (!process.env.REPORT_DATABASE_URL) html += "\n\n<i>Read with the main database user: set REPORT_DATABASE_URL.</i>";
-  const summary = process.env.GITHUB_STEP_SUMMARY;
-  if (summary) appendFileSync(summary, `${html.replace(/<[^>]+>/g, "")}\n`);
+  // No job summary: this repo's GitHub runs are public (security audit, 20 Nov 2026). The report goes to Telegram only.
   const token = process.env.TELEGRAM_BOT_TOKEN?.trim();
   const chat = process.env.OWNER_TELEGRAM_CHAT_ID?.trim();
   if (dry || !token || !chat) {

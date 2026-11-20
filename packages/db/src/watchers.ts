@@ -178,7 +178,11 @@ export async function upsertWatcherTracking(sql: postgres.Sql, watcherId: string
     update collection_schedule cs set priority = 'tracked', interval_minutes = ${INTERVAL_MINUTES.tracked},
       next_check_at = least(cs.next_check_at, coalesce(s.last_checked_at, now()) + make_interval(mins => ${INTERVAL_MINUTES.tracked}))
     from product_state s
-    where cs.product_id = ${prod.id} and s.product_id = cs.product_id and cs.priority not in ('hot', 'tracked')`;
+    where cs.product_id = ${prod.id} and s.product_id = cs.product_id and cs.priority not in ('hot', 'tracked')
+      -- Only when this person can get an alert (security audit, 20 Nov 2026: tracking needs no bot check). Someone who
+      -- connects a channel later is in the collector's first lane from its next run (canAlert in apps/worker/src/collect.ts).
+      and exists (select 1 from watchers w where w.id = ${watcherId} and (w.internal or w.telegram_chat_id is not null
+        or w.email_confirmed_at is not null or exists (select 1 from push_subscriptions ps where ps.watcher_id = w.id)))`;
   return { ok: true, trackingId: t!.id };
 }
 

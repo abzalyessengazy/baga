@@ -24,3 +24,4 @@ export * from "./reminders";
 export * from "./push";
 export * from "./storeTargets";
 export * from "./savings";
+export * from "./webKaspiGate";

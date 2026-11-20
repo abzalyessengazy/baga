@@ -43,7 +43,8 @@ async function main() {
     const channel = teamTest ? byEmail ?? byTelegram : byTelegram ?? byEmail;
     if (dry) {
       console.log(`\n--- ${channel ?? "no channel configured"} · ${d.locale} · ${d.items.length} product(s) ---`);
-      console.log(d.chatId ? renderTelegramDigest(note).html : renderEmailDigest({ ...note, stopUrl: `${site}/${d.locale}/email?digest=…` }).text);
+      // GitHub logs of this public repo are public: there, only the line above (security audit, 20 Nov 2026).
+      if (!process.env.GITHUB_ACTIONS) console.log(d.chatId ? renderTelegramDigest(note).html : renderEmailDigest({ ...note, stopUrl: `${site}/${d.locale}/email?digest=…` }).text);
       continue;
     }
     if (!channel) { skipped++; continue; }

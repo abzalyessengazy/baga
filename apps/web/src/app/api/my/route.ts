@@ -3,10 +3,12 @@ import { deleteWatcher, getSql, getWatcherBySecret } from "@baga/db";
 import { allow } from "@/lib/rateLimit";
 import { clientIp } from "@/lib/turnstile";
 import { WATCHER_COOKIE, cookieOptions, currentWatcher, hashSecret, isValidSecret } from "@/lib/watcher";
+import { browserMayChange } from "@/lib/browserKey";
 
 /**
  * The private "Мои товары" link: /api/my?k=<secret>&l=ru. Remembers the secret in this browser, then opens the
- * list. Unknown secrets just open the (empty) list. Rate-limited so secrets cannot be guessed at speed.
+ * list. Unknown secrets just open the (empty) list. Rate-limited so secrets cannot be guessed at speed. A browser that
+ * holds someone's own list or channel keeps it (browserMayChange).
  */
 export async function GET(req: Request) {
   const url = new URL(req.url);
@@ -16,7 +18,8 @@ export async function GET(req: Request) {
   res.headers.set("Referrer-Policy", "no-referrer");
   if (!allow(`my:${clientIp(req)}`, 20, 60 * 60 * 1000) || !isValidSecret(k)) return res;
   const sql = getSql();
-  if (sql && (await getWatcherBySecret(sql, hashSecret(k)))) res.cookies.set(WATCHER_COOKIE, k, cookieOptions());
+  const target = sql ? await getWatcherBySecret(sql, hashSecret(k)) : null;
+  if (sql && target && (await browserMayChange(sql, target.id))) res.cookies.set(WATCHER_COOKIE, k, cookieOptions());
   return res;
 }
 

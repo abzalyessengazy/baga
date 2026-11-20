@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
-import { parseKaspiUrl, createKaspiClient, shortLinkCode, shortLinkUrl, variantLinkCode } from "@baga/kaspi";
+import { isManualCheckTime } from "@baga/core";
+import { claimWebKaspiRequest, getSql, recordWebKaspiBlock } from "@baga/db";
+import { parseKaspiUrl, createKaspiClient, KaspiHttpError, shortLinkCode, shortLinkUrl, variantLinkCode } from "@baga/kaspi";
 import { allow } from "@/lib/rateLimit";
 import { clientIp } from "@/lib/turnstile";
 import { verifyHuman, withPass } from "@/lib/humanPass";
@@ -32,10 +34,7 @@ export async function POST(req: Request) {
     const check = await verifyHuman(req, body.token, ip, "resolve");
     if (!check.ok) return withPass(NextResponse.json({ error: "check_failed" }, { status: 403 }), false);
     passed = check.fresh;
-    const target = await kaspi.resolveShortLink(shortLinkUrl(link.path)).catch((e) => {
-      console.error("[resolve] short link failed:", String(e));
-      return null;
-    });
+    const target = await resolveSpaced(link.path);
     if (target) {
       parsed = parseKaspiUrl(target);
       const variant = parsed.ok ? null : variantLinkCode(target);
@@ -56,6 +55,22 @@ export async function POST(req: Request) {
   }
   if (!parsed.ok) return out(NextResponse.json({ error: parsed.reason }, { status: 400 }));
   return out(NextResponse.json({ productId: parsed.productId, slug: parsed.slug }));
+}
+
+/**
+ * The one Kaspi request, kept to rule 6 (security audit, 20 Nov 2026): never during the collector's minutes, at least
+ * 10 s after the last one from any instance, and none for a day after a 403/429 (web_kaspi_gate, migration 0041).
+ * Null = not sent or failed: the link is queued for the collector instead.
+ */
+async function resolveSpaced(path: string): Promise<string | null> {
+  const sql = getSql();
+  if (!sql || !isManualCheckTime(new Date())) return null;
+  if (!(await claimWebKaspiRequest(sql).catch(() => false))) return null;
+  return kaspi.resolveShortLink(shortLinkUrl(path)).catch(async (e) => {
+    console.error("[resolve] short link failed:", String(e));
+    if (e instanceof KaspiHttpError && e.isBlocking) await recordWebKaspiBlock(sql, e.status).catch(() => undefined);
+    return null;
+  });
 }
 
 /** Waits for the collector: the visitor goes to /l/<code>, where they can already set a price. */

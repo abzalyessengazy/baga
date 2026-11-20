@@ -22,7 +22,6 @@ export async function GET(req: Request) {
   // An alert's product link opens the price that alert is about, not the cached page of up to an hour ago
   // (DECISIONS.md, 2026-11-16 "Cached product pages").
   const product = /^\/(ru|kk)\/p\/(\d{5,12})(?:[?#]|$)/.exec(to);
-  if (product) revalidatePath(`/${product[1]}/p/${product[2]}`);
   const res = NextResponse.redirect(new URL(to, url), 303);
   res.headers.set("Referrer-Policy", "no-referrer");
   res.headers.set("Cache-Control", "private, no-store");
@@ -32,6 +31,8 @@ export async function GET(req: Request) {
   try {
     const id = await watcherIdByAccessCode(sql, code);
     if (!id) return res;
+    // Only after a valid code and the rate limit (security audit, 20 Nov 2026: before, any ?to= forced a page rebuild).
+    if (product) revalidatePath(`/${product[1]}/p/${product[2]}`);
     await giveBrowserKey(sql, id, res);
   } catch (e) {
     console.error(`[enter] ${e}`);

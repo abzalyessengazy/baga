@@ -389,10 +389,18 @@ async function checkCities(runId: number, limit: number, onlyProduct?: number): 
  * its last check), 1 = opened by a person since its last check and not checked today, 2 = catalog enrichment by its tier.
  * A stale stored priority can never hold back a product someone wants.
  */
+/**
+ * A tracking whose person can get an alert: Telegram, a confirmed email or browser notifications, the team's own, or
+ * an old account tracking (no watcher). Only these make a product tracked/hot and checked daily (security audit,
+ * 20 Nov 2026: tracking needs no bot check, so trackings nobody can be alerted about must not spend Kaspi requests).
+ */
+const canAlert = () => sql`(t.watcher_id is null or exists (select 1 from watchers w where w.id = t.watcher_id and (w.internal
+  or w.telegram_chat_id is not null or w.email_confirmed_at is not null
+  or exists (select 1 from push_subscriptions ps where ps.watcher_id = w.id))))`;
 const lanes = () => sql`
   select cs.product_id, cs.priority, cs.next_check_at,
     case
-      when exists (select 1 from trackings t where t.product_id = cs.product_id and t.status = 'active') then 0
+      when exists (select 1 from trackings t where t.product_id = cs.product_id and t.status = 'active' and ${canAlert()}) then 0
       when p.last_viewed_at > now() - make_interval(days => ${USER_INTEREST.viewedWithinDays})
         and p.last_viewed_at > coalesce(s.last_checked_at, '-infinity')
         and (s.last_checked_at is null
@@ -526,7 +534,7 @@ async function loadVariants() {
 async function reschedule(productId: number, minPrice: number | null) {
   const [t] = await sql<{ n: number; dist: number | null }[]>`
     select count(*)::int as n, min((${minPrice}::int - target_price)::float / target_price * 100) as dist
-    from trackings where product_id = ${productId} and status = 'active'`;
+    from trackings t where t.product_id = ${productId} and t.status = 'active' and ${canAlert()}`;
   // seed_rank: active seed products ahead of this one: priced SEED_MIN_PRICE.premium or more before cheaper ones,
   // then more Kaspi reviews. A product whose reviews are not known yet ranks 0 (daily) until its page is
   // refreshed, and does not push known ones down.
