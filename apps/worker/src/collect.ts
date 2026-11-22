@@ -5,7 +5,7 @@
  * target alerts to Telegram right after each check, queued emails at the end. Started by .github/workflows/collect.yml at 03:50 UTC; waits for 04:01.
  */
 import { createKaspiClient, buildSnapshot, KaspiHttpError, KaspiParseError, KaspiRequestRefused, canonicalProductUrl, parseKaspiUrl, queuedLinkUrl, variantLinkCode } from "@baga/kaspi";
-import { queuedManualChecks, finishManualCheck, MANUAL_CHECKS, cityChecksDue, saveCityPrice } from "@baga/db";
+import { queuedManualChecks, finishManualCheck, nextManualRetry, retryManualCheck, MANUAL_CHECKS, cityChecksDue, saveCityPrice } from "@baga/db";
 import { createMarketParser, snapshotOf, MarketParserError } from "./marketparser";
 import { refreshPages, checkedSince } from "./siteRefresh";
 import { renderStoreTargetTelegram, renderStoreTargetEmail, renderStoreTargetPush, type StoreTargetMessage } from "./storeTarget";
@@ -116,8 +116,10 @@ async function runManual() {
 
   const [run] = await sql<{ id: number }[]>`insert into collection_runs (runner) values ('manual') returning id`;
   const runId = run!.id;
-  let done = 0, waiting = 0, failed = 0;
+  let done = 0, waiting = 0, failed = 0, retried = 0;
   let aborted: string | null = null;
+  /** MarketParser failed a check twice: it went to the collector (the run turns red). */
+  let gaveUp: string | null = null;
   let idleSince = Date.now();
   const deadline = Date.now() + 20 * 60_000;
   // A batch can take up to 10 minutes to come back: none is submitted later than 11 minutes before the blackout
@@ -125,6 +127,9 @@ async function runManual() {
   while (!aborted && Date.now() < deadline && isManualCheckTime(new Date(), 11 * 60_000)) {
     const rows = await queuedManualChecks(sql, MANUAL_CHECKS.perDay);
     if (!rows.length) {
+      // A retry due before this run ends: wait for it (22 Nov 2026), instead of leaving it to the next scheduled run.
+      const retry = await nextManualRetry(sql);
+      if (retry && retry.getTime() < deadline) { await sleep(Math.max(5_000, Math.min(retry.getTime() - Date.now() + 1_000, 60_000))); continue; }
       if (Date.now() - idleSince > 90_000) break; // stay a little for requests made while this run started
       await sleep(15_000);
       continue;
@@ -171,8 +176,13 @@ async function runManual() {
           const res = results.get(b.q.external_id);
           const got = res ? snapshotOf(res, b.q.external_id, known) : { skip: "no result" };
           if ("skip" in got) {
-            // The seed_queue row stays: the collector checks the product itself in its window.
-            await finishManualCheck(sql, b.id, "collector", `MarketParser: ${got.skip}`); waiting++; continue;
+            // MarketParser's own failure is tried once more 5 minutes later; anything else (another card, no offers) would
+            // only fail again. The seed_queue row stays: the collector checks the product itself in its window.
+            const transient = got.skip === "MarketParser error" || got.skip === "no result";
+            if (transient && (await retryManualCheck(sql, b.id, `MarketParser: ${got.skip}`)) === "retry") { retried++; continue; }
+            if (transient) gaveUp = `MarketParser: ${got.skip}`;
+            if (!transient) await finishManualCheck(sql, b.id, "collector", `MarketParser: ${got.skip}`);
+            waiting++; continue;
           }
           const { productId } = await saveSnapshot(sql, got.snap, b.q.slug ?? got.slug, runId, { pageFetched: false, source: "marketparser" });
           await sql`update products set last_viewed_at = now() where id = ${productId}`;
@@ -186,19 +196,24 @@ async function runManual() {
           await finishManualCheck(sql, b.id, "done"); done++;
         }
       } catch (e) {
-        aborted = `MarketParser: ${String(e).slice(0, 300)}`;
-        for (const b of batch) await finishManualCheck(sql, b.id, "collector", aborted);
-        waiting += batch.length;
+        // No answer in time, or the report failed: each check is tried once more 5 minutes later (22 Nov 2026: one
+        // timeout sent a visitor's product to the next morning), then goes to the collector.
+        const why = `MarketParser: ${String(e).slice(0, 300)}`;
+        for (const b of batch) {
+          if ((await retryManualCheck(sql, b.id, why)) === "retry") retried++;
+          else { gaveUp = why; waiting++; }
+        }
       }
     }
     idleSince = Date.now();
   }
+  aborted ??= gaveUp;
   await sql`update collection_runs set finished_at = now(), checked = ${done}, changed = 0,
     failed = ${failed}, aborted_reason = ${aborted}, requests = 0 where id = ${runId}`;
   await sendQueued();
   await refreshSite(true);
   const left = await mp.remainingUnits().catch(() => null);
-  console.log(JSON.stringify({ manual: true, source: "marketparser", runId, done, waiting, failed, aborted, marketParserChecksLeft: left }));
+  console.log(JSON.stringify({ manual: true, source: "marketparser", runId, done, waiting, failed, retried, aborted, marketParserChecksLeft: left }));
   if (aborted) { console.log(`::error::manual checks via MarketParser stopped: ${aborted}`); process.exitCode = 1; }
 }
 

@@ -13,7 +13,7 @@ import { claimNotifications, markFailed, markSent, startSend, tidyDeliveries } f
 import { requestWatcherEmail, EMAIL_REQUEST_LIMITS, deleteWatcherTracking, listWatched, getWatcherBySecret, accessCodeFor, watcherIdByAccessCode, addWatcherKey, signOutElsewhere, dropUnusedKeys } from "./watchers";
 import { saveSnapshot, queueShortLink } from "./queries";
 import { dayMoves } from "./movers";
-import { requestManualCheck, finishManualCheck, queuedManualChecks, MANUAL_CHECKS } from "./manual";
+import { requestManualCheck, finishManualCheck, queuedManualChecks, nextManualRetry, retryManualCheck, MANUAL_CHECKS } from "./manual";
 import { cityChecksDue, saveCityPrice, latestCityPrice, noteCityView, cityDailyLows } from "./cities";
 import { getShop, productSellers, saveShopFeedback } from "./shops";
 import { decideMatch, matchesToPrice, saveMatch, saveStorePrice, storeMarketplaceId, storeOffers, saveStoreCategories, storeCategories, saveListingPage, storeItems } from "./stores";
@@ -291,6 +291,19 @@ describe.skipIf(!url)("database (disposable Postgres)", () => {
       const [q] = await queuedManualChecks(sql);
       await finishManualCheck(sql, q!.id, "blocked", "blocked: 1 response(s) were 403/429");
       expect(await requestManualCheck(sql, { externalId: "300000002" }, who("c"))).toBe("paused");
+    });
+    it("tries a MarketParser failure once more 5 minutes later, then hands it to the collector (migration 0045)", async () => {
+      expect(await requestManualCheck(sql, { externalId: "300000009" }, who("g"))).toBe("queued");
+      const [q] = await queuedManualChecks(sql);
+      expect(await retryManualCheck(sql, q!.id, "MarketParser: TimeoutError")).toBe("retry");
+      expect(await queuedManualChecks(sql)).toHaveLength(0); // not before its retry time
+      expect((await nextManualRetry(sql))!.getTime()).toBeGreaterThan(Date.now() + 4 * 60_000);
+      expect(await requestManualCheck(sql, { externalId: "300000009" }, who("h"))).toBe("already");
+      await sql`update manual_checks set retry_at = now() - interval '1 second' where id = ${q!.id}`;
+      expect((await queuedManualChecks(sql))[0]?.id).toBe(q!.id);
+      expect(await retryManualCheck(sql, q!.id, "MarketParser: error")).toBe("collector");
+      const [row] = await sql<{ status: string }[]>`select status from manual_checks where id = ${q!.id}`;
+      expect(row!.status).toBe("collector");
     });
     it("takes a queued link too (migration 0022), within the same caps", async () => {
       await queueShortLink(sql, "23955438b", "/shop/p/-23955438b/");

@@ -16,6 +16,9 @@ export const MANUAL_CHECKS = {
    * 2 pm»; it was 7 days).
    */
   resumeAtAlmaty: "14:00",
+  /** A check MarketParser failed on is tried this many more times, this many minutes later (the owner, 22 Nov 2026). */
+  retries: 1,
+  retryMinutes: 5,
 } as const;
 
 const almatyToday = (sql: postgres.Sql) => sql`(now() at time zone 'Asia/Almaty')::date`;
@@ -67,8 +70,28 @@ export async function manualCheckState(sql: postgres.Sql, target: ManualTarget):
 /** For the worker: open requests, oldest first. */
 export async function queuedManualChecks(sql: postgres.Sql, limit = 10) {
   return sql<{ id: number; externalId: string | null; linkCode: string | null }[]>`
-    select id, external_id as "externalId", link_code as "linkCode" from manual_checks where status = 'queued'
+    select id, external_id as "externalId", link_code as "linkCode" from manual_checks
+    where status = 'queued' and (retry_at is null or retry_at <= now())
     order by requested_at limit ${limit}`;
+}
+
+/** The earliest retry still waiting (a queued check whose retry_at is ahead), or null. */
+export async function nextManualRetry(sql: postgres.Sql): Promise<Date | null> {
+  const [r] = await sql<{ at: Date | null }[]>`select min(retry_at) as at from manual_checks where status = 'queued' and retry_at > now()`;
+  return r?.at ?? null;
+}
+
+/**
+ * MarketParser failed on this check: queued again MANUAL_CHECKS.retryMinutes later while it has retries left ("retry"),
+ * else handed to the morning collector ("collector").
+ */
+export async function retryManualCheck(sql: postgres.Sql, id: number, error: string): Promise<"retry" | "collector"> {
+  const [r] = await sql`update manual_checks set attempts = attempts + 1, error = ${error.slice(0, 500)},
+      retry_at = now() + make_interval(mins => ${MANUAL_CHECKS.retryMinutes})
+    where id = ${id} and attempts < ${MANUAL_CHECKS.retries} returning id`;
+  if (r) return "retry";
+  await finishManualCheck(sql, id, "collector", error);
+  return "collector";
 }
 
 export async function finishManualCheck(sql: postgres.Sql, id: number, status: "done" | "failed" | "blocked" | "collector", error: string | null = null) {
