@@ -52,6 +52,6 @@ export async function storeTargetInfo(sql: postgres.Sql, matchId: number): Promi
     from store_matches m join marketplaces k on k.id = m.marketplace_id
     join lateral (select price, in_stock, observed_at from store_prices where match_id = m.id order by observed_at desc limit 1) sp on true
     left join product_state s on s.product_id = m.product_id
-    where m.id = ${matchId}`;
+    where m.id = ${matchId} and m.status = 'confirmed'`; // a pair rejected after the message was queued sends nothing (23 Nov 2026 audit)
   return r ?? null;
 }

@@ -131,8 +131,9 @@ export async function saveMatch(sql: postgres.Sql, m: {
 
 /** Confirmed matches due for a price, people's products first. */
 export async function matchesToPrice(sql: postgres.Sql, marketplaceId: number, limit: number) {
-  return sql<{ matchId: number; slug: string; sku: string; title: string | null; ourTitle: string; method: MatchMethod }[]>`
-    select m.id as "matchId", m.store_slug as slug, m.store_sku as sku, m.store_title as title, p.title as "ourTitle", m.method
+  return sql<{ matchId: number; slug: string; sku: string; title: string | null; ourTitle: string; method: MatchMethod; externalId: string }[]>`
+    select m.id as "matchId", m.store_slug as slug, m.store_sku as sku, m.store_title as title, p.title as "ourTitle", m.method,
+      p.external_id as "externalId"
     from store_matches m join products p on p.id = m.product_id
     left join lateral (select observed_at from store_prices sp where sp.match_id = m.id order by observed_at desc limit 1) last on true
     where m.marketplace_id = ${marketplaceId} and p.status = 'active'

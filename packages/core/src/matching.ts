@@ -29,7 +29,7 @@ const COLORS: [RegExp, string[]][] = [
   [/розов/, ["pink", "rozovyy", "rose"]],
   [/зелен|зелён/, ["green", "zelenyy", "zelenaya", "sage"]],
   [/мятн/, ["mint"]],
-  [/фиолет|лаванд/, ["purple", "violet", "lavender", "light-violet", "fioletovyy"]],
+  [/фиолет|лаванд|сиренев|лилов/, ["purple", "violet", "lavender", "light-violet", "fioletovyy"]],
   [/бордов/, ["burgundy", "bordo", "bordovyy", "dark-red", "cherry"]],
   [/красн/, ["red", "krasnyy"]],
   [/оранж/, ["orange", "oranzhevyy", "cosmic"]],
@@ -42,13 +42,15 @@ const STORE_COLOR_WORDS = new Set(
     // Apple's own names (15 Nov 2026): a name we cannot translate surely («Glacier») is still a colour, so it never
     // passes as "no colour stated"; it is left for the owner as «похожий» at most.
     .concat(["mint", "titanium", "natural", "desert", "teal", "burgundy", "magenta", "cream", "lavender", "cosmic", "ultramarine",
-      "glacier", "sage", "mist", "starlight", "ultramarine", "frost", "fog", "stone", "obsidian", "porcelain", "hazel", "jade"]),
+      "glacier", "sage", "mist", "starlight", "ultramarine", "frost", "fog", "stone", "obsidian", "porcelain", "hazel", "jade",
+      // Samsung's and JBL's names (23 Nov 2026 audit: an «Olive» A56 had passed as «фиолетовый»; «Squad» is a camouflage print).
+      "olive", "pistachio", "blueberry", "squad", "camo", "camouflage"]),
 );
 const VARIANTS = new Set(["pro", "max", "plus", "ultra", "mini", "lite", "fe", "air", "neo", "edge", "slim", "absolute", "mix",
   "x", "s", "e", "c", "se", "prime", "nfc", "play", "go", "2", "3", "4", "5", "ii", "iii",
   // 22 Nov 2026 (the owner): «Xiaomi Buds 6» (59 990 ₸) had been paired with «Redmi Buds 6 Active» (4 990 ₸) at Technodom
   // and «Redmi Buds 6» at Sulpak. A cheaper line or sub-brand the Kaspi title does not name is another product.
-  "active", "note", "turbo", "gt", "redmi", "poco", "iqoo", "nord"]);
+  "active", "note", "turbo", "gt", "redmi", "poco", "iqoo", "nord", "detect"]);
 
 const COLOURWAY = /никел|медь|медн|яшм|патин|топаз|керамик|бронз|фукси|прусск|nickel|copper|jasper|patina|topaz|ceramic|bronze/;
 
@@ -93,6 +95,14 @@ export function esimOnly(title: string): boolean {
   return /dual\s*e-?sim/.test(t) || (/\be-?sim\b/.test(t) && !/nano-?\s*sim|\bsim\s*\+|\+\s*e?sim|dual\s*sim/.test(t));
 }
 
+/** A Kaspi listing of two units: «HONOR x7 play белый + x7 play белый» (23 Nov 2026 audit). «+ подарок» is not. */
+export function twoOfTheSame(title: string): boolean {
+  const parts = title.split(/\s\+\s/);
+  if (parts.length < 2) return false;
+  const first = new Set(titleTokens(parts[0]!));
+  return parts.slice(1).some((x) => { const t = titleTokens(x); return t.length > 0 && t.every((w) => first.has(w)); });
+}
+
 /** Lower-case Latin/number tokens of a Kaspi title, without memory sizes, the SIM kind and the screen size in cm ("191 см"). */
 export function titleTokens(title: string): string[] {
   const cm = /\b(\d{2,3})\s*см\b/.exec(title)?.[1];
@@ -126,6 +136,10 @@ export function mismatch(kaspiTitle: string, store: string[], storeTitle?: strin
   const set = new Set(store);
   if (!tok.every((x) => set.has(x))) return "model differs";
   if (esimOnly(kaspiTitle) && !set.has("esim")) return "esim only";
+  // An iPhone «Dual Sim» (two physical SIMs, the version for China and Hong Kong) is not the one shops here sell
+  // (23 Nov 2026 audit); Halyk's matcher already refused it.
+  if (/iphone/i.test(kaspiTitle) && /dual\s*sim/i.test(kaspiTitle) && !(set.has("dual") && set.has("sim"))) return "SIM version differs";
+  if (twoOfTheSame(kaspiTitle)) return "two items";
   const ours = new Set(tok);
   const num = (x: string | undefined) => !!x && /^\d+(gb|tb)?$/.test(x);
   for (let i = 0; i < store.length; i++) {

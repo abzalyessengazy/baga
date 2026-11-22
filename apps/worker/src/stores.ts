@@ -21,7 +21,7 @@ import {
   createTechnodomClient, TECHNODOM, TechnodomHttpError, TechnodomParseError, StoreRequestRefused, skuOf, type TechnodomProduct,
   createSulpakClient, SULPAK, SulpakHttpError, SulpakParseError, sulpakCategoriesFor, type SulpakProduct,
   createHalykClient, HALYK, HalykHttpError, HalykParseError, halykListItems, halykPickers, halykPagePath, parseHalykProduct, phoneKey, samePhoneModel,
-  pickMemory, pickColour, partNumber, sameCode, halykBrandOf, type HalykListItem,
+  pickMemory, pickColour, partNumber, sameCode, halykBrandOf, halykMismatch, type HalykListItem,
 } from "@baga/stores";
 import { env } from "./env";
 import { CircuitBreaker } from "./breaker";
@@ -159,10 +159,21 @@ async function runTechnodom() {
       // The address now shows another item: out. A renamed one is judged again by the same rules (8 Nov owner rule):
       // only the colour differs → «похожий»; anything else (memory, variant, model) → another product.
       if (p.sku !== m.sku) { await setMatchStatus(sql, m.matchId, "rejected", `item changed to ${p.sku}`); continue; }
-      // A title pair ('strict') is judged again by today's rules on every pricing, as Sulpak's are (22 Nov 2026: pairs made
-      // before a rule was added, «Xiaomi Buds 6» = «Redmi Buds 6 Active», stayed); an exact or the owner's pair only on a rename.
-      if (m.method === "strict" || (m.title && norm(p.title) !== norm(m.title))) {
-        const why = mismatch(m.ourTitle, storeTokens(m.slug, p.title), p.title);
+      // An exact pair stands on Technodom's own link to our Kaspi card: checked on every pricing, never by title rules
+      // (23 Nov 2026 audit: 145 of 303 correct exact pairs fail them, so a rename would have rejected them).
+      if (m.method === "exact") {
+        if (p.kaspiId && p.kaspiId !== m.externalId) { await setMatchStatus(sql, m.matchId, "rejected", `links to Kaspi ${p.kaspiId}`); continue; }
+      } else if (m.method === "strict" || (m.title && norm(p.title) !== norm(m.title))) {
+        // A title pair ('strict') is judged again by today's rules on every pricing, as Sulpak's are (22 Nov 2026: pairs
+        // made before a rule was added, «Xiaomi Buds 6» = «Redmi Buds 6 Active», stayed); the owner's pair on a rename.
+        let why = mismatch(m.ourTitle, storeTokens(m.slug, p.title), p.title);
+        // The store links this item to another Kaspi card in another colour (23 Nov 2026 audit: a white Razer paired
+        // with the item Technodom ties to the black one).
+        if (!why && m.method === "strict") {
+          const linked = await exactTitleForSku(sql, mid, m.sku);
+          const a = kaspiColour(m.ourTitle), b = linked ? kaspiColour(linked) : null;
+          if (a !== null && b !== null && a !== b) why = "colour of the store's own Kaspi listing differs";
+        }
         if (why && !isSimilarReason(why)) { await setMatchStatus(sql, m.matchId, "rejected", why); continue; }
         if (why) await setMatchStatus(sql, m.matchId, "pending", why);
       }
@@ -381,6 +392,10 @@ async function runHalyk() {
       let p;
       try { p = parseHalykProduct(d); } catch { failed++; continue; }
       if (p.skuId !== m.sku) { await setMatchStatus(sql, m.matchId, "rejected", `item changed to ${p.skuId}`); continue; }
+      // Judged again by today's rules on every pricing, as the other stores' title pairs are (23 Nov 2026 audit).
+      const why = halykMismatch(m.ourTitle, p.title);
+      if (why && !isSimilarReason(why)) { await setMatchStatus(sql, m.matchId, "rejected", why); continue; }
+      if (why) await setMatchStatus(sql, m.matchId, "pending", why);
       await saveStorePrice(sql, m.matchId, { price: p.price, oldPrice: null, inStock: p.inStock, offers: p.offers });
       priced++;
     }
@@ -444,11 +459,12 @@ async function runHalyk() {
       let p;
       try { p = parseHalykProduct(d); } catch { failed++; continue; }
       // The page we ended on must still be our model, memory and colour.
-      const ok = samePhoneModel(k, p.title) && p.title.toLowerCase().replace(/\s+/g, "").includes(k.memory);
+      const why = !(samePhoneModel(k, p.title) && p.title.toLowerCase().replace(/\s+/g, "").includes(k.memory))
+        ? "variant page does not match" : halykMismatch(t.title, p.title);
       const saved = await saveMatch(sql, { productId: t.productId, marketplaceId: mid, sku: p.skuId, slug: slugOf(path), title: p.title,
-        method: "strict", status: ok ? "confirmed" : "rejected", reason: ok ? null : "variant page does not match" });
+        method: "strict", status: !why ? "confirmed" : isSimilarReason(why) ? "pending" : "rejected", reason: why });
       matched++;
-      if (saved.status === "confirmed") { await saveStorePrice(sql, saved.id, { price: p.price, oldPrice: null, inStock: p.inStock, offers: p.offers }); priced++; }
+      if (saved.status === "confirmed" || isSimilarReason(why)) { await saveStorePrice(sql, saved.id, { price: p.price, oldPrice: null, inStock: p.inStock, offers: p.offers }); priced++; }
     }
     // 3. Monitors, laptops, earbuds, tablets: by the manufacturer's part number (18 Nov). The brand's lists in that
     //    category and the index; a match only when Halyk's own page title carries the same part number.
@@ -480,11 +496,11 @@ async function runHalyk() {
       if (!d) continue;
       let p;
       try { p = parseHalykProduct(d); } catch { failed++; continue; }
-      const ok = sameCode(code, p.title);
+      const why = !sameCode(code, p.title) ? "part number differs on the page" : halykMismatch(t.title, p.title);
       const saved = await saveMatch(sql, { productId: t.productId, marketplaceId: mid, sku: p.skuId, slug: slugOf(path), title: p.title,
-        method: "strict", status: ok ? "confirmed" : "rejected", reason: ok ? null : "part number differs on the page" });
+        method: "strict", status: !why ? "confirmed" : isSimilarReason(why) ? "pending" : "rejected", reason: why });
       matched++;
-      if (saved.status === "confirmed") { await saveStorePrice(sql, saved.id, { price: p.price, oldPrice: null, inStock: p.inStock, offers: p.offers }); priced++; }
+      if (saved.status === "confirmed" || isSimilarReason(why)) { await saveStorePrice(sql, saved.id, { price: p.price, oldPrice: null, inStock: p.inStock, offers: p.offers }); priced++; }
     }
   } catch (e) {
     if (!(e instanceof StoreRequestRefused)) throw e;

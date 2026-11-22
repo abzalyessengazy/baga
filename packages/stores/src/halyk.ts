@@ -179,6 +179,9 @@ export function modelCodes(title: string): string[] {
     const c = w.toUpperCase().replace(/[./-]/g, "");
     if (c.length < 5 || !/[A-Z]/.test(c) || !/\d/.test(c) || /[А-ЯЁ]/i.test(w)) continue;
     if (/^\d+(GB|TB|MB|HZ|MAH|W|MM|CM)$/.test(c)) continue;
+    // 23 Nov 2026 audit: a processor (i5-1335U, 7840HS) is shared by many laptops, and a line name with one digit
+    // (BUDS3) by its Pro and FE: neither is a part number (an IdeaPad had matched a Vivobook on «I51335U»).
+    if (/^I[3579]\d{4,5}[A-Z]{0,2}$/.test(c) || /^\d{4,5}[A-Z]{1,3}$/.test(c) || /^[A-Z]+\d$/.test(c)) continue;
     out.add(c);
   }
   return [...out];
@@ -200,6 +203,54 @@ export function sameCode(code: string, halykTitle: string): boolean {
 /** The brand in a Kaspi title: its first Latin word (after the category word), not a size. */
 export function brandOf(title: string): string | null {
   for (const w of title.split(/\s+/)) if (/^[A-Za-z][A-Za-z0-9-]{1,}$/.test(w)) return w;
+  return null;
+}
+
+const XIAOMI = new Set(["xiaomi", "redmi", "poco"]);
+/** Line words that make another model when only one title has them (23 Nov 2026 audit: Buds3 Pro ≠ Buds3 FE). */
+const LINE_WORDS = ["pro", "max", "plus", "ultra", "mini", "lite", "fe", "air", "neo", "edge", "slim", "se", "active", "note",
+  "turbo", "detect", "play", "redmi", "poco"];
+// «Mini LED» is a screen type, not the Mini model («MiniLED» on Kaspi).
+const latin = (s: string) => new Set(s.toLowerCase().replace(/mini[\s-]*led/g, "miniled").replace(/([a-z0-9])\+(?![a-z0-9])/g, "$1 plus").split(/[^a-z0-9]+/).filter(Boolean));
+/** The colours a title names, as Kaspi's Russian keys: Russian words first, else Halyk's English names. */
+export function titleColours(title: string): Set<string> {
+  const t = title.toLowerCase().replace(/ё/g, "е").replace(/сиренев|лилов/g, "фиолетов");
+  const ru = Object.keys(COLOURS).filter((c) => t.includes(c));
+  const keys = ru.filter((c) => !ru.some((o) => o !== c && o.includes(c)));
+  if (keys.length) return new Set(keys);
+  const names = Object.entries(COLOURS).flatMap(([k, v]) => v.map((n) => [n, k] as const)).sort((a, b) => b[0].length - a[0].length);
+  for (const [n, k] of names) if (new RegExp(`(^|[^a-z])${n}([^a-z]|$)`).test(t)) return new Set([k]);
+  return new Set();
+}
+/** RAM and storage in GB from "8 ГБ/256 ГБ", "6/256Gb", "256Gb", "1 ТБ". */
+export function titleMemoryGb(title: string): { ram: number | null; storage: number | null } {
+  const t = title.toLowerCase();
+  const gb = (n: string, u?: string) => +n * (u && /t|т/.test(u) ? 1024 : 1);
+  // The RAM number stands alone («N150 / 16 Гб» is a processor, then RAM, not 50/16).
+  const two = t.match(/(?<![a-zа-я0-9.])(\d{1,2})\s*(?:гб|gb)?\s*\/\s*(\d{2,4})\s*(гб|gb|тб|tb)/);
+  if (two) return { ram: +two[1]!, storage: gb(two[2]!, two[3]) };
+  const one = [...t.matchAll(/(\d{1,4})\s*(гб|gb|тб|tb)(?![a-zа-я])/g)].pop();
+  return { ram: null, storage: one ? gb(one[1]!, one[2]) : null };
+}
+/**
+ * Why Halyk's item is not our Kaspi product, or null (23 Nov 2026 audit). Run when a pair is made and on every pricing:
+ * a bundle; another brand; a line word on one side only (Pro, FE, Active…); RAM or storage that differ when both state
+ * them; another colour («colour differs», shown at most as «похожий»).
+ */
+export function halykMismatch(kaspiTitle: string, halykTitle: string): string | null {
+  if (halykTitle.includes(" + ")) return "bundle";
+  const k = latin(kaspiTitle), h = latin(halykTitle);
+  const brand = brandOf(kaspiTitle)?.toLowerCase();
+  // Halyk sometimes leaves the brand out («XT2760S 27 QHD…»): then our part number in its title stands for it.
+  const code = partNumber(kaspiTitle);
+  if (brand && !h.has(brand) && !(XIAOMI.has(brand) && [...XIAOMI].some((b) => h.has(b))) && !(code && sameCode(code, halykTitle)))
+    return "brand differs";
+  for (const w of LINE_WORDS) if (k.has(w) !== h.has(w)) return `variant ${w}`;
+  const a = titleMemoryGb(kaspiTitle), b = titleMemoryGb(halykTitle);
+  if (a.ram && b.ram && a.ram !== b.ram) return "ram differs";
+  if (a.storage && b.storage && a.storage !== b.storage) return "storage differs";
+  const ca = titleColours(kaspiTitle), cb = titleColours(halykTitle);
+  if (ca.size && cb.size && ![...cb].some((c) => ca.has(c))) return "colour differs";
   return null;
 }
 

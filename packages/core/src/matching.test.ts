@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bestCandidate, esimOnly, kaspiColour, looseCandidates, mismatch, storeIndex, storeTokens, titleMemory, titleTokens } from "./matching";
+import { bestCandidate, esimOnly, kaspiColour, looseCandidates, mismatch, storeIndex, storeTokens, titleMemory, titleTokens, twoOfTheSame } from "./matching";
 
 // Real pairs from the 7 Nov 2026 Technodom test requests (Kaspi title, Technodom address, Technodom title).
 const same = (kaspi: string, slug: string, title?: string) => expect(mismatch(kaspi, storeTokens(slug, title))).toBeNull();
@@ -45,6 +45,17 @@ describe("exact product matching (DECISIONS 2026-11-07)", () => {
     // Numbers alone are sizes and counts, not a model (22 Nov 2026).
     expect(mismatch("Заколка бант 5 см 2 шт, оранжевый", storeTokens("noutbuk-lenovo-ideapad-5-2-in-1-15agp11-1"), null)).toBe("no brand or model word");
     expect(mismatch("Аккумулятор AA 4 шт", storeTokens("batareyka-aa-4-sht-gp-extra-1"), null)).toBe("no brand or model word");
+    // 23 Nov 2026 audit: store colour names, Dual Sim iPhones, two-packs, Detect.
+    expect(mismatch("Смартфон Samsung Galaxy A56 5G 8 ГБ/256 ГБ фиолетовый", storeTokens("smartfon-samsung-galaxy-a56-5g-8-256gb-olive-1",
+      "Смартфон Samsung Galaxy A56 5G 8/256GB Olive"), "Смартфон Samsung Galaxy A56 5G 8/256GB Olive")).toBe("colour differs");
+    expect(mismatch("Смартфон Samsung Galaxy S26 12 ГБ/512 ГБ сиреневый", storeTokens("smartfon-samsung-galaxy-s26-12-512gb-black-1",
+      "Смартфон Samsung Galaxy S26 12/512GB Black"), "Смартфон Samsung Galaxy S26 12/512GB Black")).toBe("colour differs");
+    expect(mismatch("Смартфон Apple iPhone 15 128 Gb Dual Sim черный", storeTokens("smartfon-apple-iphone-15-6-128gb-black-mtp03-1",
+      "Смартфон Apple iPhone 15 6/128GB Black (MTP03)"), "Смартфон Apple iPhone 15 6/128GB Black (MTP03)")).toBe("SIM version differs");
+    expect(mismatch("Наушники HONOR x7 play белый + x7 play белый", storeTokens("naushniki-honor-choice-x7-play-white-1",
+      "Наушники Honor Choice X7 Play White"), "Наушники Honor Choice X7 Play White")).toBe("two items");
+    expect(twoOfTheSame("Смартфон Apple iPhone 17 Pro 256Gb темно-синий + подарок")).toBe(false);
+    differ("Пылесос Dyson V12 Slim Absolute серый", "pylesos-dyson-v12-sv46-detect-slim-absolute-1");
     differ("Смартфон Xiaomi Redmi 13 8 ГБ/256 ГБ черный", "smartfon-xiaomi-redmi-note-13-8-256gb-black-1");
   });
   it("reads a stuck \"+\" as the Plus variant (8 Nov owner reviews)", () => {

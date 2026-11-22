@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { brandOf, modelCodes, partNumber, sameCode, createHalykClient, listItems, nuxtData, pagePath, parseHalykProduct, phoneKey, pickColour, pickMemory, sameModel, variantPickers } from "./halyk";
+import { brandOf, halykMismatch, modelCodes, partNumber, sameCode, createHalykClient, listItems, nuxtData, pagePath, parseHalykProduct, phoneKey, pickColour, pickMemory, sameModel, variantPickers } from "./halyk";
 
 // The payload of a real product page (iPhone 17 Pro Max 256Gb Silver, 17 Nov 2026), the rest of the page cut.
 const page = readFileSync(join(__dirname, "../fixtures", "halyk-product.html"), "utf8");
@@ -82,5 +82,25 @@ describe("model codes", () => {
     expect(sameCode("XT2769VD", "XTREON XT2769VDX")).toBe(false);
     expect(sameCode("MDH74", "Ноутбук Apple MacBook Air 13 M5 MDH74RU/A")).toBe(true);
     expect(sameCode("15ARP10E", "Lenovo LOQ 15ARP10E 83S000BNRK")).toBe(true); // why only the part number decides
+  });
+});
+
+describe("halykMismatch (23 Nov 2026 audit)", () => {
+  it("rejects another brand, line, RAM; a colour only makes it «похожий»", () => {
+    expect(halykMismatch("Ноутбук Lenovo IdeaPad 1i 83B40008US 15.6\" / Intel Core i5-1335U / 16 Гб / SSD 256 Гб серебристый",
+      "Ноутбук Asus Vivobook 15 X1504VA-BQ1351W Core i5-1335U")).toBe("brand differs");
+    expect(halykMismatch("Наушники Samsung Galaxy Buds3 Pro серебристый", "Наушники Samsung Galaxy Buds3 FE Черный")).toBe("variant pro");
+    expect(halykMismatch("Смартфон Samsung Galaxy A17 8 ГБ/256 ГБ черный", "Смартфон Samsung Galaxy A17 6/256Gb Black")).toBe("ram differs");
+    expect(halykMismatch("Наушники Sony WH-1000XM6 серый", "Наушники Sony WH-1000XM6 Черный")).toBe("colour differs");
+  });
+  it("keeps correct pairs", () => {
+    expect(halykMismatch("Смартфон Apple iPhone 17 Pro Max 256Gb NanoSIM+eSIM темно-синий", "Смартфон Apple iPhone 17 Pro Max 256Gb Deep Blue")).toBeNull();
+    expect(halykMismatch("Монитор 27\" XTREON XT2760S MiniLED белый", "XT2760S 27 QHD/Mini LED/0,5ms/240-400Hz")).toBeNull();
+    expect(halykMismatch("Chuwi MiniBook X N150 10.51\" / Intel Processor N150 / 16 Гб / M.2 512 Гб / UHD Graphics / CWI558-N150 серый",
+      "Ноутбук Chuwi MiniBook X N150 CWI558-N150 10.5\" 512Gb Grey")).toBeNull();
+  });
+  it("never takes a processor or a one-digit line name for a part number", () => {
+    expect(modelCodes("Ноутбук Asus Vivobook 15 Core i5-1335U")).not.toContain("I51335U");
+    expect(modelCodes("Наушники Samsung Galaxy Buds3 Pro")).not.toContain("BUDS3");
   });
 });
