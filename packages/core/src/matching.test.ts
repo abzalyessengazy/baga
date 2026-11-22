@@ -37,6 +37,15 @@ describe("exact product matching (DECISIONS 2026-11-07)", () => {
     differ("Пылесос DREAME H13 Pro черный", "vertikalniy-moyuschiy-pylesos-dreame-h13-pro-plus-mix-292096");
     differ("Наушники Logitech G Pro X Lightspeed черный", "igrovaya-garnitura-logitech-g-pro-x-2-lightspeed-wireless-magenta-981-001275-275913");
     differ("Наушники Xiaomi Buds 6 белый", "naushniki-xiaomi-redmi-buds-6-play-white-284054");
+    // 22 Nov 2026: a sub-brand or a cheaper line the Kaspi title does not name.
+    expect(mismatch("Наушники Xiaomi Buds 6 белый", storeTokens("naushniki-vstavnye-xiaomi-redmi-buds-6-active-white-282684",
+      "Наушники вставные Xiaomi Redmi, Buds 6 Active White"), "Наушники вставные Xiaomi Redmi, Buds 6 Active White")).toBe("variant redmi");
+    expect(mismatch("Наушники Xiaomi Buds 6 белый", storeTokens("naushniki-xiaomi-buds-6-cloud-white",
+      "Наушники Redmi Buds 6 Cloud White Buds 6 Cloud White"), "Наушники Redmi Buds 6 Cloud White Buds 6 Cloud White")).toBe("variant redmi");
+    // Numbers alone are sizes and counts, not a model (22 Nov 2026).
+    expect(mismatch("Заколка бант 5 см 2 шт, оранжевый", storeTokens("noutbuk-lenovo-ideapad-5-2-in-1-15agp11-1"), null)).toBe("no brand or model word");
+    expect(mismatch("Аккумулятор AA 4 шт", storeTokens("batareyka-aa-4-sht-gp-extra-1"), null)).toBe("no brand or model word");
+    differ("Смартфон Xiaomi Redmi 13 8 ГБ/256 ГБ черный", "smartfon-xiaomi-redmi-note-13-8-256gb-black-1");
   });
   it("reads a stuck \"+\" as the Plus variant (8 Nov owner reviews)", () => {
     expect(mismatch("Смартфон REDMI Note 14 Pro+ 5G 12 ГБ/512 ГБ голубой + подарок",

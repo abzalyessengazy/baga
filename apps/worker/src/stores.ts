@@ -159,7 +159,9 @@ async function runTechnodom() {
       // The address now shows another item: out. A renamed one is judged again by the same rules (8 Nov owner rule):
       // only the colour differs → «похожий»; anything else (memory, variant, model) → another product.
       if (p.sku !== m.sku) { await setMatchStatus(sql, m.matchId, "rejected", `item changed to ${p.sku}`); continue; }
-      if (m.title && norm(p.title) !== norm(m.title)) {
+      // A title pair ('strict') is judged again by today's rules on every pricing, as Sulpak's are (22 Nov 2026: pairs made
+      // before a rule was added, «Xiaomi Buds 6» = «Redmi Buds 6 Active», stayed); an exact or the owner's pair only on a rename.
+      if (m.method === "strict" || (m.title && norm(p.title) !== norm(m.title))) {
         const why = mismatch(m.ourTitle, storeTokens(m.slug, p.title), p.title);
         if (why && !isSimilarReason(why)) { await setMatchStatus(sql, m.matchId, "rejected", why); continue; }
         if (why) await setMatchStatus(sql, m.matchId, "pending", why);

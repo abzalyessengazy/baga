@@ -3,10 +3,12 @@
  * second price source"). Strict on purpose: a wrong pair would show a price for a different product, so every rule
  * must hold. Tuned on 7 Nov 2026 test requests (74 candidates, 65 verified, 9 rejected).
  * - every Latin/number token of the Kaspi title (brand, model) appears in the store item's tokens;
- * - the store item has no variant word the Kaspi title lacks (Pro, Max, Plus, Ultra, Play, 2…): Pro ≠ Pro Max;
+ * - the store item has no variant word or sub-brand the Kaspi title lacks (Pro, Max, Plus, Ultra, Play, Active, Redmi, 2…):
+ *   Pro ≠ Pro Max, Xiaomi Buds 6 ≠ Redmi Buds 6;
  * - memory sizes agree (storage, and RAM when both state it): 6/128 ≠ 8/128;
  * - colours agree when both state one: a white item is never a blue item's match;
- * - the Kaspi title must carry a model number (a bare "Apple iPhone прозрачный" is a case, not a phone);
+ * - the Kaspi title must carry a model number (a bare "Apple iPhone прозрачный" is a case, not a phone) and a brand or
+ *   model word (numbers alone, «5 см 2 шт», are sizes);
  * - the SIM kind is not a model word (15 Nov 2026: Sulpak never writes it, so no iPhone matched): «NanoSIM+eSIM», the
  *   version shops in Kazakhstan sell (Technodom's own Kaspi links pair such listings with its items that name no SIM),
  *   matches an item that names none; an eSIM-only phone («dual eSIM») never does, unless the item says eSIM too.
@@ -43,7 +45,10 @@ const STORE_COLOR_WORDS = new Set(
       "glacier", "sage", "mist", "starlight", "ultramarine", "frost", "fog", "stone", "obsidian", "porcelain", "hazel", "jade"]),
 );
 const VARIANTS = new Set(["pro", "max", "plus", "ultra", "mini", "lite", "fe", "air", "neo", "edge", "slim", "absolute", "mix",
-  "x", "s", "e", "c", "se", "prime", "nfc", "play", "go", "2", "3", "4", "5", "ii", "iii"]);
+  "x", "s", "e", "c", "se", "prime", "nfc", "play", "go", "2", "3", "4", "5", "ii", "iii",
+  // 22 Nov 2026 (the owner): «Xiaomi Buds 6» (59 990 ₸) had been paired with «Redmi Buds 6 Active» (4 990 ₸) at Technodom
+  // and «Redmi Buds 6» at Sulpak. A cheaper line or sub-brand the Kaspi title does not name is another product.
+  "active", "note", "turbo", "gt", "redmi", "poco", "iqoo", "nord"]);
 
 const COLOURWAY = /никел|медь|медн|яшм|патин|топаз|керамик|бронз|фукси|прусск|nickel|copper|jasper|patina|topaz|ceramic|bronze/;
 
@@ -115,6 +120,9 @@ export function mismatch(kaspiTitle: string, store: string[], storeTitle?: strin
   const tok = titleTokens(kaspiTitle);
   if (tok.length < 2) return "too few model tokens";
   if (!tok.some((x) => /\d/.test(x))) return "no model number";
+  // 22 Nov 2026: numbers alone are sizes and counts, not a model («Заколка бант 5 см 2 шт» had passed as a Lenovo
+  // IdeaPad 5 2-in-1). The title must name a brand or a model word: three Latin letters, or letters with digits.
+  if (!tok.some((x) => /[a-z]{3}/.test(x) || (/[a-z]/.test(x) && /\d/.test(x)))) return "no brand or model word";
   const set = new Set(store);
   if (!tok.every((x) => set.has(x))) return "model differs";
   if (esimOnly(kaspiTitle) && !set.has("esim")) return "esim only";
