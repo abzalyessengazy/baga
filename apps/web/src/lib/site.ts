@@ -17,5 +17,5 @@ export function siteUrl(env: Record<string, string | undefined> = process.env): 
   return "http://localhost:3000";
 }
 
-/** Shown in the footer and on the legal pages (the owner's address, at their request). */
-export const SUPPORT_EMAIL = "abzal.yessengazy@gmail.com";
+/** Shown in the footer and on the legal pages: the project's own address (the owner, 22 Nov 2026; was their personal one). */
+export const SUPPORT_EMAIL = "hello@bagaapp.com";
