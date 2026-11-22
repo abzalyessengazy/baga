@@ -617,3 +617,6 @@ The owner asked for every open audit point to be fixed now (20 Nov):
 - **Backup drill:** dump and row counts from one exported snapshot; the drill restores the copy downloaded back from R2.
 - **Dark mode:** a contrast scan of every main page in both themes and locales at 390 and 1440 px found and fixed light-on-paper guide headings (1.1:1), the «Как это работает» numbers and footer link, shop counts and notes, the «Чёрная пятница» show-more button and Kaspi label.
 Still the owner's: rotate ADMIN_TOKEN in Vercel; run `pnpm db:migrate` (0041–0044) before this is pushed.
+
+## 2026-11-22 — Unknown product numbers: back to the waiting handoff
+The audit follow-up of 20 Nov threw an error on the product page for a number we have no price for (errors are not cached, so a made-up number cost no cache write) and let `error.tsx` send the browser to /wait. Live on 22 Nov, a direct visit (a shared link, Google, ChatGPT) got Next.js's bare English «500: Internal Server Error» page instead: the error boundary never ran. Back to rendering `ToWait` (the page sends the browser on to /wait), at the cost of one small cache write per unknown number. Avoiding that write needs another design (e.g. sending such numbers to /wait before the cached page), not an error.
