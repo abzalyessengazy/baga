@@ -114,7 +114,11 @@ export default async function ProductPage({ params }: Props) {
           ? tv("lowestText", { days: verdict.windowDays })
           : tv("lowText", { pct: -(verdict.aboveMedianPct ?? 0), usual: f(verdict.median!), days: verdict.windowDays })
         : verdict.kind === "typical"
-          ? verdict.typicalLow === verdict.typicalHigh ? tv("typicalOne", { price: f(verdict.typicalLow!) })
+          // Below the whole usual range but too far above an earlier low for «Хорошая цена»: «Обычно стоит 99 990 ₸» over a
+          // 69 990 ₸ price read as a mistake (the owner, 24 Nov 2026). Say it is below the usual price; wasCheaper adds the low.
+          ? verdict.current < verdict.typicalLow! && (verdict.aboveMedianPct ?? 0) < 0
+            ? tv("typicalBelow", { pct: -(verdict.aboveMedianPct ?? 0), usual: f(verdict.median!) })
+          : verdict.typicalLow === verdict.typicalHigh ? tv("typicalOne", { price: f(verdict.typicalLow!) })
             : tv("typicalText", { low: f(verdict.typicalLow!), high: f(verdict.typicalHigh!) })
           : tv("highText", { pct: verdict.aboveMedianPct ?? 0, min: f(verdict.min!), date: fmtDate(verdict.minDay!, locale) });
   // A recent low far below today is said plainly (10 Nov 2026): «Было дешевле: 169 990 ₸ (4 ноя)». «Дороже обычного»

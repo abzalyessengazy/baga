@@ -120,6 +120,7 @@
     "insufficientEmpty": "Бақылауды енді бастадық. Бағаны бағалау үшін көбірек күн бақылау керек.",
     "lowText": "Соңғы {days, plural, one {# күндегі} other {# күндегі}} әдеттегі бағадан ({usual}) {pct}% төмен.",
     "typicalText": "Әдетте {low} мен {high} аралығында.",
+    "typicalBelow": "Әдеттегі бағадан ({usual}) {pct}% төмен.",
     "typicalOne": "Әдетте {price} тұрады.",
     "wasCheaper": "Арзанырақ болған: {min} ({date}).",
     "highText": "Әдеттегіден {pct}% қымбат. Ең төмен баға {min} болған ({date}).",

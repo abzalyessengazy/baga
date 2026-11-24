@@ -229,10 +229,11 @@ async function picksOfDay(sql: postgres.Sql, moves: Awaited<ReturnType<typeof da
       where p.external_id = ${m.externalId}`;
     const note = o?.prices?.length ? priceNote(o.prices[0]!, o.prices.slice(1), o.rating, o.reviews) : null;
     if (note?.kind === "check") continue;
-    // Never a find whose own page says «Дороже обычного» (owner, 12 Nov): the same daily lows and current price as
+    // A find only where its own page says «Хорошая цена» (the owner, 24 Nov 2026; was: not «Дороже обычного», 12 Nov):
+    // a 30% drop to 69 990 ₸ after a 57 990 ₸ day was a find under «Обычная цена». Same daily lows and current price as
     // the product page's verdict.
     const [p] = await sql<{ id: number }[]>`select id from products where external_id = ${m.externalId}`;
-    if (p && computeVerdict(await getDailyLows(sql, p.id), m.now).kind === "high") continue;
+    if (!p || computeVerdict(await getDailyLows(sql, p.id), m.now).kind !== "low") continue;
     out.push({ kind: "drop", externalId: m.externalId, title: m.title, titleKk: m.titleKk, imageUrl: m.imageUrl,
       price: m.now, ref: m.was, pct: m.pct, sellers: m.offerCount, note });
   }

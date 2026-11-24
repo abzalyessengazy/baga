@@ -66,6 +66,16 @@ describe("computeVerdict", () => {
     expect(v.wasCheaper).toBe(true);
     expect(v.median).toBe(306_190);
   });
+  it("is typical below the usual range when an earlier low was far cheaper (24 Nov 2026, Bosch MMB2111S)", () => {
+    // Not «Хорошая цена», so not a find of the day; the page says «Ниже обычной цены» plus «Было дешевле».
+    const blender = series([57_990, ...Array(13).fill(99_990), 69_990]);
+    const v = computeVerdict(blender, 69_990);
+    expect(v.kind).toBe("typical");
+    expect(v.current).toBeLessThan(v.typicalLow!);
+    expect(v.aboveMedianPct).toBe(-30);
+    expect(v.median).toBe(99_990);
+    expect(v.wasCheaper).toBe(true);
+  });
   it("is a good price clearly under the usual one, close to the lowest", () => {
     const v = computeVerdict(series([100_000, 100_000, 100_000, 100_000, 93_000, 92_000, 100_000, 100_000, 100_000, 100_000]), 93_000);
     expect(v.kind).toBe("low");

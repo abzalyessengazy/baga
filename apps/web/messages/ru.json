@@ -120,6 +120,7 @@
     "insufficientEmpty": "Только начали наблюдать. Чтобы оценить цену, нужно больше дней наблюдений.",
     "lowText": "На {pct}% ниже обычной цены ({usual}) за последние {days, plural, one {# день} few {# дня} many {# дней} other {# дня}}.",
     "typicalText": "Обычно стоит от {low} до {high}.",
+    "typicalBelow": "Ниже обычной цены ({usual}) на {pct}%.",
     "typicalOne": "Обычно стоит {price}.",
     "wasCheaper": "Было дешевле: {min} ({date}).",
     "highText": "Дороже обычного на {pct}%. Минимум был {min} ({date}).",
