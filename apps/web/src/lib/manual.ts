@@ -21,7 +21,7 @@ function requester(ip: string): string {
   return createHash("sha256").update(`${ip}|${almatyDay()}|${process.env.TURNSTILE_SECRET_KEY ?? ""}`).digest("hex");
 }
 
-async function startWorkflow(): Promise<boolean> {
+export async function startManualWorkflow(): Promise<boolean> {
   const token = process.env.GITHUB_DISPATCH_TOKEN, repo = process.env.GITHUB_REPO ?? "abzalyessengazy/baga";
   if (!token) return false;
   try {
@@ -45,7 +45,7 @@ export async function requestManual(target: ManualTarget, ip: string): Promise<M
   const sql = getSql();
   if (!sql) return "unavailable";
   const r = await requestManualCheck(sql, target, requester(ip));
-  if (r === "queued") await startWorkflow();
+  if (r === "queued") await startManualWorkflow();
   return r;
 }
 

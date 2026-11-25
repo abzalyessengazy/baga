@@ -86,6 +86,9 @@ async function refreshSite(force = false) {
  */
 async function runManual() {
   const utcMin = () => { const d = new Date(); return d.getUTCHours() * 60 + d.getUTCMinutes(); };
+  // New trackings first, at any hour (no Kaspi request): the confirmation card goes out at once.
+  const greeted = await greetNewTrackings();
+  if (greeted) { await sendQueued(); console.log(JSON.stringify({ greeted })); }
   if (!isManualCheckTime(new Date(), WINDOW_MARGIN_MS)) {
     // Shortly before the blackout ends (08:25–08:50 UTC), wait for it; earlier, the collector takes the products.
     if (utcMin() >= 8 * 60 + 25 && utcMin() < 8 * 60 + 50) {
@@ -644,27 +647,53 @@ async function afterSave(productId: number, externalId: string, price: number | 
       if (target) await sql`update trackings set target_price = ${target} where id = ${p.id} and target_price is null`;
     }
   }
-  // The first price goes out once there is a price and somewhere to send it: a watcher who connects Telegram or
-  // confirms an email later gets it after the next check, and nobody is ever told "0 ₸". Marking and queueing
-  // happen in one transaction, so a crash cannot mark a tracking as told without its message.
-  if (price !== null) {
-    await sql.begin(async (tx) => {
-      const waiting = await tx<{ id: string; tg: boolean; mail: boolean; push: boolean }[]>`
-        update trackings t set first_price_sent_at = now()
-        from watchers w
-        where t.product_id = ${productId} and t.watcher_id = w.id and t.status = 'active' and t.first_price_sent_at is null
-          and ${city === REFERENCE_CITY ? tx`coalesce(t.city, 'almaty') = 'almaty'` : tx`t.city = ${city}`}
-          and (w.telegram_chat_id is not null or w.email_confirmed_at is not null or exists (select 1 from push_subscriptions ps where ps.watcher_id = w.id))
-        returning t.id, w.telegram_chat_id is not null as tg, w.email_confirmed_at is not null as mail, exists (select 1 from push_subscriptions ps where ps.watcher_id = w.id) as push`;
-      for (const w of waiting) await queueNotification(tx, w, "first_price", price, `${w.id}:first`);
-      // Its target already met: the first-price card says so («✅ Цена уже не выше вашей»), so no second alert for the
-      // same check a minute later (audit 20 Nov 2026). The tracking counts as alerted; it re-arms as usual.
-      if (waiting.length) await tx`update trackings set alert_state = 'triggered', last_triggered_at = now(), above_since = null
-        where id = any(${tx.array(waiting.map((w) => w.id))}::uuid[]) and alert_state = 'armed' and target_price is not null and target_price >= ${price}`;
-    });
-  }
+  if (price !== null) await queueFirstPrice(productId, price, city);
   if (price !== null) await evaluateTrackings(productId, externalId, price, seller, city);
   await sendAfterCheck();
+}
+
+/**
+ * The first price goes out once there is a price and somewhere to send it: a watcher who connects Telegram or
+ * confirms an email later gets it after the next check (or greetNewTrackings), and nobody is ever told "0 ₸". Marking
+ * and queueing happen in one transaction, so a crash cannot mark a tracking as told without its message. Returns how
+ * many trackings were told.
+ */
+async function queueFirstPrice(productId: number, price: number, city: City = REFERENCE_CITY): Promise<number> {
+  return sql.begin(async (tx) => {
+    const waiting = await tx<{ id: string; tg: boolean; mail: boolean; push: boolean }[]>`
+      update trackings t set first_price_sent_at = now()
+      from watchers w
+      where t.product_id = ${productId} and t.watcher_id = w.id and t.status = 'active' and t.first_price_sent_at is null
+        and ${city === REFERENCE_CITY ? tx`coalesce(t.city, 'almaty') = 'almaty'` : tx`t.city = ${city}`}
+        and (w.telegram_chat_id is not null or w.email_confirmed_at is not null or exists (select 1 from push_subscriptions ps where ps.watcher_id = w.id))
+      returning t.id, w.telegram_chat_id is not null as tg, w.email_confirmed_at is not null as mail, exists (select 1 from push_subscriptions ps where ps.watcher_id = w.id) as push`;
+    for (const w of waiting) await queueNotification(tx, w, "first_price", price, `${w.id}:first`);
+    // Its target already met: the first-price card says so («✅ Цена уже не выше вашей»), so no second alert for the
+    // same check a minute later (audit 20 Nov 2026). The tracking counts as alerted; it re-arms as usual.
+    if (waiting.length) await tx`update trackings set alert_state = 'triggered', last_triggered_at = now(), above_since = null
+      where id = any(${tx.array(waiting.map((w) => w.id))}::uuid[]) and alert_state = 'armed' and target_price is not null and target_price >= ${price}`;
+    return waiting.length;
+  });
+}
+
+/**
+ * The confirmation card right after a person starts tracking (the owner, 25 Nov 2026: a product tracked while it already
+ * had a price got no message until its next check, the next morning, while one tracked before its first price got one
+ * within minutes). Trackings not yet told, on an Almaty-priced product checked in the last GREET_FRESH_DAYS, get the
+ * first-price card now with that observed price: price, their target, the gap. No Kaspi request; the website starts
+ * manual.yml after a tracking, and its 30-minute schedule catches a person who connects Telegram or email later.
+ * Older prices and other cities wait for the product's next check, as before.
+ */
+const GREET_FRESH_DAYS = 3;
+async function greetNewTrackings(): Promise<number> {
+  const rows = await sql<{ product_id: number; price: number }[]>`
+    select distinct t.product_id, s.current_min_price as price
+    from trackings t join product_state s on s.product_id = t.product_id
+    where t.status = 'active' and t.first_price_sent_at is null and t.watcher_id is not null and coalesce(t.city, 'almaty') = 'almaty'
+      and s.current_min_price is not null and s.last_checked_at > now() - make_interval(days => ${GREET_FRESH_DAYS})`;
+  let told = 0;
+  for (const r of rows) told += await queueFirstPrice(r.product_id, r.price);
+  return told;
 }
 
 /**

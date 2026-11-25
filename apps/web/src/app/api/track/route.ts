@@ -5,6 +5,7 @@ import { allow } from "@/lib/rateLimit";
 import { clientIp } from "@/lib/turnstile";
 import { ensureWatcher, currentWatcher, telegramConnectUrl, trackInitial, WATCHER_LIMIT } from "@/lib/watcher";
 import { cityPrice, visitorCity } from "@/lib/city";
+import { startManualWorkflow } from "@/lib/manual";
 
 /**
  * Starts (or updates) tracking a product for this visitor, before registration exists (DECISIONS.md, 2026-11-02).
@@ -60,6 +61,9 @@ export async function POST(req: Request) {
     ? await upsertWatcherTracking(sql, watcher.id, productId, t, WATCHER_LIMIT, city)
     : await upsertWatcherShortLinkTracking(sql, watcher.id, shortLink!, t, WATCHER_LIMIT);
   if (!r.ok) return NextResponse.json({ code: r.reason }, { status: r.reason === "limit" ? 409 : 404 });
+  // A product with a price and a person we can reach: the confirmation card goes out within minutes (manual.yml's
+  // greetNewTrackings; the owner, 25 Nov 2026), not after the product's next check. No Kaspi request.
+  if (productId && !city && current !== null && (watcher.telegramChatId || watcher.emailConfirmed || watcher.push)) await startManualWorkflow();
   return NextResponse.json({
     code: "tracking", target: "price" in t ? t.price : null, dropPct: "dropPct" in t ? t.dropPct : null,
     linked: !!watcher.telegramChatId, telegramUrl: await telegramConnectUrl(watcher),
