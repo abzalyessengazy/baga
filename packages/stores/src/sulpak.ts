@@ -17,12 +17,24 @@ export const SULPAK = {
 } as const;
 
 export class SulpakHttpError extends Error {
-  constructor(public status: number, public url: string) {
-    super(`Sulpak answered ${status} for ${url}`);
+  constructor(public status: number, public url: string, public location: string | null = null) {
+    super(`Sulpak answered ${status} for ${url}${location ? ` → ${location}` : ""}`);
     this.name = "SulpakHttpError";
   }
   get isBlocked() { return this.status === 403 || this.status === 429; }
   get isGone() { return this.status === 404 || this.status === 410; }
+}
+/**
+ * A listing page past the category's end: Sulpak answers 301 to the same category's last page (25 Nov 2026: after a
+ * 10-day pause, «/f/videokartiy?page=3» → «/f/videokartiy?page=2»; every resumed category failed and stopped the run).
+ * Returns that last page number, or null for any other answer. The redirect is never followed.
+ */
+export function pastEnd(e: SulpakHttpError, category: string, page: number): number | null {
+  if ((e.status !== 301 && e.status !== 302) || !e.location) return null;
+  const m = e.location.match(/^(?:https:\/\/www\.sulpak\.kz)?\/f\/([a-z0-9_]+)(?:\?page=(\d+))?$/);
+  if (!m || m[1] !== category) return null;
+  const last = m[2] ? Number(m[2]) : 1;
+  return last < page ? last : null;
 }
 export class SulpakParseError extends Error {
   constructor(message: string) { super(message); this.name = "SulpakParseError"; }
@@ -115,12 +127,23 @@ export function createSulpakClient(o: SulpakClientOptions = {}) {
     await gate();
     await o.beforeRequest?.();
     const res = await f(url, { headers: { "User-Agent": ua, Accept: accept }, redirect: "manual", signal: AbortSignal.timeout(timeoutMs) });
-    if (res.status < 200 || res.status >= 300) { await res.body?.cancel().catch(() => undefined); throw new SulpakHttpError(res.status, url); }
+    if (res.status < 200 || res.status >= 300) {
+      await res.body?.cancel().catch(() => undefined);
+      throw new SulpakHttpError(res.status, url, res.headers.get("location"));
+    }
     return res.text();
   }
   return {
     fetchCategories: async () => parseCategorySitemap(await get(SULPAK.categorySitemap, "application/xml, text/xml")),
-    fetchListing: async (category: string, page: number) => parseListing(await get(SULPAK.listingUrl(category, page), "text/html")),
+    fetchListing: async (category: string, page: number) => {
+      try {
+        return parseListing(await get(SULPAK.listingUrl(category, page), "text/html"));
+      } catch (e) {
+        const last = e instanceof SulpakHttpError ? pastEnd(e, category, page) : null;
+        if (last === null) throw e;
+        return { items: [], pages: last }; // the category ends before this page: read again from page 1 next time
+      }
+    },
     fetchProduct: async (slug: string) => parseSulpakProduct(await get(SULPAK.productUrl(slug), "text/html")),
   };
 }

@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { createSulpakClient, parseCategorySitemap, parseListing, parseSulpakProduct, SulpakHttpError, SulpakParseError, sulpakCategoriesFor, sulpakTranslit } from "./sulpak";
+import { createSulpakClient, parseCategorySitemap, parseListing, parseSulpakProduct, SulpakHttpError, SulpakParseError, pastEnd, sulpakCategoriesFor, sulpakTranslit } from "./sulpak";
 
 const fixture = (f: string) => readFileSync(join(__dirname, "../fixtures", f), "utf8");
 
@@ -59,5 +59,20 @@ describe("Sulpak client", () => {
     const e = await c.fetchCategories().catch((x) => x);
     expect(e).toBeInstanceOf(SulpakHttpError);
     expect((e as SulpakHttpError).isBlocked).toBe(true);
+  });
+  it("reads a redirect to an earlier page of the same category as the category's end (25 Nov 2026)", async () => {
+    const f = (async () => new Response(null, { status: 301, headers: { location: "/f/videokartiy?page=2" } })) as typeof fetch;
+    const c = createSulpakClient({ fetch: f, minIntervalMs: 0, userAgent: "BAGA test" });
+    expect(await c.fetchListing("videokartiy", 3)).toEqual({ items: [], pages: 2 });
+  });
+  it("still fails on any other redirect", () => {
+    const at = (location: string | null, status = 301) => pastEnd(new SulpakHttpError(status, "u", location), "videokartiy", 3);
+    expect(at("/f/videokartiy")).toBe(1);
+    expect(at("https://www.sulpak.kz/f/videokartiy?page=2")).toBe(2);
+    expect(at("/f/videokartiy?page=4")).toBeNull(); // forward: not an end
+    expect(at("/f/monitoriy?page=2")).toBeNull(); // another category
+    expect(at("/login")).toBeNull();
+    expect(at(null)).toBeNull();
+    expect(at("/f/videokartiy?page=2", 403)).toBeNull();
   });
 });
