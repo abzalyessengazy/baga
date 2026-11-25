@@ -33,7 +33,7 @@ async function main() {
     throw e;
   }
   const site = env.siteUrl(), token = env.telegramBotToken(), key = env.resendApiKey();
-  let sent = 0, failed = 0, skipped = 0;
+  let sent = 0, failed = 0, skipped = 0, left = 0;
   for (const d of due) {
     const suggestions = await suggestFor(sql, d.watcherId, DIGEST.suggestions).catch(() => []);
     // Sign-in links (migration 0032): set the person's code the first time; a dry run writes nothing.
@@ -62,14 +62,21 @@ async function main() {
       }
       sent++;
     } catch (e) {
-      failed++;
-      console.error(`[nudge] ${channel} failed: ${e}`);
-      // A chat that blocked the bot is unlinked: the next note goes by email, if confirmed (audit 20 Nov 2026).
-      if (channel === "telegram" && chatGone(e)) await sql`update watchers set telegram_chat_id = null where telegram_chat_id = ${d.chatId!}`.catch(() => undefined);
+      // A chat that blocked the bot is unlinked: the next note goes by email, if confirmed (audit 20 Nov 2026). The
+      // person's choice, not a failed send: it does not turn the run red (the owner, 25 Nov 2026: two red runs, each
+      // one person who had blocked the bot).
+      if (channel === "telegram" && chatGone(e)) {
+        left++;
+        console.log(`[nudge] telegram chat gone (${e instanceof Error ? e.message : e}): unlinked`);
+        await sql`update watchers set telegram_chat_id = null where telegram_chat_id = ${d.chatId!}`.catch(() => undefined);
+      } else {
+        failed++;
+        console.error(`[nudge] ${channel} failed: ${e}`);
+      }
     }
     await sleep(150);
   }
-  console.log(`[nudge] due ${due.length}, sent ${sent}, failed ${failed}, skipped ${skipped}${dry ? " (dry run: nothing sent)" : ""}`);
+  console.log(`[nudge] due ${due.length}, sent ${sent}, failed ${failed}, left ${left}, skipped ${skipped}${dry ? " (dry run: nothing sent)" : ""}`);
   if (failed) process.exitCode = 1; // a red run makes GitHub tell the owner (cost audit 20 Nov 2026)
 }
 
