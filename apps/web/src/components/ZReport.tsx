@@ -5,7 +5,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { formatTenge, shortTitle, formatCount } from "@baga/core";
 import type { Market } from "@baga/db";
 import { Link } from "@/i18n/navigation";
-import { cachedMarket, cachedStats, loadMarket, loadStats, type Stats, type StatsDrop, type StatsItem, type StatsMoves } from "@/lib/market";
+import { cachedMarket, cachedStats, loadMarket, loadStats, type Stats, type StatsItem, type StatsMoves, type StatsSaving } from "@/lib/market";
 import { dayMonth, type DatesT } from "@/lib/dayMonth";
 import { useReplay } from "./Motion";
 
@@ -99,13 +99,18 @@ const cameBack = () => {
 /** y: the page's scroll measured from the top of the lists, so sections above that load later do not move it. */
 type Spot = { y: number; slip: number; at: number };
 
-/* Price moves in percent (docs/STATS.md rules D and W). */
-function MovesSlip({ moves, locale }: { moves: Stats["moves"]; locale: L }) {
+/*
+ * Price moves (docs/STATS.md rules D and W), in percent or in tenge: one list with a %/₸ switch, % first (the owner,
+ * 25 Nov 2026: the separate «Самые большие изменения в тенге» slip repeated this one). ₸ ranks by the difference in
+ * tenge, so a 300 000 ₸ drop on a laptop leads there (13 Nov).
+ */
+function MovesSlip({ s, locale, unit }: { s: Stats; locale: L; unit: "pct" | "tenge" }) {
   const t = useTranslations("home");
   // The tabs chosen stay chosen for this browser tab: back from a product, the same list is there (the owner, 12 Nov).
   const [dir, setDir] = useSaved<keyof StatsMoves>("moves-dir", ["drops", "rises"]);
   const [period, setPeriod] = useSaved<"day" | "week">("moves-period", ["day", "week"]);
-  const rows = moves[period][dir].slice(0, ROWS);
+  const byTenge = period === "day" ? s.tenge : s.tengeWeek;
+  const rows = (unit === "tenge" && byTenge ? byTenge : s.moves[period])[dir].slice(0, ROWS);
   return (
     <Screen more={`/explore?list=${dir}`} moreLabel={t("explore")}>
       {(go) => (
@@ -116,9 +121,12 @@ function MovesSlip({ moves, locale }: { moves: Stats["moves"]; locale: L }) {
           </div>
           {!rows.length && <p className="z-empty">{t("movesNone")}</p>}
           {rows.map((d, i) => (
-            <Row key={`${dir}${period}${d.externalId}`} k={`${dir}${period}${d.externalId}`} i={i} go={go} href={`/p/${d.externalId}`} thumb={d.imageUrl}
+            <Row key={`${dir}${period}${unit}${d.externalId}`} k={`${dir}${period}${unit}${d.externalId}`} i={i} go={go} href={`/p/${d.externalId}`} thumb={d.imageUrl}
               name={dropTitle(d, locale)} sub={<>{formatTenge(d.from, locale)} → {formatTenge(d.to, locale)}</>}
-              value={<>{d.pct > 0 ? "+" : "−"}{Math.abs(d.pct)}%</>} tone={dir === "rises" ? "up" : "down"} />
+              value={unit === "tenge"
+                ? <>{d.to > d.from ? "+" : "−"}{formatTenge(Math.abs(d.to - d.from), locale)}</>
+                : <>{d.pct > 0 ? "+" : "−"}{Math.abs(d.pct)}%</>}
+              tone={dir === "rises" ? "up" : "down"} />
           ))}
         </>
       )}
@@ -126,21 +134,28 @@ function MovesSlip({ moves, locale }: { moves: Stats["moves"]; locale: L }) {
   );
 }
 
-/* The same day's moves by the difference in tenge (the owner, 13 Nov): a 300 000 ₸ drop on a laptop leads here. */
-function TengeSlip({ moves, locale }: { moves: StatsMoves; locale: L }) {
+/*
+ * «Ловим снижение» (the owner, 25 Nov 2026, in place of the seller spread): «Поймали» = products where a person's
+ * alert caught a real drop, the biggest first; «Ждут» = products people track now, by the total they wait to save.
+ * No person's target price or count is shown.
+ */
+function SavingsSlip({ savings, locale }: { savings: NonNullable<Stats["savings"]>; locale: L }) {
   const t = useTranslations("home");
-  const [dir, setDir] = useSaved<keyof StatsMoves>("tenge-dir", ["drops", "rises"]);
-  const rows = moves[dir].slice(0, ROWS);
+  const tabs = (["caught", "waiting"] as const).filter((k) => savings[k].length);
+  const [side, setSide] = useSaved<"caught" | "waiting">("savings-side", tabs.length ? tabs : ["caught"]);
+  const on = savings[side].length ? side : tabs[0] ?? side;
   return (
-    <Screen more={`/explore?list=${dir}`} moreLabel={t("explore")}>
+    <Screen note={t(on === "caught" ? "savCaughtNote" : "savWaitNote")}>
       {(go) => (
         <>
-          <div className="z-tabs"><Tabs id="tenge-dir" value={dir} set={setDir} options={[["drops", `↓ ${t("tabDrops")}`], ["rises", `↑ ${t("tabRises")}`]]} /></div>
-          {!rows.length && <p className="z-empty">{t("movesNone")}</p>}
-          {rows.map((d: StatsDrop, i) => (
-            <Row key={`${dir}${d.externalId}`} k={`${dir}${d.externalId}`} i={i} go={go} href={`/p/${d.externalId}`} thumb={d.imageUrl}
-              name={dropTitle(d, locale)} sub={<>{formatTenge(d.from, locale)} → {formatTenge(d.to, locale)}</>}
-              value={<>{d.to > d.from ? "+" : "−"}{formatTenge(Math.abs(d.to - d.from), locale)}</>} tone={dir === "rises" ? "up" : "down"} />
+          {tabs.length > 1 && (
+            <div className="z-tabs"><Tabs id="savings-side" value={on} set={setSide} options={[["caught", t("savCaught")], ["waiting", t("savWaiting")]]} /></div>
+          )}
+          {savings[on].slice(0, ROWS).map((d: StatsSaving, i) => (
+            <Row key={`${on}${d.externalId}`} k={`${on}${d.externalId}`} i={i} go={go} href={`/p/${d.externalId}`} thumb={d.imageUrl}
+              name={dropTitle(d, locale)}
+              sub={on === "caught" ? <>{formatTenge(d.from, locale)} → {formatTenge(d.to, locale)}</> : t("savNow", { price: formatTenge(d.from, locale) })}
+              value={<>−{formatTenge(d.saved, locale)}</>} tone={on === "caught" ? "down" : "plain"} />
           ))}
         </>
       )}
@@ -173,20 +188,6 @@ function StableSlip({ items, locale }: { items: NonNullable<Stats["stable"]>; lo
         <Row key={d.externalId} k={d.externalId} i={i} go={go} href={`/p/${d.externalId}`} thumb={d.imageUrl}
           name={dropTitle(d, locale)} sub={t("stableDays", { days: d.days, since: dayMonth(d.since, td) })}
           value={d.price !== null ? formatTenge(d.price, locale) : "—"} tone="plain" />
-      ))}
-    </Screen>
-  );
-}
-
-/* Seller spread: the same product, the cheapest and the dearest seller of its latest check. */
-function SpreadSlip({ rows, locale }: { rows: Market["spread"]["top"]; locale: L }) {
-  const t = useTranslations("home");
-  return (
-    <Screen more="/explore?list=spread" moreLabel={t("explore")}>
-      {(go) => rows.slice(0, ROWS).map((s, i) => (
-        <Row key={s.externalId} k={s.externalId} i={i} go={go} href={`/p/${s.externalId}`} thumb={s.imageUrl}
-          name={dropTitle(s, locale)} sub={<>{formatTenge(s.lo, locale)} – {formatTenge(s.hi, locale)}</>}
-          value={<>+{formatTenge(s.hi - s.lo, locale)}</>} tone="down" />
       ))}
     </Screen>
   );
@@ -249,10 +250,12 @@ export function ZReport() {
     return () => { live = false; };
   }, []);
   const ready = !!s?.lastRun && s.days.length > 0;
-  const slips = !ready ? [] : [
-    { id: "moves", title: t("movesTitle"), chip: t("chipMoves"), el: <MovesSlip moves={s!.moves} locale={locale} /> },
-    ...(s!.tenge && (s!.tenge.drops.length || s!.tenge.rises.length) ? [{ id: "tenge", title: t("tengeTitle"), chip: t("chipTenge"), el: <TengeSlip moves={s!.tenge} locale={locale} /> }] : []),
-    ...(m?.spread.top.length ? [{ id: "spread", title: t("spreadTitle"), chip: t("chipSpread"), el: <SpreadSlip rows={m.spread.top} locale={locale} /> }] : []),
+  // The moves list's %/₸ switch sits in its title row (three tab sets did not fit one line on a desktop slip).
+  const [unit, setUnit] = useSaved<"pct" | "tenge">("moves-unit", ["pct", "tenge"]);
+  const slips: { id: string; title: string; chip: string; el: ReactNode; aside?: ReactNode }[] = !ready ? [] : [
+    { id: "moves", title: t("movesTitle"), chip: t("chipMoves"), el: <MovesSlip s={s!} locale={locale} unit={unit} />,
+      aside: <Tabs id="moves-unit" value={unit} set={setUnit} options={[["pct", t("unitPct")], ["tenge", t("unitTenge")]]} /> },
+    ...(s!.savings && (s!.savings.caught.length || s!.savings.waiting.length) ? [{ id: "savings", title: t("savTitle"), chip: t("chipSavings"), el: <SavingsSlip savings={s!.savings} locale={locale} /> }] : []),
     ...(s!.stable?.length ? [{ id: "stable", title: t("stableTitle"), chip: t("chipStable"), el: <StableSlip items={s!.stable} locale={locale} /> }] : []),
     ...(m?.categories.length ? [{ id: "cats", title: t("catTitle"), chip: t("chipCats"), el: <CategorySlip rows={m.categories} locale={locale} /> }] : []),
     ...(s!.shops && s!.shops.top.length ? [{ id: "shops", title: t("shopsTitle"), chip: t("chipShops"), el: <ShopsSlip shops={s!.shops} /> }] : []),
@@ -374,7 +377,7 @@ export function ZReport() {
       <div className={`z-slips${peek ? " is-peek" : ""}${showAll ? " show-all" : ""}`} ref={rail} onAnimationEnd={() => setPeek(false)}>
         {slips.map((x, i) => (
           <article key={x.id} className={`slip${i >= n - wide && (showAll || n <= 3) ? (n === 1 ? " is-full" : " is-wide") : ""}${i >= 3 ? " is-more" : ""}`}>
-            <div className="slip-caption"><h3>{x.title}</h3></div>
+            <div className={`slip-caption${x.aside ? " has-aside" : ""}`}><h3>{x.title}</h3>{x.aside}</div>
             {x.el}
           </article>
         ))}

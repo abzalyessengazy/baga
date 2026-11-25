@@ -12,6 +12,7 @@ export type StatsItem = { externalId: string; title: string; titleKk: string | n
 export type StatsMoves = { drops: StatsDrop[]; rises: StatsDrop[] };
 export type StatsShop = { externalId: string; name: string; rating: number; reviews: number; products: number };
 /** /api/stats as the browser gets it (dates as strings). Lists added on 13 Nov may be missing in a cached answer. */
+export type StatsSaving = StatsItem & { from: number; to: number; saved: number };
 export type Stats = {
   products: number; sellers: number; shiftDay: string | null; shiftRun?: { startedAt: string; finishedAt: string } | null; checks: number; changes: number; drops: number; rises: number; alertsSent: number; watchers: number;
   lastRun: { startedAt: string; finishedAt: string } | null;
@@ -20,6 +21,8 @@ export type Stats = {
   mostTracked: StatsItem[];
   newest: StatsItem[];
   tenge?: StatsMoves;
+  tengeWeek?: StatsMoves;
+  savings?: { caught: StatsSaving[]; waiting: StatsSaving[] };
   stable?: (StatsItem & { days: number; since: string })[];
   shops?: { top: StatsShop[]; low: StatsShop[] };
 };

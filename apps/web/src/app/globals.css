@@ -294,6 +294,8 @@ a { color: inherit; }
 .z-slips > .slip { grid-column: span 2; display: flex; flex-direction: column; min-width: 0; }
 /* Home slips: the title on top, the list under it; lists stretch so a row of slips ends level. */
 .z-slips > .slip .slip-caption { flex: none; border-top: 0; border-bottom: 1.5px dashed var(--rule); padding: 18px 18px 12px; }
+.slip-caption.has-aside { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.slip-caption.has-aside h3 { margin: 0; }
 .z-slips > .slip .slip-screen { flex: 1; }
 .z-slips[data-n="4"] > .slip, .z-slips[data-n="5"] > .slip:nth-child(n + 4), .z-slips[data-n="2"] > .slip { grid-column: span 3; }
 .z-slips[data-n="1"] > .slip { grid-column: span 6; }

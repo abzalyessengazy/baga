@@ -32,7 +32,7 @@ export interface Mover {
  * low 2–7 days before today that held two days in a row (owner, 11 Nov: against the week's highest or lowest day, a one-day blip that came back
  * showed as a move). Biggest percent first. Products under CHEAP.price are left out (15 Nov: a 500 ₸ mat in the lists).
  */
-export async function weekMovers(sql: postgres.Sql, dir: "down" | "up", limit = 30, minPct = MOVE_MIN_PCT): Promise<Mover[]> {
+export async function weekMovers(sql: postgres.Sql, dir: "down" | "up", limit = 30, minPct = MOVE_MIN_PCT, by: "pct" | "tenge" = "pct"): Promise<Mover[]> {
   const down = dir === "down";
   return sql<Mover[]>`
     with d as (
@@ -71,7 +71,10 @@ export async function weekMovers(sql: postgres.Sql, dir: "down" | "up", limit = 
         : sql`s.current_min_price >= pr.was * (1 + ${minPct}::numeric / 100)`}
       -- A listing error, not a move (plausibleMove).
       and s.current_min_price >= pr.was * ${PLAUSIBLE_RATIO}::numeric and s.current_min_price <= pr.was / ${PLAUSIBLE_RATIO}::numeric
-    order by s.current_min_price::numeric / pr.was ${down ? sql`asc` : sql`desc`}
+    order by ${by === "tenge"
+      // The home list's ₸ view (the owner, 25 Nov 2026): the biggest difference in tenge first.
+      ? sql`abs(s.current_min_price - pr.was) desc`
+      : sql`s.current_min_price::numeric / pr.was ${down ? sql`asc` : sql`desc`}`}
     limit ${limit}`;
 }
 

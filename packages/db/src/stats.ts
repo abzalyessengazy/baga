@@ -1,5 +1,5 @@
 import type postgres from "postgres";
-import { CHEAP } from "@baga/core";
+import { CHEAP, MAX_DROP_PCT } from "@baga/core";
 import { dayMoves, stillMoving, weekMovers, type Mover } from "./movers";
 
 /** One Almaty calendar day of collector work. */
@@ -58,12 +58,22 @@ export interface PlatformStats {
   newest: StatsProduct[];
   /** The day's moves again (rule D), ordered by the difference in tenge instead of percent (the owner, 13 Nov). */
   tenge: StatsMoves;
+  /** The week's moves (rule W) by the difference in tenge: the ₸ view of the one price-moves list (the owner, 25 Nov). */
+  tengeWeek: StatsMoves;
+  /**
+   * «Ловим снижение» (the owner, 25 Nov 2026, in place of the seller spread): caught = products where a person's alert
+   * caught a real drop (start price → alert price, the biggest per product first; the same ledger as «Поймали
+   * снижение»); waiting = products people track now, by the total they wait to save (today's price − their targets).
+   */
+  savings: { caught: StatsSaving[]; waiting: StatsSaving[] };
   /** Products whose daily low has not changed for the most observed days in a row, up to today. */
   stable: StatsStable[];
   /** Shops with offers on our products by Kaspi's own rating, from SHOP_BOARD_MIN_REVIEWS reviews. */
   shops: { top: StatsShop[]; low: StatsShop[] };
 }
 
+/** A product in «Ловим снижение»: caught from → to (saved = from − to); waiting: today's price and the total wanted. */
+export interface StatsSaving extends StatsProduct { from: number; to: number; saved: number }
 /** A product with one unchanged daily low: `days` observed days in a row, the first of them `since`. */
 export interface StatsStable extends StatsProduct { days: number; since: string }
 export interface StatsShop { externalId: string; name: string; rating: number; reviews: number; products: number }
@@ -115,6 +125,35 @@ export async function getPlatformStats(sql: postgres.Sql, dayCount = 14, listCou
     from r left join d using (day) order by r.day desc limit ${dayCount}`;
   const weekDown = await weekMovers(sql, "down", listCount);
   const weekUp = await weekMovers(sql, "up", listCount);
+  const weekDownT = await weekMovers(sql, "down", listCount, undefined, "tenge");
+  const weekUpT = await weekMovers(sql, "up", listCount, undefined, "tenge");
+  type SavingRow = { external_id: string; title: string; title_kk: string | null; image_url: string | null; price: number | null; at: Date; from: number; to: number; saved: number };
+  // Caught: the ledger of caughtSavings (caught_live, and caught_drops for trackings since removed), one row per
+  // product: its biggest caught drop.
+  const caught = await sql<SavingRow[]>`
+    with every as (
+      select tracking_id, product_id, start_price as a, alert_price as b from caught_live
+      union all
+      select c.tracking_id, c.product_id, c.start_price, c.alert_price from caught_drops c
+      where not exists (select 1 from caught_live l where l.tracking_id = c.tracking_id)),
+    best as (
+      select distinct on (product_id) product_id, a, b from every where a > b order by product_id, a - b desc, tracking_id)
+    select p.external_id, p.title, p.title_kk, p.image_url, s.current_min_price as price, now() as at,
+           best.a::int as "from", best.b::int as "to", (best.a - best.b)::float8 as saved
+    from best join products p on p.id = best.product_id left join product_state s on s.product_id = p.id
+    where p.status = 'active'
+    order by best.a - best.b desc limit ${listCount}`;
+  // Waiting: active trackings below today's price, within MAX_DROP_PCT (as the home receipt's «ждут»), team left out.
+  // Only the total is shown, never a person's target or how many people track it.
+  const waiting = await sql<SavingRow[]>`
+    select p.external_id, p.title, p.title_kk, p.image_url, s.current_min_price as price, max(t.created_at) as at,
+           s.current_min_price as "from", min(t.target_price) as "to", sum(s.current_min_price - t.target_price)::float8 as saved
+    from trackings t join products p on p.id = t.product_id join product_state s on s.product_id = p.id
+    where t.status = 'active' and t.watcher_id is not null and p.status = 'active' and s.current_min_price is not null
+      and t.target_price < s.current_min_price and t.target_price * 100 >= s.current_min_price * (100 - ${MAX_DROP_PCT})
+      and not exists (select 1 from watchers w where w.id = t.watcher_id and w.internal)
+    group by p.id, s.current_min_price
+    order by sum(s.current_min_price - t.target_price) desc limit ${listCount}`;
   const move = (m: Mover): StatsMove => ({ externalId: m.externalId, title: m.title, titleKk: m.titleKk, imageUrl: m.imageUrl, from: m.was, to: m.now, pct: m.pct, at: m.checkedAt });
   const product = (r: { external_id: string; title: string; title_kk: string | null; image_url: string | null; price: number | null; at: Date }): StatsProduct =>
     ({ externalId: r.external_id, title: r.title, titleKk: r.title_kk, imageUrl: r.image_url, price: r.price, at: r.at });
@@ -159,6 +198,12 @@ export async function getPlatformStats(sql: postgres.Sql, dayCount = 14, listCou
   const byTenge = (rows: Mover[]) => rows.filter(listed).sort((a, b) => Math.abs(b.now - b.was) - Math.abs(a.now - a.was)).slice(0, listCount).map(move);
   return {
     tenge: { drops: byTenge(day.down), rises: byTenge(day.up) },
+    tengeWeek: { drops: weekDownT.map(move), rises: weekUpT.map(move) },
+    savings: {
+      caught: caught.map((r) => ({ ...product(r), from: r.from, to: r.to, saved: r.saved })),
+      // The lowest target is not sent to the page: «to» is today's price minus the total.
+      waiting: waiting.map((r) => ({ ...product(r), from: r.from, to: r.from, saved: r.saved })),
+    },
     stable: stable.map((r) => ({ ...product(r), days: r.days, since: r.since })),
     shops: { top: await shopRows(true), low: await shopRows(false) },
     products: totals!.products,
