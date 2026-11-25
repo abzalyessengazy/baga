@@ -2,7 +2,11 @@
  * A visitor's profile (DECISIONS.md, 2026-11-13 "Profiles, leaderboard and the 3-day note"): a made-up nickname, a
  * stock avatar and a few answers, never a name, phone or address. Pure rules; the words live in the messages files.
  */
-export const AVATARS = ["girl", "boy", "woman", "man", "scarf", "granny", "grandpa", "beard", "coder", "cat"] as const;
+/**
+ * Stock avatars. 25 Nov 2026 (the owner: «all blond, make it more Kazakh, add more options»): faces in the medium
+ * skin tone (dark hair; medium-light still drew light hair), ten more (jobs, and a horse, a golden eagle and a camel). Old ids stay valid (saved profiles).
+ */
+export const AVATARS = ["girl", "boy", "woman", "man", "scarf", "granny", "grandpa", "beard", "coder", "student", "office", "teacher", "doctor", "mechanic", "cook", "farmer", "cat", "horse", "eagle", "camel"] as const;
 export type Avatar = (typeof AVATARS)[number];
 export const isAvatar = (v: unknown): v is Avatar => typeof v === "string" && (AVATARS as readonly string[]).includes(v);
 
