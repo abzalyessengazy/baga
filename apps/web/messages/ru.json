@@ -1323,7 +1323,11 @@
     "remindTitle": "Напомнить {start}?",
     "remindText": "Пришлём в Telegram итоги: какие скидки настоящие. Одно сообщение, без регистрации.",
     "remindButton": "Напомнить в Telegram",
-    "showMore": "Показать ещё {count, plural, one {# товар} few {# товара} other {# товаров}}"
+    "showMore": "Показать ещё {count, plural, one {# товар} few {# товара} other {# товаров}}",
+    "versions": "{count, plural, one {# вариант} few {# варианта} other {# вариантов}}",
+    "slidePrev": "Предыдущий вариант",
+    "slideNext": "Следующий вариант",
+    "slideHint": "листайте →"
   },
   "alertsBar": {
     "text": "Вы следите за {count, plural, one {# товаром} other {# товарами}}, но уведомления некуда прислать.",

@@ -1323,7 +1323,11 @@
     "remindTitle": "{start} еске салайық па?",
     "remindText": "Telegram-ға қорытынды жібереміз: қай жеңілдік шынайы. Бір хабарлама, тіркелусіз.",
     "remindButton": "Telegram-да еске салу",
-    "showMore": "Тағы {count} тауарды көрсету"
+    "showMore": "Тағы {count} тауарды көрсету",
+    "versions": "{count} нұсқа",
+    "slidePrev": "Алдыңғы нұсқа",
+    "slideNext": "Келесі нұсқа",
+    "slideHint": "парақтаңыз →"
   },
   "alertsBar": {
     "text": "Сіз {count} тауарды бақылап отырсыз, бірақ хабарламаны жіберетін жер жоқ.",

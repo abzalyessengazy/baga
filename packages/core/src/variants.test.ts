@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deviceKey, laterVariants } from "./variants";
+import { deviceKey, deviceTitle, groupByDevice, laterVariants } from "./variants";
 
 describe("variants", () => {
   it("one key for colours, memory sizes, SIM kinds and gifts of one device", () => {
@@ -20,5 +20,28 @@ describe("variants", () => {
       { id: 4, title: "Фен Dyson HD19", reviews: 5 },
     ]);
     expect([...v].sort()).toEqual([1, 3]);
+  });
+});
+
+describe("groupByDevice", () => {
+  it("keeps the rows' order: a device sits where its first row was, its versions in their order", () => {
+    const rows = [
+      { title: "Смартфон Apple iPhone 18 Pro 512Gb NanoSIM+eSIM бордовый" },
+      { title: "Samsung Galaxy A16 8 ГБ/256 ГБ серый" },
+      { title: "Смартфон Apple iPhone 18 Pro 256Gb NanoSIM+eSIM черный" },
+      { title: "Смартфон Apple iPhone 18 Pro Max 2Tb dual eSIM серебристый" },
+      { title: "Samsung Galaxy A16 4 ГБ/128 ГБ черный + подарок" },
+    ];
+    expect(groupByDevice(rows).map((g) => g.map((r) => rows.indexOf(r)))).toEqual([[0, 2], [1, 4], [3]]);
+  });
+  it("leaves titles too short to tell apart alone", () => {
+    expect(groupByDevice([{ title: "Чайник белый" }, { title: "Чайник черный" }])).toHaveLength(2);
+  });
+});
+
+describe("deviceTitle", () => {
+  it("drops colour, memory, SIM and the gift, keeps the case", () => {
+    expect(deviceTitle("Apple iPhone 18 Pro 512Gb NanoSIM+eSIM бордовый")).toBe("Apple iPhone 18 Pro");
+    expect(deviceTitle("Samsung Galaxy A16 8 ГБ/256 ГБ серый + подарок")).toBe("Samsung Galaxy A16");
   });
 });

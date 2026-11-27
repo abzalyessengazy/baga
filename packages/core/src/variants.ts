@@ -40,3 +40,32 @@ export function laterVariants<T extends { id: number; title: string; reviews: nu
 
 /** How often a variant nobody tracks or opened lately is checked: every third day, like a product out of stock. */
 export const VARIANT_INTERVAL_MINUTES = 3 * 24 * 60;
+
+/**
+ * Rows grouped by device (Black Friday page, the owner 27 Nov 2026: «compact them on product type»), keeping the
+ * rows' order: a group sits where its first row was and holds its rows in their order, so with bfOrder's rows the
+ * biggest difference comes first, in the list and inside each device. Titles too short to tell apart stay alone.
+ */
+export function groupByDevice<T extends { title: string }>(rows: T[]): T[][] {
+  const groups: T[][] = [];
+  const byKey = new Map<string, T[]>();
+  for (const r of rows) {
+    const k = deviceKey(r.title);
+    const g = k.split(" ").length >= 3 ? byKey.get(k) : undefined;
+    if (g) { g.push(r); continue; }
+    const fresh = [r];
+    groups.push(fresh);
+    if (k.split(" ").length >= 3) byKey.set(k, fresh);
+  }
+  return groups;
+}
+
+/** A device's name from one of its titles, case kept: colour words, memory sizes, SIM kinds and «+ подарок» removed. */
+export function deviceTitle(title: string): string {
+  const t = title
+    .replace(/\+\s*подарок/gi, " ")
+    .replace(/\d+\s*(gb|tb|гб|тб)\s*\/\s*\d+\s*(gb|tb|гб|тб)/gi, " ")
+    .replace(/\d+\s*(gb|tb|гб|тб)\b/gi, " ")
+    .replace(/[,()]/g, " ");
+  return t.split(/\s+/).filter((w) => w && !COLOUR.test(w) && !SIM.test(w)).join(" ");
+}

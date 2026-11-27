@@ -40,9 +40,9 @@ function Row({ i, go, k, href, thumb, name, sub, value, tone }: {
   );
 }
 
-function Tabs<K extends string>({ id, value, set, options }: { id: string; value: K; set: (k: K) => void; options: [K, string][] }) {
+function Tabs<K extends string>({ id, value, set, options, pill }: { id: string; value: K; set: (k: K) => void; options: [K, string][]; pill?: boolean }) {
   return (
-    <span className="z-tabset">
+    <span className={`z-tabset${pill ? " is-unit" : ""}`}>
       {options.map(([k, label]) => (
         <button key={k} type="button" className={`z-tab${value === k ? " is-on" : ""}`} aria-pressed={value === k} onClick={() => set(k)}>
           {value === k && <motion.span layoutId={`tab-${id}`} className="z-tab-ink" transition={{ type: "spring", stiffness: 500, damping: 36 }} />}
@@ -254,7 +254,7 @@ export function ZReport() {
   const [unit, setUnit] = useSaved<"pct" | "tenge">("moves-unit", ["pct", "tenge"]);
   const slips: { id: string; title: string; chip: string; el: ReactNode; aside?: ReactNode }[] = !ready ? [] : [
     { id: "moves", title: t("movesTitle"), chip: t("chipMoves"), el: <MovesSlip s={s!} locale={locale} unit={unit} />,
-      aside: <Tabs id="moves-unit" value={unit} set={setUnit} options={[["pct", t("unitPct")], ["tenge", t("unitTenge")]]} /> },
+      aside: <Tabs id="moves-unit" pill value={unit} set={setUnit} options={[["pct", t("unitPct")], ["tenge", t("unitTenge")]]} /> },
     ...(s!.savings && (s!.savings.caught.length || s!.savings.waiting.length) ? [{ id: "savings", title: t("savTitle"), chip: t("chipSavings"), el: <SavingsSlip savings={s!.savings} locale={locale} /> }] : []),
     ...(s!.stable?.length ? [{ id: "stable", title: t("stableTitle"), chip: t("chipStable"), el: <StableSlip items={s!.stable} locale={locale} /> }] : []),
     ...(m?.categories.length ? [{ id: "cats", title: t("catTitle"), chip: t("chipCats"), el: <CategorySlip rows={m.categories} locale={locale} /> }] : []),

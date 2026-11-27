@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import { getTranslations, setRequestLocale } from "next-intl/server";
-import { BLACK_FRIDAY, bfOrder, formatTenge, salePhase, shortTitle, type StoreSaleCheck } from "@baga/core";
+import { BLACK_FRIDAY, bfOrder, deviceTitle, formatTenge, groupByDevice, salePhase, shortTitle, type StoreSaleCheck } from "@baga/core";
 import { almatyToday, blackFridayRows, getSql, type BfRow } from "@baga/db";
 import { Link } from "@/i18n/navigation";
+import { BfSlider } from "@/components/BfSlider";
 import { botUsername } from "@/lib/watcher";
 
 type Props = { params: Promise<{ locale: string }> };
@@ -41,6 +42,7 @@ export default async function BlackFridayPage({ params }: Props) {
   // Biggest real drops first, then Halyk or Technodom below Kaspi, then popularity (the database's order; the owner, 19 Nov).
   const rows: BfRow[] = bfOrder(sql && today ? await blackFridayRows(sql, today).catch(() => []) : []);
 
+  const groups = groupByDevice(rows);
   const storeNow = (r: BfRow) => r.stores.map((s) => s.now).filter((n): n is number => n !== null);
   const kaspiCheaper = rows.filter((r) => storeNow(r).length && r.kaspiNow < Math.min(...storeNow(r))).length;
   const storeCheaper = rows.filter((r) => storeNow(r).some((n) => n < r.kaspiNow)).length;
@@ -61,13 +63,14 @@ export default async function BlackFridayPage({ params }: Props) {
     }
   };
 
-  const row = (r: BfRow, i: number) => {
+  // One version's card: thumb, name, Kaspi, then each store. A device with one version keeps its rank in the head.
+  const card = (r: BfRow, rank: string | null) => {
             const name = shortTitle((L === "kk" && r.titleKk) || r.title);
             const best = Math.min(...storeNow(r), Infinity);
             return (
-              <li key={r.externalId} className="receipt bf-row">
-                <div className="bf-head">
-                  <span className="bf-rank">{String(i + 1).padStart(2, "0")}</span>
+              <>
+                <div className={`bf-head${rank ? "" : " no-rank"}`}>
+                  {rank && <span className="bf-rank">{rank}</span>}
                   {r.imageUrl ? <img src={r.imageUrl} alt="" width={56} height={56} loading="lazy" className="bf-thumb" /> : <span className="bf-thumb" aria-hidden />}
                   <div className="bf-title">
                     <Link href={`/p/${r.externalId}`} className="bf-name">{name}</Link>
@@ -93,9 +96,25 @@ export default async function BlackFridayPage({ params }: Props) {
                     </li>
                   ))}
                 </ul>
-              </li>
+              </>
             );
           };
+
+  // Versions of one device (colour, memory) in one card with a slider, biggest difference first (the owner, 27 Nov).
+  const group = (g: BfRow[], i: number) => {
+    const rank = String(i + 1).padStart(2, "0");
+    const top = g[0]!;
+    if (g.length === 1) return <li key={top.externalId} className="receipt bf-row">{card(top, rank)}</li>;
+    const device = deviceTitle(shortTitle((L === "kk" && top.titleKk) || top.title));
+    return (
+      <li key={top.externalId} className="receipt bf-row bf-group">
+        <BfSlider prev={t("slidePrev")} next={t("slideNext")} hint={t("slideHint")}
+          head={<p className="bf-device"><span className="bf-rank">{rank}</span><span><b>{device}</b><span className="bf-versions">{t("versions", { count: g.length })}</span></span></p>}>
+          {g.map((r) => <div key={r.externalId}>{card(r, null)}</div>)}
+        </BfSlider>
+      </li>
+    );
+  };
 
   return (
     <main className="wrap untracked bf">
@@ -126,12 +145,12 @@ export default async function BlackFridayPage({ params }: Props) {
 
       {rows.length === 0 ? <article className="receipt"><p className="untracked-status">{t("none")}</p></article> : (
         <>
-          <ol className="bf-list">{rows.slice(0, BLACK_FRIDAY.shown).map((r, i) => row(r, i))}</ol>
-          {/* The rest of the pairs, one tap away (18 Nov): plain HTML, no script, and the first screen stays light. */}
-          {rows.length > BLACK_FRIDAY.shown && (
+          <ol className="bf-list">{groups.slice(0, BLACK_FRIDAY.shown).map((g, i) => group(g, i))}</ol>
+          {/* The rest of the devices, one tap away (18 Nov): plain HTML, and the first screen stays light. */}
+          {groups.length > BLACK_FRIDAY.shown && (
             <details className="bf-more">
-              <summary className="btn btn-ghost">{t("showMore", { count: rows.length - BLACK_FRIDAY.shown })}</summary>
-              <ol className="bf-list" start={BLACK_FRIDAY.shown + 1}>{rows.slice(BLACK_FRIDAY.shown).map((r, i) => row(r, i + BLACK_FRIDAY.shown))}</ol>
+              <summary className="btn btn-ghost">{t("showMore", { count: groups.slice(BLACK_FRIDAY.shown).flat().length })}</summary>
+              <ol className="bf-list" start={BLACK_FRIDAY.shown + 1}>{groups.slice(BLACK_FRIDAY.shown).map((g, i) => group(g, i + BLACK_FRIDAY.shown))}</ol>
             </details>
           )}
         </>
